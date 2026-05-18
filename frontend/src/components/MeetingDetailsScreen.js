@@ -26,26 +26,24 @@ export function MeetingDetailsScreen({
   );
 
   return (
-    <div className={`flex flex-1 flex-col justify-center w-full md:p-[6px] sm:p-1 p-1.5`}>
+    <div className="flex flex-1 flex-col justify-center w-full">
       {iscreateMeetingClicked ? (
-        <div className="border border-solid border-gray-400 rounded-xl px-4 py-3  flex items-center justify-center">
-          <p className="text-white text-base">
-            {`Meeting code : ${meetingId}`}
+        <div className="border border-orange-200 rounded-xl px-4 py-3 flex items-center justify-center bg-orange-50">
+          <p className="text-gray-800 text-sm font-mono font-semibold flex-1 truncate">
+            {`Code: ${meetingId}`}
           </p>
           <button
-            className="ml-2"
+            className="ml-2 shrink-0"
             onClick={() => {
               navigator.clipboard.writeText(meetingId);
               setIsCopied(true);
-              setTimeout(() => {
-                setIsCopied(false);
-              }, 3000);
+              setTimeout(() => setIsCopied(false), 3000);
             }}
           >
             {isCopied ? (
-              <CheckIcon className="h-5 w-5 text-green-550" />
+              <CheckIcon className="h-5 w-5 text-green-500" />
             ) : (
-              <ClipboardIcon className="h-5 w-5 text-white" />
+              <ClipboardIcon className="h-5 w-5 text-orange-450" />
             )}
           </button>
         </div>
@@ -53,14 +51,12 @@ export function MeetingDetailsScreen({
         <>
           <input
             defaultValue={meetingId}
-            onChange={(e) => {
-              setMeetingId(e.target.value);
-            }}
-            placeholder={"Enter meeting Id"}
-            className="px-4 py-3 bg-gray-650 rounded-xl text-white w-full text-center"
+            onChange={(e) => setMeetingId(e.target.value)}
+            placeholder="Enter meeting ID"
+            className="px-4 py-3 bg-white border border-orange-200 rounded-xl text-gray-800 w-full text-center focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-450 transition-colors placeholder-gray-400"
           />
           {meetingIdError && (
-            <p className="text-xs text-red-600">{`Please enter valid meetingId`}</p>
+            <p className="text-xs text-red-500 mt-1">{`Please enter a valid meeting ID`}</p>
           )}
         </>
       ) : null}
@@ -71,17 +67,15 @@ export function MeetingDetailsScreen({
             value={participantName}
             onChange={(e) => setParticipantName(e.target.value)}
             placeholder="Enter your name"
-            className="px-4 py-3 mt-5 bg-gray-650 rounded-xl text-white w-full text-center"
+            className="px-4 py-3 mt-4 bg-white border border-orange-200 rounded-xl text-gray-800 w-full text-center focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-450 transition-colors placeholder-gray-400"
           />
-
-          {/* <p className="text-xs text-white mt-1 text-center">
-            Your name will help everyone identify you in the meeting.
-          </p> */}
           <button
             disabled={participantName.length < 3}
-            className={`w-full ${
-              participantName.length < 3 ? "bg-gray-650" : "bg-purple-350"
-            }  text-white px-2 py-3 rounded-xl mt-5`}
+            className={`w-full text-white px-2 py-3 rounded-xl mt-4 font-semibold transition-colors ${
+              participantName.length < 3
+                ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                : "bg-orange-450 hover:bg-orange-500"
+            }`}
             onClick={(e) => {
               if (iscreateMeetingClicked) {
                 if (videoTrack) {
@@ -116,16 +110,16 @@ export function MeetingDetailsScreen({
               }
             }}
           >
-            {iscreateMeetingClicked ? "Start a meeting" : "Join a meeting"}
+            {iscreateMeetingClicked ? "Start meeting" : "Join meeting"}
           </button>
         </>
       )}
 
       {!iscreateMeetingClicked && !isJoinMeetingClicked && !MeetingId && (
-        <div className="w-full md:mt-0 mt-4 flex flex-col justify-center h-full">
+        <div className="w-full flex flex-col gap-3">
           <button
-            className="w-full bg-purple-350 text-white px-2 py-3 rounded-xl"
-            onClick={async (e) => {
+            className="w-full bg-orange-450 hover:bg-orange-500 text-white px-2 py-3 rounded-xl font-semibold transition-colors"
+            onClick={async () => {
               const meetingId = await _handleOnCreateMeeting();
               setMeetingId(meetingId);
               setIscreateMeetingClicked(true);
@@ -134,10 +128,8 @@ export function MeetingDetailsScreen({
             Create a meeting
           </button>
           <button
-            className="w-full bg-gray-650 text-white px-2 py-3 rounded-xl mt-5"
-            onClick={(e) => {
-              setIsJoinMeetingClicked(true);
-            }}
+            className="w-full border-2 border-orange-450 text-orange-450 hover:bg-orange-50 px-2 py-3 rounded-xl font-semibold transition-colors"
+            onClick={() => setIsJoinMeetingClicked(true)}
           >
             Join a meeting
           </button>

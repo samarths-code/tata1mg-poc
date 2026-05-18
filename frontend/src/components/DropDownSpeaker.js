@@ -57,16 +57,16 @@ export default function DropDownSpeaker({ speakers }) {
               onMouseEnter={() => { setIsHovered(true) }}
               onMouseLeave={() => { setIsHovered(false) }}
               disabled={!isMicrophonePermissionAllowed}
-              className={`focus:outline-none hover:ring-1 hover:ring-gray-250 hover:bg-black 
+              className={`focus:outline-none hover:ring-1 hover:ring-orange-200 hover:bg-orange-50
               ${open
-                  ? "text-white ring-1 ring-gray-250 bg-black"
-                  : "text-customGray-250 hover:text-white"
+                  ? "text-gray-800 ring-1 ring-orange-200 bg-orange-50"
+                  : "text-gray-600 hover:text-gray-900"
                 }
               group inline-flex items-center rounded-md px-1 py-1 w-full text-base font-normal
               ${!isMicrophonePermissionAllowed ? "opacity-50" : ""}`}
             >
               <div>
-                <DropSpeaker fillColor={isHovered || open ? "#FFF" : "#B4B4B4"} />
+                <DropSpeaker fillColor={isHovered || open ? "#FF6F61" : "#9CA3AF"} />
 
               </div>
               <span className=" overflow-hidden whitespace-nowrap overflow-ellipsis w-full ml-6">
@@ -89,7 +89,7 @@ export default function DropDownSpeaker({ speakers }) {
             >
               <Popover.Panel className="absolute bottom-full z-10 mt-3 w-full px-4 sm:px-0 pb-2">
                 <div className="rounded-lg shadow-lg">
-                  <div className={"bg-gray-350 rounded-lg"} >
+                  <div className="bg-white border border-orange-100 rounded-lg">
                     <div>
                       <div className="flex flex-col">
                         {speakers.map(
@@ -98,7 +98,7 @@ export default function DropDownSpeaker({ speakers }) {
                               item?.kind === "audiooutput" && (
                                 <div
                                   key={`speaker_${index}`}
-                                  className={` my-1 pl-4 pr-2 text-white text-left flex `} >
+                                  className={` my-1 pl-4 pr-2 text-gray-700 text-left flex `} >
                                   <span className="w-6 mr-2 flex items-center justify-center">
                                     {selectedSpeaker?.label === item?.label && (
                                       <CheckIcon className='h-5 w-5' />
@@ -128,8 +128,8 @@ export default function DropDownSpeaker({ speakers }) {
                             );
                           }
                         )}
-                        {speakers.length && <> <hr className='border border-gray-50 mt-2 mb-1' />
-                          <div className={`my-1 pl-4 pr-2 text-white text-left`} >
+                        {speakers.length && <> <hr className='border border-orange-100 mt-2 mb-1' />
+                          <div className={`my-1 pl-4 pr-2 text-gray-700 text-left`} >
                             <button
                               className={`flex flex-1 w-full text-left mb-1 pl-1 focus:outline-none`}
                               onClick={testSpeakers}
@@ -137,8 +137,8 @@ export default function DropDownSpeaker({ speakers }) {
                               <span className="mr-3">
                                 <TestSpeaker />
                               </span>
-                              {isPlaying ? <div className="w-52 mt-2 bg-gray-450 rounded-full h-2 dark:bg-gray-700">
-                                <div className="bg-white opacity-50 h-2 rounded-full" style={{ width: `${audioProgress}%` }}></div>
+                              {isPlaying ? <div className="w-52 mt-2 bg-orange-100 rounded-full h-2">
+                                <div className="bg-orange-450 h-2 rounded-full" style={{ width: `${audioProgress}%` }}></div>
                               </div>
                                 : <span>Test Speakers</span>
                               }

@@ -171,10 +171,10 @@ export default function DropDownMic({
               onMouseEnter={() => { setIsHovered(true) }}
               onMouseLeave={() => { setIsHovered(false) }}
               disabled={!isMicrophonePermissionAllowed}
-              className={`focus:outline-none hover:ring-1 hover:ring-gray-250 hover:bg-black 
+              className={`focus:outline-none hover:ring-1 hover:ring-orange-200 hover:bg-orange-50
               ${open
-                  ? "text-white ring-1 ring-gray-250 bg-black"
-                  : "text-customGray-250 hover:text-white"
+                  ? "text-gray-800 ring-1 ring-orange-200 bg-orange-50"
+                  : "text-gray-600 hover:text-gray-900"
                 }
               group inline-flex items-center rounded-md px-1 py-1 w-full text-base font-normal
               ${!isMicrophonePermissionAllowed ? "opacity-50" : ""}`}
@@ -185,7 +185,7 @@ export default function DropDownMic({
               }}
             >
               <div>
-                <DropMIC fillColor={isHovered || open ? "#FFF" : "#B4B4B4"} />
+                <DropMIC fillColor={isHovered || open ? "#FF6F61" : "#9CA3AF"} />
 
               </div>
               <span className="overflow-hidden whitespace-nowrap overflow-ellipsis w-full ml-6">
@@ -209,7 +209,7 @@ export default function DropDownMic({
             >
               <Popover.Panel className="absolute bottom-full z-10 mt-3 w-full px-4 sm:px-0 pb-2">
                 <div className="rounded-lg shadow-lg">
-                  <div className="bg-gray-350 rounded-lg">
+                  <div className="bg-white border border-orange-100 rounded-lg">
                     <div>
                       <div className="flex flex-col">
                         {mics.map(
@@ -218,7 +218,7 @@ export default function DropDownMic({
                               item?.kind === "audioinput" && (
                                 <div
                                   key={`mics_${index}`}
-                                  className={` my-1 pl-4 pr-2 text-white text-left flex`}
+                                  className={` my-1 pl-4 pr-2 text-gray-700 text-left flex`}
                                 >
                                   <span className="w-6 mr-2 flex items-center justify-center">
                                     {selectedMicrophone?.label === item?.label && (
@@ -254,53 +254,51 @@ export default function DropDownMic({
                           }
                         )}
 
-                        <hr className='border border-gray-50 mt-2 mb-1' />
+                        <hr className='border border-orange-100 mt-2 mb-1' />
 
-                        {micOn ? <div className={`my-1  text-white flex ${isMobile ? "flex-col" : "flex-1"} w-full text-left mb-2 pl-2`} >
+                        {micOn ? <div className={`my-1 text-gray-700 flex ${isMobile ? "flex-col" : "flex-1"} w-full text-left mb-2 pl-2`} >
                           <div className={`flex flex-row ${!isMobile && "w-2/3"} `}>
                             <span className="mr-4 mt-1">
                               <TestMic />
                             </span>
 
-                            <div className={`${isMobile ? "w-full mr-5" : "w-36"} mt-3 bg-gray-450 rounded-full h-1 dark:bg-gray-700`}>
-                              <div className="bg-white opacity-50 h-1 rounded-full" style={{ width: `${volume / 256 * 100}%` }} ></div>
+                            <div className={`${isMobile ? "w-full mr-5" : "w-36"} mt-3 bg-orange-100 rounded-full h-1`}>
+                              <div className="bg-orange-450 h-1 rounded-full" style={{ width: `${volume / 256 * 100}%` }} ></div>
                             </div>
                           </div>
 
                           {!isMobile && <div className={`${!isMobile && "w-1/3"} w-full flex justify-center `}>
-                            {recordingStatus == "inactive" && <button className=' p-2 text-xs rounded  bg-gray-450' onClick={startRecording}>
+                            {recordingStatus == "inactive" && <button className='p-2 text-xs rounded bg-orange-50 text-orange-450 border border-orange-200 hover:bg-orange-100' onClick={startRecording}>
                               Record
                             </button>}
 
-
-                            {recordingStatus == "stopped recording" && <button className=' p-2 text-xs rounded  bg-gray-450' onClick={handlePlaying}>
+                            {recordingStatus == "stopped recording" && <button className='p-2 text-xs rounded bg-orange-50 text-orange-450 border border-orange-200 hover:bg-orange-100' onClick={handlePlaying}>
                               Play
                             </button>}
 
-                            {recordingStatus == "recording" && <button className=' p-2 mx-1 py-4 text-xs rounded w-full  bg-gray-450 relative z-0' onClick={stopRecording}>
-                              <div className=' h-full rounded bg-[#6F767E] absolute top-0 left-0 ' style={{ width: `${recordingProgress}%` }} >
+                            {recordingStatus == "recording" && <button className='p-2 mx-1 py-4 text-xs rounded w-full bg-orange-100 relative z-0' onClick={stopRecording}>
+                              <div className='h-full rounded bg-orange-350 absolute top-0 left-0' style={{ width: `${recordingProgress}%` }} >
                                 <PauseButton />
                               </div>
                             </button>}
 
-                            {recordingStatus == "playing" && <button className=' p-2 mx-1 py-4 text-xs rounded w-full  bg-gray-450 relative z-0' onClick={handlePlaying}>
-                              <div className=' h-full rounded bg-[#6F767E] absolute top-0 left-0 ' style={{ width: `${audioProgress}%` }} >
+                            {recordingStatus == "playing" && <button className='p-2 mx-1 py-4 text-xs rounded w-full bg-orange-100 relative z-0' onClick={handlePlaying}>
+                              <div className='h-full rounded bg-orange-350 absolute top-0 left-0' style={{ width: `${audioProgress}%` }} >
                                 <PauseButton />
                               </div>
                             </button>}
                           </div>}
                           {isMobile &&
                             <div className='flex flex-col mt-1 items-center justify-center'>
-                              {testSpeaker && <p className='text-xs text-gray-100 text-center'>Speak to test mic & speakers...</p>}
-                              <button className='p-2 text-xs mt-1 rounded w-fit  bg-gray-450' onClick={testingSpeaker}>
+                              {testSpeaker && <p className='text-xs text-gray-500 text-center'>Speak to test mic & speakers...</p>}
+                              <button className='p-2 text-xs mt-1 rounded w-fit bg-orange-50 text-orange-450 border border-orange-200 hover:bg-orange-100' onClick={testingSpeaker}>
                                 {!testSpeaker ? "Test Mic and Speaker" : "Stop Test"}
                               </button></div>
                           }
 
-
                         </div>
                           :
-                          <div className=' text-[#747B84] flex flex-1 items-center w-full  mb-2 pl-5'>
+                          <div className='text-gray-400 flex flex-1 items-center w-full mb-2 pl-5'>
                             <TestMicOff />
                             Unmute to test your mic
                           </div>

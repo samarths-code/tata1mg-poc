@@ -42,26 +42,26 @@ const NetworkStats = ({ }) => {
   
   return (
     <>
-      <div className="flex flex-row auto-cols-max border border-[#3F4346] divide-x divide-[#3F4346] rounded-md bg-black opacity-80 h-9 ">
-        
+      <div className="flex flex-row auto-cols-max border border-orange-100 divide-x divide-orange-100 rounded-lg bg-white/90 backdrop-blur-sm shadow-sm h-9">
+
         {error === "no-error-loading" &&
-          <div className="group inline-flex items-center gap-3 text-xs text-customGray-250 ml-3 ">
-            Checking network speeds
+          <div className="group inline-flex items-center gap-2 text-xs text-gray-500 px-3">
+            Checking network…
             <RefreshCheck />
           </div>
         }
 
         {error === "no-error" &&
           <>
-            <div className={`group  inline-flex items-center gap-2 text-xs text-customGray-250 basis-1/2 ${!isMobile && "w-32"}`}>
+            <div className={`group inline-flex items-center gap-1.5 text-xs text-gray-600 px-2 basis-1/2 ${!isMobile && "w-28"}`}>
               <DownloadIcon />
-              {downloadSpeed} MBPS
+              {downloadSpeed} Mbps
             </div>
-            <div className={`group  inline-flex items-center gap-2 text-xs text-customGray-250 basis-1/2 ${!isMobile && "w-32"}`}>
+            <div className={`group inline-flex items-center gap-1.5 text-xs text-gray-600 px-2 basis-1/2 ${!isMobile && "w-28"}`}>
               <UploadIcon />
-              {uploadSpeed} MBPS
+              {uploadSpeed} Mbps
             </div>
-            <div className="basis-1/6 flex items-center justify-center" onClick={handleOnClick}>
+            <div className="basis-1/6 flex items-center justify-center px-2 cursor-pointer" onClick={handleOnClick}>
               <RefreshIcon />
             </div>
           </>
@@ -69,11 +69,11 @@ const NetworkStats = ({ }) => {
 
         {error === "no-wifi" &&
           <>
-            <div className="group inline-flex items-center gap-3 text-xs text-red-250 p-2 ">
+            <div className="group inline-flex items-center gap-2 text-xs text-red-500 px-2 py-1">
               <WifiOff />
-              You're offline! Check your connection
+              You're offline!
             </div>
-            <div className=" flex items-center justify-center p-2" onClick={handleOnClick}>
+            <div className="flex items-center justify-center px-2 cursor-pointer" onClick={handleOnClick}>
               <RefreshIcon />
             </div>
           </>
@@ -81,10 +81,10 @@ const NetworkStats = ({ }) => {
 
         {error === "timeout" &&
           <>
-            <div className="group inline-flex items-center gap-3 text-xs text-red-250 p-2 ">
-              Something went wrong! Couldn't load data
+            <div className="group inline-flex items-center gap-2 text-xs text-red-500 px-2 py-1">
+              Network check failed
             </div>
-            <div className=" flex items-center justify-center p-2" onClick={handleOnClick}>
+            <div className="flex items-center justify-center px-2 cursor-pointer" onClick={handleOnClick}>
               <RefreshIcon />
             </div>
           </>

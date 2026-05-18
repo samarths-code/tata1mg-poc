@@ -388,7 +388,10 @@ export default function ActionsTab() {
     if (!token) return;
     setSpoofResults((prev) => ({ ...prev, [target]: { loading: true } }));
     try {
-      const result = await runAntiSpoof({ token, imageBase64 });
+      const raw = await runAntiSpoof({ token, imageBase64 });
+      // API returns { spoof_detected: boolean, accuracy: number }
+      // Normalise to { isReal, confidence } for SpoofBadge
+      const result = { isReal: !raw.spoof_detected, confidence: raw.accuracy };
       setSpoofResults((prev) => ({ ...prev, [target]: result }));
       setCustomerSpoofStatus(result.isReal ? "real" : "spoof");
     } catch {
@@ -400,8 +403,10 @@ export default function ActionsTab() {
     if (!token) return;
     setFaceMatchResult({ loading: true });
     try {
-      const result = await runFaceMatch({ token, referenceBase64: refBase64, targetBase64 });
-      setFaceMatchResult(result);
+      const raw = await runFaceMatch({ token, referenceBase64: refBase64, targetBase64 });
+      // API returns { verified: boolean }
+      // Normalise to { matched } for FaceMatchCard
+      setFaceMatchResult({ matched: raw.verified });
     } catch {
       setFaceMatchResult({ error: true });
     }
@@ -411,8 +416,10 @@ export default function ActionsTab() {
     if (!token) return;
     setOcrResult({ loading: true });
     try {
-      const result = await runOCR({ token, imageBase64 });
-      setOcrResult(result);
+      const raw = await runOCR({ token, imageBase64 });
+      // API returns flat { idType, idNumber, name, dateOfBirth, address, gender, mobileNumber }
+      // Normalise to { fields } for OCRResultCard
+      setOcrResult({ fields: raw });
     } catch {
       setOcrResult({ error: true });
     }

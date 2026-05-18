@@ -378,24 +378,15 @@ export function JoiningScreen({
   };
 
   const ButtonWithTooltip = ({ onClick, onState, OnIcon, OffIcon }) => {
-    const btnRef = useRef();
     return (
-      <>
-        <div>
-          <button
-            ref={btnRef}
-            onClick={onClick}
-            className={`rounded-full min-w-auto w-12 h-12 flex items-center justify-center 
-            ${onState ? "bg-white" : "bg-red-650 text-white"}`}
-          >
-            {onState ? (
-              <OnIcon fillcolor={onState ? "#050A0E" : "#fff"} />
-            ) : (
-              <OffIcon fillcolor={onState ? "#050A0E" : "#fff"} />
-            )}
-          </button>
-        </div>
-      </>
+      <button
+        onClick={onClick}
+        className={`rounded-full w-12 h-12 flex items-center justify-center shadow-lg transition-all ${
+          onState ? "bg-orange-450 hover:bg-orange-500" : "bg-red-650 hover:bg-red-500"
+        }`}
+      >
+        {onState ? <OnIcon fillcolor="white" /> : <OffIcon fillcolor="white" />}
+      </button>
     );
   };
 
@@ -404,104 +395,99 @@ export function JoiningScreen({
       {!permissionDone && (
         <PermissionSetup onDone={() => setPermissionDone(true)} />
       )}
-      <div className="overflow-y-auto flex flex-col flex-1  h-screen bg-gray-800">
-        <div className="flex flex-1 flex-col md:flex-row  items-center justify-center m-10 md:m-[30px] lg:m-16">
-          <div className="container grid  md:grid-flow-col grid-flow-row ">
-            <div className="grid grid-cols-12">
-              <div className="md:col-span-7 2xl:col-span-7 col-span-12">
-                <div className="flex items-center justify-center p-1.5 sm:p-4 lg:p-6">
-                  <div className="relative w-full md:pl-4  sm:pl-10  pl-5  md:pr-4 sm:pr-10 pr-5">
 
-                    <div className="w-full relative" style={{ height: isMobile ? "45vh" : "55vh" }}>
-                      <div className={`absolute  z-10 ${isMobile ? "right-0" : " right-2 top-2"}`}>
-                        <NetworkStats />
+      <div className="min-h-screen bg-gray-50 flex flex-col overflow-y-auto">
+        {/* Orange header */}
+        <header className="bg-orange-450 px-5 py-3 flex items-center gap-3 shrink-0 shadow-md">
+          <img
+            src="https://play-lh.googleusercontent.com/yjbAu08_Ahes38IEMV8slP91zgjh2mdh5xpZefvcbYuZxR8O7FZFderRn2Ivaz0uR2Lw"
+            alt="Tata 1mg"
+            className="w-9 h-9 rounded-xl object-contain"
+          />
+          <div className="leading-none">
+            <p className="text-white font-bold text-sm">Tata 1mg</p>
+            <p className="text-white/70 text-xs mt-0.5">Video MER</p>
+          </div>
+        </header>
+
+        {/* Main content */}
+        <div className="flex flex-1 items-start md:items-center justify-center px-4 py-8 md:py-10">
+          <div className="w-full max-w-4xl">
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+
+              {/* Left column: one unified card (video on top, device bar on bottom) */}
+              <div className="md:col-span-7">
+                {/*
+                  overflow-hidden is NOT on the outer card so dropdown panels
+                  opened with `absolute bottom-full` can escape upward.
+                  It IS on the inner video wrapper to round the top corners.
+                */}
+                <div className="rounded-2xl shadow-md border border-gray-200 bg-white">
+
+                  {/* Video area — own overflow-hidden keeps the dark bg clipped to rounded-t corners */}
+                  <div className="rounded-t-2xl overflow-hidden relative bg-gray-900" style={{ height: isMobile ? "52vw" : 300, minHeight: 180 }}>
+                    <div className={`absolute z-10 ${isMobile ? "right-2 top-2" : "right-3 top-3"}`}>
+                      <NetworkStats />
+                    </div>
+                    {isMobile && (
+                      <audio autoPlay playsInline muted={!testSpeaker} ref={audioPlayerRef} controls={false} />
+                    )}
+                    <video
+                      autoPlay playsInline muted ref={videoPlayerRef} controls={false}
+                      style={{ backgroundColor: "#111827" }}
+                      className="h-full w-full object-cover flip"
+                    />
+                    <div className="absolute bottom-4 left-0 right-0 flex items-center justify-center gap-4">
+                      {isMicrophonePermissionAllowed ? (
+                        <ButtonWithTooltip onClick={_toggleMic} onState={micOn} mic={true} OnIcon={MicOnIcon} OffIcon={MicOffIcon} />
+                      ) : (
+                        <MicPermissionDenied />
+                      )}
+                      {isCameraPermissionAllowed ? (
+                        <ButtonWithTooltip onClick={_toggleWebcam} onState={webcamOn} mic={false} OnIcon={WebcamOnIcon} OffIcon={WebcamOffIcon} />
+                      ) : (
+                        <CameraPermissionDenied />
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Device selectors — inside the card, no overflow-hidden */}
+                  <div className="rounded-b-2xl border-t border-gray-100 bg-white px-4 py-3">
+                    <div className={`flex gap-2 ${isMobile ? "flex-col" : "flex-row"}`}>
+                      <div className={isMobile ? "w-full" : "flex-1 min-w-0"}>
+                        <DropDownMic
+                          mics={mics}
+                          changeMic={changeMic}
+                          customAudioStream={customAudioStream}
+                          audioTrack={audioTrack}
+                          micOn={micOn}
+                          didDeviceChange={didDeviceChange}
+                          setDidDeviceChange={setDidDeviceChange}
+                          testSpeaker={testSpeaker}
+                          setTestSpeaker={setTestSpeaker}
+                        />
                       </div>
-                      {isMobile && <audio
-                        autoPlay
-                        playsInline
-                        muted={!testSpeaker}
-                        ref={audioPlayerRef}
-                        controls={false}
-                      />}
-                      <video
-                        autoPlay
-                        playsInline
-                        muted
-                        ref={videoPlayerRef}
-                        controls={false}
-                        style={{
-                          backgroundColor: "#1c1c1c",
-                        }}
-                        className={
-                          "rounded-[10px] h-full w-full object-cover flex items-center justify-center flip"
-                        }
-                      />
-
-                      <div className="absolute xl:bottom-6 bottom-4 left-0 right-0">
-                        <div className="container grid grid-flow-col space-x-4 items-center justify-center md:-m-2">
-                          {isMicrophonePermissionAllowed ? (
-                            <ButtonWithTooltip
-                              onClick={_toggleMic}
-                              onState={micOn}
-                              mic={true}
-                              OnIcon={MicOnIcon}
-                              OffIcon={MicOffIcon}
-                            />
-                          ) : (
-                            <MicPermissionDenied />
-                          )}
-
-                          {isCameraPermissionAllowed ? (
-                            <ButtonWithTooltip
-                              onClick={_toggleWebcam}
-                              onState={webcamOn}
-                              mic={false}
-                              OnIcon={WebcamOnIcon}
-                              OffIcon={WebcamOffIcon}
-                            />
-                          ) : (
-                            <CameraPermissionDenied />
-                          )}
+                      {!isMobile && (
+                        <div className="flex-1 min-w-0">
+                          <DropDownSpeaker speakers={speakers} />
                         </div>
+                      )}
+                      <div className={isMobile ? "w-full" : "flex-1 min-w-0"}>
+                        <DropDownCam changeWebcam={changeWebcam} webcams={webcams} />
                       </div>
                     </div>
-
-                    <>
-
-
-                      <div className={`flex mt-3  ${isMobile ? "flex-col" : "flex-row "} `}>
-                        <div className={`${isMobile ? "w-full mt-1" : "w-1/3"}`}>
-                          <DropDownMic
-                            mics={mics}
-                            changeMic={changeMic}
-                            customAudioStream={customAudioStream}
-                            audioTrack={audioTrack}
-                            micOn={micOn}
-                            didDeviceChange={didDeviceChange}
-                            setDidDeviceChange={setDidDeviceChange}
-                            testSpeaker={testSpeaker}
-                            setTestSpeaker={setTestSpeaker}
-                          />
-                        </div>
-                        <div className={`lg:ml-3 ${isMobile ? "w-full" : "w-1/3 "}`}>
-                          {!isMobile && <DropDownSpeaker speakers={speakers} />}
-                        </div>
-                        <div className={`lg:ml-3 ${isMobile ? "w-full mt-1" : "w-1/3 "}`}>
-                          <DropDownCam
-                            changeWebcam={changeWebcam}
-                            webcams={webcams}
-                          />
-                        </div>
-
-
-
-                      </div>
-                    </>
                   </div>
+
                 </div>
               </div>
-              <div className="md:col-span-5 2xl:col-span-5 col-span-12 md:relative">
-                <div className="flex flex-1 flex-col items-center justify-center xl:m-16 lg:m-6 md:mt-9 lg:mt-14 xl:mt-20 mt-3 md:absolute md:left-0 md:right-0 md:top-0 md:bottom-0">
+
+              {/* Right column: meeting form */}
+              <div className="md:col-span-5">
+                <div className="bg-white rounded-2xl shadow-md border border-gray-200 p-6 h-full flex flex-col justify-center">
+                  <div className="mb-5">
+                    <h2 className="text-xl font-bold text-gray-800">Ready to join?</h2>
+                    <p className="text-gray-500 text-sm mt-1">Enter your details to join the consultation</p>
+                  </div>
                   <MeetingDetailsScreen
                     participantName={participantName}
                     setParticipantName={setParticipantName}
@@ -509,19 +495,9 @@ export function JoiningScreen({
                     onClickJoin={async (id) => {
                       const token = await getToken();
                       setToken(token);
-                      const valid = await validateMeeting({
-                        roomId: id,
-                        token,
-                      });
-
+                      const valid = await validateMeeting({ roomId: id, token });
                       if (valid) {
-                        // setToken(token);
                         setMeetingId(id);
-                        // setMeetingId(id);
-                        // if (videoTrack) {
-                        //   videoTrack.stop();
-                        //   setVideoTrack(null);
-                        // }
                         onClickStartMeeting();
                       } else {
                         toast(`Invalid Meeting ID`, {
@@ -540,7 +516,6 @@ export function JoiningScreen({
                       const token = await getToken();
                       setToken(token);
                       const _meetingId = await createMeeting({ token });
-                      // setToken(token);
                       setMeetingId(_meetingId);
                       return _meetingId;
                     }}

@@ -102,39 +102,47 @@ export const validateMeeting = async ({ roomId, token }) => {
   return result ? result.roomId === roomId : false;
 };
 
-// ─── VideoSDK Vision / Image-Intelligence APIs ────────────────────────────────
+// ─── VideoSDK AI / Identity-Verification APIs ────────────────────────────────
+// All three endpoints require a full `data:image/jpeg;base64,...` string.
+
+const AI_BASE = "https://api.videosdk.live/ai/v1";
+
+const ensureDataUrl = (s) =>
+  s && s.startsWith("data:") ? s : `data:image/jpeg;base64,${s}`;
 
 export const runOCR = async ({ token, imageBase64 }) => {
-  const res = await fetch(`${API_BASE_URL}/v2/vision/ocr`, {
+  const img = ensureDataUrl(imageBase64);
+  const res = await fetch(`${AI_BASE}/ocr`, {
     method: "POST",
     headers: { Authorization: token, "Content-Type": "application/json" },
-    body: JSON.stringify({ imageData: stripDataUrl(imageBase64) }),
+    // backPart is sent as the same image when only one side is captured
+    body: JSON.stringify({ frontPart: img, backPart: img }),
   });
   if (!res.ok) throw new Error(`OCR API ${res.status}`);
-  return res.json();
+  return res.json(); // { idType, idNumber, name, dateOfBirth, address, gender, mobileNumber }
 };
 
 export const runFaceMatch = async ({ token, referenceBase64, targetBase64 }) => {
-  const res = await fetch(`${API_BASE_URL}/v2/vision/face-match`, {
+  const res = await fetch(`${AI_BASE}/face-verification/verify`, {
     method: "POST",
     headers: { Authorization: token, "Content-Type": "application/json" },
     body: JSON.stringify({
-      image1: stripDataUrl(referenceBase64),
-      image2: stripDataUrl(targetBase64),
+      img1: ensureDataUrl(referenceBase64),
+      img2: ensureDataUrl(targetBase64),
     }),
   });
   if (!res.ok) throw new Error(`Face-match API ${res.status}`);
-  return res.json();
+  return res.json(); // { verified: boolean }
 };
 
 export const runAntiSpoof = async ({ token, imageBase64 }) => {
-  const res = await fetch(`${API_BASE_URL}/v2/vision/anti-spoof`, {
+  const res = await fetch(`${AI_BASE}/face-verification/detect-spoof`, {
     method: "POST",
     headers: { Authorization: token, "Content-Type": "application/json" },
-    body: JSON.stringify({ imageData: stripDataUrl(imageBase64) }),
+    body: JSON.stringify({ img: ensureDataUrl(imageBase64) }),
   });
   if (!res.ok) throw new Error(`Anti-spoof API ${res.status}`);
-  return res.json();
+  return res.json(); // { spoof_detected: boolean, accuracy: number }
 };
 
 // POST all captured MER documents to Tata 1mg backend
