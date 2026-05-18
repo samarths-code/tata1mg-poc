@@ -368,8 +368,8 @@ export default function ActionsTab() {
 
           setIsCapturing(false);
 
-          // Skip spoof for reference face
-          if (target !== "reference") {
+          // Skip spoof for reference face and ID card (Aadhaar)
+          if (target !== "reference" && target !== "aadhaarPhoto") {
             runSpoofCheck(dataUrl, target);
           }
 
@@ -731,7 +731,6 @@ export default function ActionsTab() {
                 onCapture={() => handleCapture("aadhaarPhoto")}
                 captureLabel="Capture Aadhaar"
                 customerId={customerId}
-                spoofResult={spoofResults.aadhaarPhoto}
               />
 
               {/* OCR result */}
@@ -798,7 +797,7 @@ export default function ActionsTab() {
               </div>
 
               {/* AI summary */}
-              {(spoofResults.customerPhoto || spoofResults.aadhaarPhoto || faceMatchResult) && (
+              {(spoofResults.customerPhoto || faceMatchResult) && (
                 <div className="bg-slate-50 rounded-xl p-4 border border-gray-300">
                   <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3">AI Checks</p>
                   <div className="space-y-2">
@@ -806,12 +805,6 @@ export default function ActionsTab() {
                       <div className="flex items-center justify-between">
                         <span className="text-xs text-gray-500">Photo liveness</span>
                         <SpoofBadge result={spoofResults.customerPhoto} />
-                      </div>
-                    )}
-                    {spoofResults.aadhaarPhoto && !spoofResults.aadhaarPhoto.loading && (
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-gray-500">Aadhaar liveness</span>
-                        <SpoofBadge result={spoofResults.aadhaarPhoto} />
                       </div>
                     )}
                     {faceMatchResult && !faceMatchResult.loading && !faceMatchResult.error && (
