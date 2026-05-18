@@ -1,4 +1,4 @@
-import { Fragment, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { useMeeting, usePubSub } from "@videosdk.live/react-sdk";
 import { useMeetingAppContext } from "../../../context/MeetingAppContext";
 import {
@@ -17,7 +17,6 @@ import {
 } from "@heroicons/react/24/outline";
 import { toast } from "react-toastify";
 import { submitDocuments, runAntiSpoof, runFaceMatch, runOCR } from "../../../api";
-import PhotoEditModal from "../../PhotoEditModal";
 
 const STEPS = ["Greeting", "Details", "Photo", "Aadhaar", "Submit"];
 
@@ -298,11 +297,6 @@ export default function ActionsTab() {
   const captureTargetRef = useRef(null); // 'reference' | 'customerPhoto' | 'aadhaarPhoto'
   const imageChunksRef = useRef({});
 
-  // Edit modal
-  const [pendingImage, setPendingImage] = useState(null);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [editModalTitle, setEditModalTitle] = useState("Edit Photo");
-
   // Camera selection
   const [selectedCamera, setSelectedCamera] = useState(null);
   const [customerCameras, setCustomerCameras] = useState([]);
@@ -330,8 +324,22 @@ export default function ActionsTab() {
     token,
   } = useMeetingAppContext();
 
+  // Keep a stable ref so pubsub callbacks always see the latest referencePhoto
+  const referencePhotoRef = useRef(referencePhoto);
+  useEffect(() => { referencePhotoRef.current = referencePhoto; }, [referencePhoto]);
+
   const { publish: triggerCapture } = usePubSub(`IMAGE_CAPTURE_${pid}`, {});
   const { publish: switchCam } = usePubSub(`SWITCH_PARTICIPANT_CAMERA_${pid}`, {});
+
+  // Auto-capture reference face when Details step becomes active
+  useEffect(() => {
+    if (activeStep !== 1) return;
+    if (!customerId) return;
+    if (referencePhoto || isCapturing) return;
+    const timer = setTimeout(() => handleCapture("reference"), 500);
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeStep, customerId]);
 
   usePubSub("DEVICE_INFO", {
     onMessageReceived: ({ payload }) => {
@@ -356,22 +364,28 @@ export default function ActionsTab() {
             .map((c) => c.chunkdata)
             .join("");
           const dataUrl = `data:image/jpeg;base64,${base64}`;
+          const target = captureTargetRef.current;
 
           setIsCapturing(false);
-          setPendingImage(dataUrl);
 
-          // Run spoof immediately on the raw image
-          const target = captureTargetRef.current;
-          runSpoofCheck(dataUrl, target);
+          // Skip spoof for reference face
+          if (target !== "reference") {
+            runSpoofCheck(dataUrl, target);
+          }
 
-          // Open edit modal
-          const titles = {
-            reference: "Edit Reference Face",
-            customerPhoto: "Edit Customer Photo",
-            aadhaarPhoto: "Edit Aadhaar Card",
-          };
-          setEditModalTitle(titles[target] || "Edit Photo");
-          setShowEditModal(true);
+          // Save directly without a modal
+          if (target === "reference") {
+            setReferencePhoto(dataUrl);
+            toast.success("Reference face saved.", { autoClose: 2000 });
+          } else {
+            setCapturedImage(dataUrl);
+            if (target === "customerPhoto" && referencePhotoRef.current) {
+              runFaceMatchCheck(referencePhotoRef.current, dataUrl);
+            }
+            if (target === "aadhaarPhoto") {
+              runOCRCheck(dataUrl);
+            }
+          }
 
           delete imageChunksRef.current[id];
         }
@@ -438,25 +452,6 @@ export default function ActionsTab() {
     } catch (err) {
       console.error("Capture error:", err);
       setIsCapturing(false);
-    }
-  }
-
-  async function handleEditSave(editedImage) {
-    const target = captureTargetRef.current;
-    setShowEditModal(false);
-    setPendingImage(null);
-
-    if (target === "reference") {
-      setReferencePhoto(editedImage);
-      toast.success("Reference face saved.", { autoClose: 2000 });
-    } else {
-      setCapturedImage(editedImage);
-      if (target === "customerPhoto" && referencePhoto) {
-        await runFaceMatchCheck(referencePhoto, editedImage);
-      }
-      if (target === "aadhaarPhoto") {
-        await runOCRCheck(editedImage);
-      }
     }
   }
 
@@ -859,18 +854,6 @@ export default function ActionsTab() {
         />
       </div>
 
-      {/* Photo edit modal */}
-      <PhotoEditModal
-        open={showEditModal}
-        imageSrc={pendingImage}
-        title={editModalTitle}
-        onSave={handleEditSave}
-        onClose={() => {
-          setShowEditModal(false);
-          setPendingImage(null);
-          setIsCapturing(false);
-        }}
-      />
     </>
   );
 }
