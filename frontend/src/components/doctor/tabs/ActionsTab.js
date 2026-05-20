@@ -448,7 +448,7 @@ export default function ActionsTab() {
     setCapturedImage(null);
     setFaceMatchResult(null);
     try {
-      triggerCapture("IMAGE_CAPTURE", { persist: true }, { senderId: localParticipant.id });
+      triggerCapture("IMAGE_CAPTURE", { persist: true }, { senderId: localParticipant.id, target });
     } catch (err) {
       console.error("Capture error:", err);
       setIsCapturing(false);

@@ -1,5 +1,5 @@
 import { createCameraVideoTrack, useMeeting } from "@videosdk.live/react-sdk";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useMeetingAppContext } from "../../context/MeetingAppContext";
 import { MemoizedParticipant } from "../ParticipantView";
 import InfoTab from "./tabs/InfoTab";
@@ -10,7 +10,7 @@ import MicOffIcon from "../../icons/Bottombar/MicOffIcon";
 import WebcamOnIcon from "../../icons/Bottombar/WebcamOnIcon";
 import WebcamOffIcon from "../../icons/Bottombar/WebcamOffIcon";
 import EndIcon from "../../icons/Bottombar/EndIcon";
-import { VideoCameraIcon, ClipboardIcon, CheckIcon } from "@heroicons/react/24/outline";
+import { VideoCameraIcon, ClipboardIcon, CheckIcon, InformationCircleIcon } from "@heroicons/react/24/outline";
 import { toast } from "react-toastify";
 import { nameTructed, trimSnackBarText } from "../../utils/helper";
 
@@ -154,19 +154,60 @@ function DoctorControls() {
   );
 }
 
+function useIsMobile(breakpoint = 768) {
+  const [mobile, setMobile] = useState(
+    () => window.matchMedia(`(max-width: ${breakpoint - 1}px)`).matches
+  );
+  useEffect(() => {
+    const mq = window.matchMedia(`(max-width: ${breakpoint - 1}px)`);
+    const h = (e) => setMobile(e.matches);
+    mq.addEventListener("change", h);
+    return () => mq.removeEventListener("change", h);
+  }, [breakpoint]);
+  return mobile;
+}
+
+const MOBILE_TABS = [
+  { id: "video",   label: "Video",  Icon: VideoCameraIcon },
+  { id: "actions", label: "Steps",  Icon: ClipboardIcon },
+  { id: "info",    label: "Info",   Icon: InformationCircleIcon },
+];
+
 export default function DoctorView() {
   const { caseId } = useMeetingAppContext();
+  const [activeMobileTab, setActiveMobileTab] = useState("actions");
+  const isMobile = useIsMobile();
+
+  // Each panel gets a single set of layout classes — no duplicate component instances
+  const actionsCls = !isMobile
+    ? "w-96 xl:w-[440px] shrink-0 overflow-hidden border-r border-gray-300 bg-white flex flex-col"
+    : activeMobileTab === "actions"
+    ? "flex-1 overflow-hidden flex flex-col bg-white"
+    : "hidden";
+
+  const videoCls = !isMobile
+    ? "flex-1 overflow-hidden"
+    : activeMobileTab === "video"
+    ? "flex-1 overflow-hidden"
+    : "hidden";
+
+  const infoCls = !isMobile
+    ? "w-80 xl:w-96 shrink-0 overflow-y-auto bg-slate-50 border-l border-gray-300"
+    : activeMobileTab === "info"
+    ? "flex-1 overflow-y-auto bg-slate-50"
+    : "hidden";
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Header */}
       <header
-        className="flex items-center justify-between px-6 bg-gray-750 border-b border-gray-600 shrink-0 gap-4"
+        className="flex items-center justify-between px-3 md:px-6 bg-gray-750 border-b border-gray-600 shrink-0 gap-2 md:gap-4"
         style={{ height: 56 }}
       >
         <Tata1mgLogo />
 
-        <div className="flex items-center gap-3 flex-1 justify-center">
+        {/* Desktop center: case ID + meeting ID copy */}
+        <div className="hidden md:flex items-center gap-3 flex-1 justify-center">
           {caseId && (
             <div className="flex items-center gap-2">
               <span className="text-gray-900 text-xs">Case</span>
@@ -178,26 +219,61 @@ export default function DoctorView() {
           <MeetingIdCopy />
         </div>
 
+        {/* Mobile center: compact case ID chip */}
+        <div className="md:hidden flex-1 flex justify-center">
+          {caseId && (
+            <span className="font-mono text-[11px] font-semibold bg-gray-700 text-white px-2.5 py-1 rounded-lg max-w-[100px] truncate">
+              {caseId}
+            </span>
+          )}
+        </div>
+
         <DoctorControls />
       </header>
 
-      {/* Three-column body */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* LEFT: stepper / instructions — wider */}
-        <aside className="w-96 xl:w-[440px] shrink-0 overflow-hidden border-r border-gray-300 bg-white flex flex-col">
+      {/* Panel body — single instance of each panel, layout adapts via JS breakpoint */}
+      <div className={`flex flex-1 overflow-hidden${isMobile ? " flex-col" : ""}`}>
+        <div className={actionsCls}>
           <ActionsTab />
-        </aside>
+        </div>
 
-        {/* CENTRE: live video */}
-        <main className="flex-1 overflow-hidden">
+        <div className={videoCls}>
           <VideoPanel />
-        </main>
+        </div>
 
-        {/* RIGHT: device + location info */}
-        <aside className="w-80 xl:w-96 shrink-0 overflow-y-auto bg-slate-50 border-l border-gray-300">
+        <div className={infoCls}>
           <InfoTab />
-        </aside>
+        </div>
       </div>
+
+      {/* Mobile bottom tab bar */}
+      {isMobile && (
+        <nav
+          className="shrink-0 flex bg-white border-t border-gray-200"
+          style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
+        >
+          {MOBILE_TABS.map(({ id, label, Icon }) => {
+            const isActive = activeMobileTab === id;
+            return (
+              <button
+                key={id}
+                onClick={() => setActiveMobileTab(id)}
+                className={`relative flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5 min-h-[52px] transition-colors ${
+                  isActive
+                    ? "text-orange-450"
+                    : "text-gray-400 hover:text-gray-500 active:text-gray-600"
+                }`}
+              >
+                <Icon className="w-5 h-5 shrink-0" />
+                <span className="text-[11px] font-medium leading-none">{label}</span>
+                {isActive && (
+                  <span className="absolute top-0 inset-x-4 h-0.5 bg-orange-450 rounded-b-sm" />
+                )}
+              </button>
+            );
+          })}
+        </nav>
+      )}
     </div>
   );
 }
