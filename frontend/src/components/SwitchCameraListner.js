@@ -21,6 +21,8 @@ const SwitchCameraListner = () => {
   const { setSelectedWebcam } = useMeetingAppContext();
   const { getVideoTrack } = useMediaStream();
 
+  const { publish: publishDeviceInfo } = usePubSub("DEVICE_INFO", {});
+
   usePubSub(`SWITCH_PARTICIPANT_CAMERA_${mMeeting?.localParticipant?.id}`, {
     onMessageReceived: async ({ payload }) => {
       try {
@@ -37,6 +39,8 @@ const SwitchCameraListner = () => {
           mMeeting?.disableWebcam();
           const track = await getVideoTrack({ webcamId: target.deviceId });
           mMeeting.changeWebcam(track);
+          // Notify InfoTab of the new active camera
+          publishDeviceInfo("DEVICE_INFO", { persist: true }, { selectedCameraLabel: target.label });
         }
       } catch (err) {
         console.error("Error processing camera switch:", err);

@@ -75,6 +75,27 @@ function PermissionRow({ emoji, label, detail, status, critical }) {
   );
 }
 
+function permissionErrMsg(errorName, isLocation = false) {
+  if (!errorName) return null;
+  if (errorName === "NotAllowedError" || errorName === "PermissionDeniedError")
+    return isLocation
+      ? "Location blocked. Click the lock icon in your address bar → Site settings → set Location to Allow."
+      : "Blocked by browser. Click the lock icon in your address bar → Site settings → set to Allow.";
+  if (errorName === "PositionUnavailable")
+    return "Location unavailable. Ensure your device has GPS or network location enabled.";
+  if (errorName === "NotFoundError" || errorName === "DevicesNotFoundError")
+    return "No device found. Connect a camera / microphone and retry.";
+  if (errorName === "NotReadableError" || errorName === "TrackStartError")
+    return "Device in use by another app. Close Zoom, Teams, or other video apps and retry.";
+  if (errorName === "timeout")
+    return isLocation
+      ? "Location timed out. Move to an area with better signal and retry."
+      : "Device not responding. Reconnect it and retry.";
+  return isLocation
+    ? "Could not determine location. Check device settings and retry."
+    : "Could not access device. Check it is connected and not blocked.";
+}
+
 export default function PermissionSetup({ onDone }) {
   const [camera,   setCamera]   = useState(STATUS.IDLE);
   const [mic,      setMic]      = useState(STATUS.IDLE);
@@ -82,10 +103,15 @@ export default function PermissionSetup({ onDone }) {
   const [network,  setNetwork]  = useState(STATUS.IDLE);
   const [networkDetail,  setNetworkDetail]  = useState(null);
   const [locationDetail, setLocationDetail] = useState(null);
+  const [cameraError,   setCameraError]   = useState(null);
+  const [micError,      setMicError]      = useState(null);
+  const [locationError, setLocationError] = useState(null);
 
+  // Hard block — camera, mic AND location must all be granted before proceeding
   const criticalDone =
-    (camera === STATUS.GRANTED || camera === STATUS.DENIED) &&
-    (mic    === STATUS.GRANTED || mic    === STATUS.DENIED);
+    camera   === STATUS.GRANTED &&
+    mic      === STATUS.GRANTED &&
+    location === STATUS.GRANTED;
 
   const totalDone = [camera, mic, location, network].filter(
     (s) => s === STATUS.GRANTED || s === STATUS.DENIED
@@ -97,24 +123,38 @@ export default function PermissionSetup({ onDone }) {
   }, []);
 
   async function runChecks() {
+    // Some USB audio/video devices hang getUserMedia indefinitely — cap at 10s
+    const withTimeout = (promise, ms = 10000) =>
+      Promise.race([
+        promise,
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("timeout")), ms)
+        ),
+      ]);
+
+    setCameraError(null);
     setCamera(STATUS.CHECKING);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      const stream = await withTimeout(navigator.mediaDevices.getUserMedia({ video: true }));
       stream.getTracks().forEach((t) => t.stop());
       setCamera(STATUS.GRANTED);
-    } catch {
+    } catch (err) {
       setCamera(STATUS.DENIED);
+      setCameraError(err?.message === "timeout" ? "timeout" : (err?.name || "unknown"));
     }
 
+    setMicError(null);
     setMic(STATUS.CHECKING);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await withTimeout(navigator.mediaDevices.getUserMedia({ audio: true }));
       stream.getTracks().forEach((t) => t.stop());
       setMic(STATUS.GRANTED);
-    } catch {
+    } catch (err) {
       setMic(STATUS.DENIED);
+      setMicError(err?.message === "timeout" ? "timeout" : (err?.name || "unknown"));
     }
 
+    setLocationError(null);
     setLocation(STATUS.CHECKING);
     try {
       await new Promise((resolve, reject) => {
@@ -130,8 +170,15 @@ export default function PermissionSetup({ onDone }) {
         );
       });
       setLocation(STATUS.GRANTED);
-    } catch {
+    } catch (err) {
       setLocation(STATUS.DENIED);
+      // GeolocationPositionError codes: 1=PERMISSION_DENIED, 2=POSITION_UNAVAILABLE, 3=TIMEOUT
+      const code = err?.code;
+      setLocationError(
+        code === 1 ? "NotAllowedError" :
+        code === 2 ? "PositionUnavailable" :
+        code === 3 ? "timeout" : "unknown"
+      );
     }
 
     setNetwork(STATUS.CHECKING);
@@ -196,6 +243,7 @@ export default function PermissionSetup({ onDone }) {
             label="Location"
             detail={locationDetail || "Required for MER report"}
             status={location}
+            critical
           />
           <PermissionRow
             emoji="🌐"
@@ -207,6 +255,19 @@ export default function PermissionSetup({ onDone }) {
 
         {/* Continue button */}
         <div className="px-6 pb-8 pt-1">
+          {(camera === STATUS.DENIED || mic === STATUS.DENIED || location === STATUS.DENIED) && (
+            <div className="mb-3 p-3 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700 space-y-1.5 leading-relaxed">
+              {camera === STATUS.DENIED && (
+                <p><span className="font-bold">Camera — </span>{permissionErrMsg(cameraError)}</p>
+              )}
+              {mic === STATUS.DENIED && (
+                <p><span className="font-bold">Microphone — </span>{permissionErrMsg(micError)}</p>
+              )}
+              {location === STATUS.DENIED && (
+                <p><span className="font-bold">Location — </span>{permissionErrMsg(locationError, true)}</p>
+              )}
+            </div>
+          )}
           <button
             disabled={!criticalDone}
             onClick={onDone}
@@ -221,14 +282,19 @@ export default function PermissionSetup({ onDone }) {
                 Continue to call
                 <ArrowRightIcon className="w-4 h-4" />
               </>
-            ) : (
+            ) : camera === STATUS.CHECKING || mic === STATUS.CHECKING || location === STATUS.CHECKING ? (
               "Checking permissions…"
+            ) : (
+              "Allow camera, mic & location to continue"
             )}
           </button>
-          {(camera === STATUS.DENIED || mic === STATUS.DENIED) && (
-            <p className="text-xs text-center text-red-500 mt-3 leading-relaxed">
-              Camera or mic access was denied. Update your browser settings and reload.
-            </p>
+          {(camera === STATUS.DENIED || mic === STATUS.DENIED || location === STATUS.DENIED) && (
+            <button
+              onClick={runChecks}
+              className="mt-2 w-full py-3 rounded-2xl text-sm font-semibold text-orange-450 border border-orange-450/40 hover:bg-orange-450/5 active:scale-95 transition-all"
+            >
+              ↺ Retry permission check
+            </button>
           )}
         </div>
       </div>

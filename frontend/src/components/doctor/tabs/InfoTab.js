@@ -79,7 +79,7 @@ export default function InfoTab() {
 
   usePubSub("DEVICE_INFO", {
     onMessageReceived: ({ payload }) => {
-      setDeviceInfo(payload);
+      setDeviceInfo((prev) => prev ? { ...prev, ...payload } : payload);
     },
     onOldMessagesReceived: (messages) => {
       const latest = messages[messages.length - 1];

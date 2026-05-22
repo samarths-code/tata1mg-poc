@@ -9,14 +9,17 @@ import {
   UserCircleIcon,
 } from "@heroicons/react/24/solid";
 import {
+  ArrowDownTrayIcon,
   ArrowPathIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   DocumentTextIcon,
+  ExclamationTriangleIcon,
   FaceSmileIcon,
 } from "@heroicons/react/24/outline";
+import { generateMERpdf } from "../../../utils/generateMERpdf";
 import { toast } from "react-toastify";
-import { submitDocuments, runAntiSpoof, runFaceMatch, runOCR } from "../../../api";
+import { runAntiSpoof, runFaceMatch, runOCR } from "../../../api";
 
 const STEPS = ["Greeting", "Details", "Photo", "Aadhaar", "Submit"];
 
@@ -121,59 +124,83 @@ function SpoofBadge({ result }) {
       ) : (
         <ShieldExclamationIcon className="w-3.5 h-3.5 shrink-0" />
       )}
-      {isReal ? `Live${pct != null ? ` ${pct}%` : ""} ✓` : "Spoof Detected ✗"}
+      {isReal
+        ? `Live${pct != null ? ` · ${pct}%` : ""} ✓`
+        : `Spoof Detected${pct != null ? ` · ${pct}%` : ""} ✗`}
     </span>
   );
 }
 
 // ─── Face match result ─────────────────────────────────────────────────────────
-function FaceMatchCard({ result }) {
+function FaceMatchCard({ result, onRetry }) {
   if (!result) return null;
+
   if (result.loading) {
     return (
-      <div className="mt-3 p-3 rounded-xl border border-gray-300 bg-slate-50 flex items-center gap-2">
-        <span className="w-4 h-4 rounded-full border-2 border-orange-450 border-t-transparent animate-spin shrink-0" />
-        <span className="text-xs text-gray-500">Running face match…</span>
+      <div className="mt-3 p-4 rounded-xl border border-orange-450/20 bg-orange-450/5 flex items-center gap-3">
+        <span className="w-5 h-5 rounded-full border-2 border-orange-450 border-t-transparent animate-spin shrink-0" />
+        <span className="text-sm font-medium text-gray-500">Running face match…</span>
       </div>
     );
   }
+
   if (result.error) {
     return (
-      <div className="mt-3 p-3 rounded-xl border border-gray-300 bg-slate-50">
-        <p className="text-xs text-gray-400 italic">Face match check failed</p>
+      <div className="mt-3 p-3 rounded-xl border border-red-200 bg-red-50 flex items-center justify-between gap-3">
+        <p className="text-xs text-red-600 font-medium">Face match check failed</p>
+        {onRetry && (
+          <button
+            onClick={onRetry}
+            className="flex items-center gap-1 text-xs font-semibold text-orange-450 hover:text-orange-500 shrink-0"
+          >
+            <ArrowPathIcon className="w-3.5 h-3.5" />
+            Retry
+          </button>
+        )}
       </div>
     );
   }
+
   const matched = result.matched ?? result.match ?? false;
-  const score = result.score ?? result.similarity ?? result.confidence ?? null;
-  const pct = score != null ? Math.round(score * 100) : null;
+  const score   = result.score ?? result.similarity ?? result.confidence ?? null;
+  const pct     = score != null ? Math.round(score * 100) : null;
+
   return (
     <div
-      className="mt-3 rounded-xl border overflow-hidden"
-      style={{ borderColor: matched ? "rgba(59,165,93,0.4)" : "rgba(211,47,47,0.4)" }}
+      className="mt-3 rounded-xl border-2 overflow-hidden"
+      style={{ borderColor: matched ? "rgba(59,165,93,0.35)" : "rgba(211,47,47,0.35)" }}
     >
+      {/* Header row: big score + badge */}
       <div
-        className="flex items-center justify-between px-3 py-2 border-b"
-        style={{
-          background: matched ? "rgba(59,165,93,0.06)" : "rgba(211,47,47,0.06)",
-          borderColor: matched ? "rgba(59,165,93,0.2)" : "rgba(211,47,47,0.2)",
-        }}
+        className="flex items-center gap-4 px-4 py-3"
+        style={{ background: matched ? "rgba(59,165,93,0.07)" : "rgba(211,47,47,0.06)" }}
       >
-        <span className="text-xs font-semibold text-gray-650">Face Match</span>
+        <div className="flex-1 min-w-0">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-0.5">
+            Face Match
+          </p>
+          {pct != null && (
+            <p
+              className="text-3xl font-bold leading-none"
+              style={{ color: matched ? "#3BA55D" : "#D32F2F" }}
+            >
+              {pct}%
+            </p>
+          )}
+        </div>
         <span
-          className="text-xs font-bold px-2 py-0.5 rounded-full"
-          style={{
-            background: matched ? "rgba(59,165,93,0.15)" : "rgba(211,47,47,0.15)",
-            color: matched ? "#3BA55D" : "#D32F2F",
-          }}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-bold shrink-0 text-white"
+          style={{ background: matched ? "#3BA55D" : "#D32F2F" }}
         >
-          {matched ? "Matched ✓" : "Not Matched ✗"}
+          {matched ? "✓ Passed" : "✗ Failed"}
         </span>
       </div>
+
+      {/* Similarity bar */}
       {pct != null && (
-        <div className="p-3">
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-[10px] text-gray-500 uppercase tracking-wide">Similarity</span>
+        <div className="px-4 py-2.5 bg-white border-t border-gray-100">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[10px] text-gray-400 uppercase tracking-wide">Similarity</span>
             <span className="text-xs font-bold text-gray-650">{pct}%</span>
           </div>
           <div className="h-2 rounded-full bg-gray-200 overflow-hidden">
@@ -306,7 +333,7 @@ export default function ActionsTab() {
   const [faceMatchResult, setFaceMatchResult] = useState(null);
   const [ocrResult, setOcrResult] = useState(null);
 
-  const { participants, localParticipant, meetingId } = useMeeting();
+  const { participants, localParticipant, localWebcamOn, localMicOn } = useMeeting();
   const remoteIds = [...participants.keys()].filter(
     (id) => id !== localParticipant.id && participants.get(id)?.displayName?.toLowerCase() !== "recorder"
   );
@@ -420,7 +447,7 @@ export default function ActionsTab() {
       const raw = await runFaceMatch({ token, referenceBase64: refBase64, targetBase64 });
       // API returns { verified: boolean }
       // Normalise to { matched } for FaceMatchCard
-      setFaceMatchResult({ matched: raw.verified });
+      setFaceMatchResult({ matched: raw.verified, score: raw.score });
     } catch {
       setFaceMatchResult({ error: true });
     }
@@ -470,34 +497,37 @@ export default function ActionsTab() {
 
   // ── Submit ───────────────────────────────────────────────────────────────────
 
-  async function handleSubmit() {
-    setSubmissionStatus("submitting");
+  function handleSubmit() {
     try {
-      await submitDocuments({
-        caseId,
-        geoData,
-        patientName: name,
-        patientAge: age,
-        customerPhotoBase64: customerPhoto,
-        aadhaarPhotoBase64: aadhaarPhoto,
-        sessionId: meetingId,
-      });
-      setSubmissionStatus("success");
-      toast.success("Documents submitted successfully.", { autoClose: 3000 });
+      handlePdfDownload();
+      toast.success("MER report downloaded.", { autoClose: 3000 });
     } catch (err) {
-      console.error("Submit error:", err);
-      setSubmissionStatus("error");
-      toast.error("Submission failed. Please retry.");
+      console.error("PDF generation error:", err);
+      toast.warn("Could not generate PDF — use Re-download after submission.", { autoClose: 4000 });
     }
+    setSubmissionStatus("success");
   }
 
   // ── Navigation ───────────────────────────────────────────────────────────────
+
+  function resetToFrontCamera() {
+    if (!selectedCamera || !customerCameras.length) return;
+    // Front camera is typically the first in the list or labelled "front"
+    const front =
+      customerCameras.find((c) => c.label.toLowerCase().includes("front")) ||
+      customerCameras[0];
+    if (front && front.deviceId !== selectedCamera.deviceId) {
+      handleCameraSelect(front);
+    }
+  }
 
   function goNext() {
     if (activeStep === 2) {
       if (capturedImage) { setCustomerPhoto(capturedImage); setCapturedImage(null); }
     } else if (activeStep === 3) {
       if (capturedImage) { setAadhaarPhoto(capturedImage); setCapturedImage(null); }
+      // Auto-reset to front camera when leaving the Aadhaar step
+      resetToFrontCamera();
     } else if (activeStep === 4) {
       handleSubmit();
       return;
@@ -513,10 +543,42 @@ export default function ActionsTab() {
 
   function canGoNext() {
     if (activeStep === 1) return name.trim().length > 0 && age.trim().length > 0;
-    if (activeStep === 2) return !!capturedImage || !!customerPhoto;
+    if (activeStep === 2) {
+      if (!capturedImage && !customerPhoto) return false;
+      // Block if face match was run against a reference photo and explicitly failed
+      if (
+        referencePhoto &&
+        faceMatchResult &&
+        !faceMatchResult.loading &&
+        !faceMatchResult.error &&
+        !(faceMatchResult.matched ?? faceMatchResult.match)
+      ) return false;
+      return true;
+    }
     if (activeStep === 3) return !!capturedImage || !!aadhaarPhoto;
     if (activeStep === 4) return submissionStatus !== "submitting" && submissionStatus !== "success";
     return true;
+  }
+
+  const faceMatchFailed =
+    activeStep === 2 &&
+    referencePhoto &&
+    faceMatchResult &&
+    !faceMatchResult.loading &&
+    !faceMatchResult.error &&
+    !(faceMatchResult.matched ?? faceMatchResult.match);
+
+  function handlePdfDownload() {
+    generateMERpdf({
+      name,
+      age,
+      customerPhoto,
+      faceMatchResult,
+      ocrResult,
+      geoData,
+      caseId,
+      spoofResult: spoofResults.customerPhoto,
+    });
   }
 
   function getNextLabel() {
@@ -533,8 +595,22 @@ export default function ActionsTab() {
 
   return (
     <>
-      <div className="flex flex-col h-full overflow-hidden">
+      <div className="relative flex flex-col h-full overflow-hidden">
         <StepBar active={activeStep} />
+
+        {/* In-session permission warning */}
+        {(!localWebcamOn || !localMicOn) && (
+          <div className="shrink-0 flex items-center gap-2.5 px-4 py-2.5 bg-amber-50 border-b border-amber-200">
+            <ExclamationTriangleIcon className="w-4 h-4 text-amber-500 shrink-0" />
+            <p className="text-xs text-amber-700 font-medium">
+              {!localWebcamOn && !localMicOn
+                ? "Camera and microphone are off — use the controls above to re-enable."
+                : !localWebcamOn
+                ? "Your camera is off — the patient cannot see you."
+                : "Your microphone is off — the patient cannot hear you."}
+            </p>
+          </div>
+        )}
 
         {/* Scrollable step content */}
         <div className="flex-1 overflow-y-auto">
@@ -663,7 +739,10 @@ export default function ActionsTab() {
                 spoofResult={spoofResults.customerPhoto}
               >
                 {/* Face match result */}
-                <FaceMatchCard result={faceMatchResult} />
+                <FaceMatchCard
+                  result={faceMatchResult}
+                  onRetry={capturedImage && referencePhoto ? () => runFaceMatchCheck(referencePhoto, capturedImage) : null}
+                />
 
                 {/* Manual face match button */}
                 {capturedImage && referencePhoto && !faceMatchResult?.loading && (
@@ -721,6 +800,22 @@ export default function ActionsTab() {
                       );
                     })}
                   </div>
+                  {/* Reset to front camera button */}
+                  {selectedCamera && (() => {
+                    const front =
+                      customerCameras.find((c) => c.label.toLowerCase().includes("front")) ||
+                      customerCameras[0];
+                    if (!front || front.deviceId === selectedCamera.deviceId) return null;
+                    return (
+                      <button
+                        onClick={resetToFrontCamera}
+                        className="mt-2 w-full flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold text-orange-450 border border-orange-450/30 hover:bg-orange-450/5 transition-colors"
+                      >
+                        <ArrowPathIcon className="w-3.5 h-3.5" />
+                        Reset to Front Camera
+                      </button>
+                    );
+                  })()}
                 </div>
               )}
 
@@ -807,29 +902,43 @@ export default function ActionsTab() {
                         <SpoofBadge result={spoofResults.customerPhoto} />
                       </div>
                     )}
-                    {faceMatchResult && !faceMatchResult.loading && !faceMatchResult.error && (
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-gray-500">Face match</span>
-                        <span
-                          className="text-xs font-semibold px-2 py-0.5 rounded-full"
-                          style={{
-                            background: (faceMatchResult.matched ?? faceMatchResult.match) ? "rgba(59,165,93,0.12)" : "rgba(211,47,47,0.1)",
-                            color: (faceMatchResult.matched ?? faceMatchResult.match) ? "#3BA55D" : "#D32F2F",
-                          }}
-                        >
-                          {(faceMatchResult.matched ?? faceMatchResult.match) ? "Matched ✓" : "Not Matched ✗"}
-                        </span>
-                      </div>
-                    )}
+                    {faceMatchResult && !faceMatchResult.loading && !faceMatchResult.error && (() => {
+                      const matched = faceMatchResult.matched ?? faceMatchResult.match;
+                      const score = faceMatchResult.score ?? faceMatchResult.similarity ?? faceMatchResult.confidence ?? null;
+                      const pct = score != null ? Math.round(score * 100) : null;
+                      return (
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-gray-500">Face match</span>
+                          <span
+                            className="text-xs font-semibold px-2 py-0.5 rounded-full"
+                            style={{
+                              background: matched ? "rgba(59,165,93,0.12)" : "rgba(211,47,47,0.1)",
+                              color: matched ? "#3BA55D" : "#D32F2F",
+                            }}
+                          >
+                            {matched ? "Matched ✓" : "Not Matched ✗"}{pct != null ? ` · ${pct}%` : ""}
+                          </span>
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
               )}
 
               {submissionStatus === "success" && (
-                <div className="flex items-center gap-2.5 p-3 bg-green-350 rounded-xl border border-green-450">
-                  <CheckBadgeIcon className="w-5 h-5 text-green-150 shrink-0" />
-                  <p className="text-sm font-medium text-green-150">Documents submitted successfully.</p>
-                </div>
+                <>
+                  <div className="flex items-center gap-2.5 p-3 bg-green-350 rounded-xl border border-green-450">
+                    <CheckBadgeIcon className="w-5 h-5 text-green-150 shrink-0" />
+                    <p className="text-sm font-medium text-green-150">Documents submitted successfully.</p>
+                  </div>
+                  <button
+                    onClick={handlePdfDownload}
+                    className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-orange-450 text-orange-450 text-sm font-semibold hover:bg-orange-450/5 active:scale-95 transition-all"
+                  >
+                    <ArrowDownTrayIcon className="w-4 h-4" />
+                    Re-download MER Report (PDF)
+                  </button>
+                </>
               )}
               {submissionStatus === "error" && (
                 <p className="text-xs text-red-150 text-center">Submission failed. Please try again.</p>
@@ -837,6 +946,16 @@ export default function ActionsTab() {
             </div>
           )}
         </div>
+
+        {/* Face match failure — hard block message above nav */}
+        {faceMatchFailed && (
+          <div className="shrink-0 flex items-center gap-2.5 px-4 py-2.5 bg-red-50 border-t border-red-200">
+            <ShieldExclamationIcon className="w-4 h-4 text-red-500 shrink-0" />
+            <p className="text-xs text-red-600 font-medium">
+              Face match failed — retake the photo to proceed.
+            </p>
+          </div>
+        )}
 
         <NavRow
           step={activeStep}

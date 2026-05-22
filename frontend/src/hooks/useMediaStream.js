@@ -62,12 +62,19 @@ const useMediaStream = () => {
   };
 
   const getAudioTrack = async ({micId}) => {
-    try{
-      const track = await createMicrophoneAudioTrack({
-        microphoneId: micId
-      });
+    try {
+      // Some external USB microphones cause createMicrophoneAudioTrack to hang
+      // indefinitely. Race against a 10-second timeout so the joining flow
+      // always completes — worst case with no audio track.
+      const track = await Promise.race([
+        createMicrophoneAudioTrack({ microphoneId: micId }),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("audio track timeout")), 10000)
+        ),
+      ]);
       return track;
     } catch(error) {
+      console.error("getAudioTrack error:", error);
       return null;
     }
   };

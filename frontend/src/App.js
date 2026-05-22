@@ -52,8 +52,7 @@ const App = () => {
               micEnabled: micOn,
               webcamEnabled: webcamOn,
               name: participantName || "TestUser",
-              participantId: participantName,
-              multiStream: false,
+              multiStream: true,
               customCameraVideoTrack: customVideoStream,
               customMicrophoneAudioTrack: customAudioStream,
             }}

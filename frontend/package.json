@@ -8,6 +8,7 @@
     "@popperjs/core": "^2.11.7",
     "@videosdk.live/react-sdk": "^0.9.1",
     "@videosdk.live/videosdk-media-processor-web": "^0.0.12",
+    "jspdf": "^4.2.1",
     "lottie-react": "^2.3.1",
     "react": "^18.2.0",
     "react-cropper": "^2.1.8",
