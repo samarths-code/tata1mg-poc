@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { MeetingDetailsScreen } from "../MeetingDetailsScreen";
-import { createMeeting, getToken, validateMeeting } from "../../api";
+import { getToken, validateMeeting } from "../../api";
 import ConfirmBox from "../ConfirmBox";
 import WebcamOffIcon from "../../icons/WebcamOffIcon";
 import WebcamOnIcon from "../../icons/Bottombar/WebcamOnIcon";
@@ -34,6 +34,9 @@ export function JoiningScreen({
   setCustomVideoStream,
   micOn,
   webcamOn,
+  isAutoJoin,
+  tokenReady,
+  credentialError,
 }) {
   const {
     selectedWebcam,
@@ -484,42 +487,48 @@ export function JoiningScreen({
               {/* Right column: meeting form */}
               <div className="md:col-span-5">
                 <div className="bg-white rounded-2xl shadow-md border border-gray-200 p-6 h-full flex flex-col justify-center">
-                  <div className="mb-5">
-                    <h2 className="text-xl font-bold text-gray-800">Ready to join?</h2>
-                    <p className="text-gray-500 text-sm mt-1">Enter your details to join the consultation</p>
-                  </div>
-                  <MeetingDetailsScreen
-                    participantName={participantName}
-                    setParticipantName={setParticipantName}
-                    onClickStartMeeting={onClickStartMeeting}
-                    onClickJoin={async (id) => {
-                      const token = await getToken();
-                      setToken(token);
-                      const valid = await validateMeeting({ roomId: id, token });
-                      if (valid) {
-                        setMeetingId(id);
-                        onClickStartMeeting();
-                      } else {
-                        toast(`Invalid Meeting ID`, {
-                          position: "bottom-left",
-                          autoClose: 4000,
-                          hideProgressBar: true,
-                          closeButton: false,
-                          pauseOnHover: true,
-                          draggable: true,
-                          progress: undefined,
-                          theme: "light",
-                        });
-                      }
-                    }}
-                    _handleOnCreateMeeting={async () => {
-                      const token = await getToken();
-                      setToken(token);
-                      const _meetingId = await createMeeting({ token });
-                      setMeetingId(_meetingId);
-                      return _meetingId;
-                    }}
-                  />
+                  {isAutoJoin ? (
+                    <AutoJoinPanel
+                      participantName={participantName}
+                      setParticipantName={setParticipantName}
+                      participantMode={participantMode}
+                      tokenReady={tokenReady}
+                      credentialError={credentialError}
+                      onClickStartMeeting={onClickStartMeeting}
+                    />
+                  ) : (
+                    <>
+                      <div className="mb-5">
+                        <h2 className="text-xl font-bold text-gray-800">Ready to join?</h2>
+                        <p className="text-gray-500 text-sm mt-1">Enter your details to join the consultation</p>
+                      </div>
+                      <MeetingDetailsScreen
+                        participantName={participantName}
+                        setParticipantName={setParticipantName}
+                        onClickStartMeeting={onClickStartMeeting}
+                        onClickJoin={async (id) => {
+                          const valid = await validateMeeting({ roomId: id });
+                          if (valid) {
+                            const token = await getToken({ roomId: id });
+                            setToken(token);
+                            setMeetingId(id);
+                            onClickStartMeeting();
+                          } else {
+                            toast(`Invalid Meeting ID`, {
+                              position: "bottom-left",
+                              autoClose: 4000,
+                              hideProgressBar: true,
+                              closeButton: false,
+                              pauseOnHover: true,
+                              draggable: true,
+                              progress: undefined,
+                              theme: "light",
+                            });
+                          }
+                        }}
+                      />
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -546,6 +555,59 @@ export function JoiningScreen({
         title="Mic or webcam not available"
         subTitle="Please connect a mic and webcam to speak and share your video in the meeting. You can also join without them."
       />
+    </>
+  );
+}
+
+function AutoJoinPanel({
+  participantName,
+  setParticipantName,
+  participantMode,
+  tokenReady,
+  credentialError,
+  onClickStartMeeting,
+}) {
+  const roleLabel = participantMode === participantModes.DOCTOR ? "Doctor" : "Patient";
+  const canJoin = participantName.length >= 3 && tokenReady && !credentialError;
+
+  return (
+    <>
+      <div className="mb-5">
+        <h2 className="text-xl font-bold text-gray-800">Join as {roleLabel}</h2>
+        <p className="text-gray-500 text-sm mt-1">
+          {credentialError
+            ? "Session setup failed"
+            : tokenReady
+            ? "Your session is ready"
+            : "Setting up your session…"}
+        </p>
+      </div>
+
+      {credentialError ? (
+        <p className="text-sm text-red-500 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+          {credentialError}
+        </p>
+      ) : (
+        <>
+          <input
+            value={participantName}
+            onChange={(e) => setParticipantName(e.target.value)}
+            placeholder="Enter your name"
+            className="px-4 py-3 bg-white border border-orange-200 rounded-xl text-gray-800 w-full text-center focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-450 transition-colors placeholder-gray-400"
+          />
+          <button
+            disabled={!canJoin}
+            onClick={onClickStartMeeting}
+            className={`w-full text-white px-2 py-3 rounded-xl mt-4 font-semibold transition-colors ${
+              canJoin
+                ? "bg-orange-450 hover:bg-orange-500"
+                : "bg-gray-200 text-gray-400 cursor-not-allowed"
+            }`}
+          >
+            {tokenReady ? "Join Meeting" : "Setting up…"}
+          </button>
+        </>
+      )}
     </>
   );
 }

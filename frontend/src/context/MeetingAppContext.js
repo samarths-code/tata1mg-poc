@@ -13,7 +13,6 @@ export const MeetingAppProvider = ({
   initialWebcamOn,
   participantMode,
   initialSpeakerOn,
-  token,
   caseId,
 }) => {
   const isMobile = useIsMobile();
@@ -66,7 +65,6 @@ export const MeetingAppProvider = ({
         initialMicOn,
         initialWebcamOn,
         participantMode,
-        token,
         caseId,
 
         allowedVirtualBackground: false,

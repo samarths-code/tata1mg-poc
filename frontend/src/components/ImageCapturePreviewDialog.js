@@ -6,10 +6,12 @@ import { useMeeting, usePubSub } from "@videosdk.live/react-sdk";
 import { useMeetingAppContext } from "../context/MeetingAppContext";
 import { toast } from "react-toastify";
 import useIsMobile from "../hooks/useIsMobile";
+import { maskAadhaarImage } from "../api";
 
 const ImageCapturePreviewDialog = ({ open, setOpen }) => {
   const mMeeting = useMeeting();
   const [imageSrc, setImageSrc] = useState(null);
+  const [isMasking, setIsMasking] = useState(false);
   const { setCustomerPhoto, setAadhaarPhoto } = useMeetingAppContext();
   const isMobile = useIsMobile();
   const imageChunksRef = useRef({});
@@ -46,19 +48,37 @@ const ImageCapturePreviewDialog = ({ open, setOpen }) => {
 
   const finalImage = cropClicked && cropData ? cropData : imageSrc;
 
-  const handleSave = (saveAs) => {
-    if (!finalImage) { toast.error("No image to save."); return; }
-    if (saveAs === "photo") {
-      setCustomerPhoto(finalImage);
-      toast.success("Customer photo saved.", { autoClose: 2000 });
-    } else {
-      setAadhaarPhoto(finalImage);
-      toast.success("Aadhaar card saved.", { autoClose: 2000 });
-    }
+  const resetDialog = () => {
     setOpen(false);
     setImageSrc(null);
     setCropData(null);
     setCropClicked(false);
+  };
+
+  const handleSave = async (saveAs) => {
+    if (!finalImage) { toast.error("No image to save."); return; }
+    if (saveAs === "photo") {
+      setCustomerPhoto(finalImage);
+      toast.success("Customer photo saved.", { autoClose: 2000 });
+      resetDialog();
+      return;
+    }
+
+    // Aadhaar: mask the ID number before storing
+    setIsMasking(true);
+    try {
+      const { maskedImage } = await maskAadhaarImage({ imageBase64: finalImage });
+      setAadhaarPhoto(maskedImage);
+      toast.success("Aadhaar card saved (ID number masked).", { autoClose: 2000 });
+    } catch (err) {
+      console.error("[AadhaarMask]", err);
+      // Fall back to unmasked image so the flow isn't blocked, but warn the user.
+      setAadhaarPhoto(finalImage);
+      toast.warn("Aadhaar saved — masking unavailable. Verify manually before submission.", { autoClose: 4000 });
+    } finally {
+      setIsMasking(false);
+      resetDialog();
+    }
   };
 
   return (
@@ -124,8 +144,8 @@ const ImageCapturePreviewDialog = ({ open, setOpen }) => {
                   <button type="button" disabled={!imageSrc} className="rounded border border-blue-400 bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-40" onClick={() => handleSave("photo")}>
                     Save as Photo
                   </button>
-                  <button type="button" disabled={!imageSrc} className="rounded border border-green-400 bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-40" onClick={() => handleSave("aadhaar")}>
-                    Save as Aadhaar
+                  <button type="button" disabled={!imageSrc || isMasking} className="rounded border border-green-400 bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-40" onClick={() => handleSave("aadhaar")}>
+                    {isMasking ? "Masking…" : "Save as Aadhaar"}
                   </button>
                 </div>
               </Dialog.Panel>

@@ -1,71 +1,101 @@
-const API_BASE_URL = "https://api.videosdk.live";
-const TATA1MG_API_URL = process.env.REACT_APP_TATA1MG_API_URL || "https://api.tata1mg.com";
-const VIDEOSDK_TOKEN = process.env.REACT_APP_VIDEOSDK_TOKEN;
-const RECORDING_TEMPLATE_URL = process.env.REACT_APP_RECORDING_TEMPLATE_URL || "";
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "http://localhost:5001";
+const VIDEOSDK_AI = "https://api.videosdk.live/ai/v1";
 
-const stripDataUrl = (s) => (s || "").replace(/^data:image\/[a-z+]+;base64,/, "");
+// Stable participant ID for this browser session (used by the manual join flow).
+const _sessionParticipantId = (() => {
+  const KEY = "_vsdk_pid";
+  const stored = sessionStorage.getItem(KEY);
+  if (stored) return stored;
+  const id = "p-" + Math.random().toString(36).slice(2, 10);
+  sessionStorage.setItem(KEY, id);
+  return id;
+})();
 
-// Token is embedded in the join link by Tata 1mg backend.
-// Fall back to env var for local dev/testing.
-export const getToken = async () => {
-  const urlParams = new URLSearchParams(window.location.search);
-  const urlToken = urlParams.get("token");
-  if (urlToken) return urlToken;
+// Last known meeting ID — fallback when React state hasn't propagated yet.
+let _cachedRoomId = null;
 
-  const appId = urlParams.get("appId");
-  if (appId) {
-    const url = `${API_BASE_URL}/v2/projects/auth-token/${appId}`;
-    const options = {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        permissions: ["allow_join"],
-        expiresIn: "7d",
-        roles: ["CRAWLER"],
-      }),
-    };
-    const { authToken: token } = await fetch(url, options)
-      .then((r) => r.json())
-      .catch((e) => console.error("error in auth token", e));
-    return token;
-  }
+// Short-lived crawler token issued by our backend for VideoSDK AI API calls.
+// Populated whenever a token endpoint is called; AI functions use it automatically.
+let _cachedAiToken = null;
 
-  if (VIDEOSDK_TOKEN) return VIDEOSDK_TOKEN;
-  console.error("No token available — add ?token= to the URL or set REACT_APP_VIDEOSDK_TOKEN");
+export const isAiReady = () => !!_cachedAiToken;
+
+function getParticipantRole() {
+  const mode = new URLSearchParams(window.location.search).get("mode")?.toUpperCase();
+  return mode === "DOCTOR" ? "DOCTOR" : "CUSTOMER";
+}
+
+// Ensure image is a data URL before sending to VideoSDK AI APIs.
+function ensureDataUrl(b64) {
+  if (!b64 || b64.startsWith("data:")) return b64;
+  return `data:image/jpeg;base64,${b64}`;
+}
+
+// ── Room / token APIs (proxied through our backend) ───────────────────────────
+
+export const getToken = async ({ roomId, participantId } = {}) => {
+  const role = getParticipantRole();
+  const effectiveRoomId = roomId || _cachedRoomId;
+  if (!effectiveRoomId) throw new Error("getToken: roomId is required");
+  const body = {
+    role,
+    roomId: effectiveRoomId,
+    participantId: participantId || _sessionParticipantId,
+  };
+  const res = await fetch(`${BACKEND_URL}/api/video/token`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Participant-Role": role,
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`Token request failed: ${res.status}`);
+  const data = await res.json();
+  _cachedAiToken = data.aiToken;
+  return data.token;
 };
 
-export const createMeeting = async ({ token }) => {
-  const url = `${API_BASE_URL}/v2/rooms`;
-  const body = {};
-  if (RECORDING_TEMPLATE_URL) {
-    body.autoStartConfig = {
-      recording: {
-        config: {
-          layout: { type: "SPOTLIGHT", priority: "SPEAKER", gridSize: 20 },
-          theme: "DARK",
-          mode: "video-and-audio",
-          quality: "high",
-          orientation: "landscape",
-        },
-        template: {
-          url: RECORDING_TEMPLATE_URL,
-          width: 1280,
-          height: 720,
-          windowWidth: 1280,
-          windowHeight: 720,
-        },
-      },
-    };
-  }
-  const options = {
+export const getSessionCredentials = async ({ meetingId, mode }) => {
+  const role = mode?.toUpperCase() === "DOCTOR" ? "DOCTOR" : "PATIENT";
+  const res = await fetch(`${BACKEND_URL}/api/video/session-credentials`, {
     method: "POST",
-    headers: { Authorization: token, "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  };
-  const { roomId } = await fetch(url, options)
-    .then((r) => r.json())
-    .catch((e) => console.error("error in create room", e));
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ meetingId, role }),
+  });
+  if (!res.ok) throw new Error(`Session credentials request failed: ${res.status}`);
+  const data = await res.json();
+  _cachedAiToken = data.aiToken;
+  return { token: data.token, participantId: data.participantId };
+};
+
+export const createMeeting = async () => {
+  const res = await fetch(`${BACKEND_URL}/api/video/meetings`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Participant-Role": "DOCTOR",
+    },
+    body: JSON.stringify({}),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || `Create meeting failed: ${res.status}`);
+  }
+  const { roomId } = await res.json();
+  _cachedRoomId = roomId;
   return roomId;
+};
+
+export const validateMeeting = async ({ roomId }) => {
+  const res = await fetch(`${BACKEND_URL}/api/video/meetings/${encodeURIComponent(roomId)}/validate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!res.ok) return false;
+  const data = await res.json();
+  if (data.valid === true) _cachedRoomId = roomId;
+  return data.valid === true;
 };
 
 export const getIPGeoInfo = async () => {
@@ -90,84 +120,49 @@ export const getIPGeoInfo = async () => {
   }
 };
 
-export const validateMeeting = async ({ roomId, token }) => {
-  const url = `${API_BASE_URL}/v2/rooms/validate/${roomId}`;
-  const options = {
-    method: "GET",
-    headers: { Authorization: token, "Content-Type": "application/json" },
-  };
-  const result = await fetch(url, options)
-    .then((r) => r.json())
-    .catch((e) => console.error("error in validate room", e));
-  return result ? result.roomId === roomId : false;
-};
+// ── VideoSDK AI APIs (called directly from the client) ────────────────────────
+// Auth uses the short-lived aiToken issued by our backend alongside the RTC token.
 
-// ─── VideoSDK AI / Identity-Verification APIs ────────────────────────────────
-// All three endpoints require a full `data:image/jpeg;base64,...` string.
-
-const AI_BASE = "https://api.videosdk.live/ai/v1";
-
-const ensureDataUrl = (s) =>
-  s && s.startsWith("data:") ? s : `data:image/jpeg;base64,${s}`;
-
-export const runOCR = async ({ token, imageBase64 }) => {
+export const runOCR = async ({ imageBase64 }) => {
   const img = ensureDataUrl(imageBase64);
-  const res = await fetch(`${AI_BASE}/ocr`, {
+  const res = await fetch(`${VIDEOSDK_AI}/ocr`, {
     method: "POST",
-    headers: { Authorization: token, "Content-Type": "application/json" },
-    // backPart is sent as the same image when only one side is captured
+    headers: { Authorization: _cachedAiToken, "Content-Type": "application/json" },
     body: JSON.stringify({ frontPart: img, backPart: img }),
   });
   if (!res.ok) throw new Error(`OCR API ${res.status}`);
-  return res.json(); // { idType, idNumber, name, dateOfBirth, address, gender, mobileNumber }
+  return res.json();
 };
 
-export const runFaceMatch = async ({ token, referenceBase64, targetBase64 }) => {
-  const res = await fetch(`${AI_BASE}/face-verification/verify`, {
+export const runFaceMatch = async ({ referenceBase64, targetBase64 }) => {
+  const res = await fetch(`${VIDEOSDK_AI}/face-verification/verify`, {
     method: "POST",
-    headers: { Authorization: token, "Content-Type": "application/json" },
+    headers: { Authorization: _cachedAiToken, "Content-Type": "application/json" },
     body: JSON.stringify({
       img1: ensureDataUrl(referenceBase64),
       img2: ensureDataUrl(targetBase64),
     }),
   });
   if (!res.ok) throw new Error(`Face-match API ${res.status}`);
-  return res.json(); // { verified: boolean }
+  return res.json();
 };
 
-export const runAntiSpoof = async ({ token, imageBase64 }) => {
-  const res = await fetch(`${AI_BASE}/face-verification/detect-spoof`, {
+export const runAntiSpoof = async ({ imageBase64 }) => {
+  const res = await fetch(`${VIDEOSDK_AI}/face-verification/detect-spoof`, {
     method: "POST",
-    headers: { Authorization: token, "Content-Type": "application/json" },
+    headers: { Authorization: _cachedAiToken, "Content-Type": "application/json" },
     body: JSON.stringify({ img: ensureDataUrl(imageBase64) }),
   });
   if (!res.ok) throw new Error(`Anti-spoof API ${res.status}`);
-  return res.json(); // { spoof_detected: boolean, accuracy: number }
+  return res.json();
 };
 
-// POST all captured MER documents to Tata 1mg backend
-export const submitDocuments = async ({
-  caseId,
-  geoData,
-  customerPhotoBase64,
-  aadhaarPhotoBase64,
-  sessionId,
-}) => {
-  const url = `${TATA1MG_API_URL}/api/mer/cases/${caseId}/documents`;
-  const options = {
+export const maskAadhaarImage = async ({ imageBase64 }) => {
+  const res = await fetch(`${VIDEOSDK_AI}/aadhaar-mask`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      geoData,
-      customerPhoto: customerPhotoBase64,
-      aadhaarPhoto: aadhaarPhotoBase64,
-      sessionId,
-    }),
-  };
-  return fetch(url, options)
-    .then((r) => r.json())
-    .catch((e) => {
-      console.error("error submitting documents", e);
-      throw e;
-    });
+    headers: { Authorization: _cachedAiToken, "Content-Type": "application/json" },
+    body: JSON.stringify({ img: ensureDataUrl(imageBase64) }),
+  });
+  if (!res.ok) throw new Error(`Aadhaar mask API ${res.status}`);
+  return res.json(); // { maskedImage: "data:image/jpeg;base64,..." }
 };

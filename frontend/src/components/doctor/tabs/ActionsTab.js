@@ -19,7 +19,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { generateMERpdf } from "../../../utils/generateMERpdf";
 import { toast } from "react-toastify";
-import { runAntiSpoof, runFaceMatch, runOCR } from "../../../api";
+import { runAntiSpoof, runFaceMatch, runOCR, isAiReady } from "../../../api";
 
 const STEPS = ["Greeting", "Details", "Photo", "Aadhaar", "Submit"];
 
@@ -348,7 +348,6 @@ export default function ActionsTab() {
     caseId,
     referencePhoto, setReferencePhoto,
     setCustomerSpoofStatus,
-    token,
   } = useMeetingAppContext();
 
   // Keep a stable ref so pubsub callbacks always see the latest referencePhoto
@@ -426,10 +425,10 @@ export default function ActionsTab() {
   // ── AI helpers ───────────────────────────────────────────────────────────────
 
   async function runSpoofCheck(imageBase64, target) {
-    if (!token) return;
+    if (!isAiReady()) return;
     setSpoofResults((prev) => ({ ...prev, [target]: { loading: true } }));
     try {
-      const raw = await runAntiSpoof({ token, imageBase64 });
+      const raw = await runAntiSpoof({ imageBase64 });
       // API returns { spoof_detected: boolean, accuracy: number }
       // Normalise to { isReal, confidence } for SpoofBadge
       const result = { isReal: !raw.spoof_detected, confidence: raw.accuracy };
@@ -441,10 +440,10 @@ export default function ActionsTab() {
   }
 
   async function runFaceMatchCheck(refBase64, targetBase64) {
-    if (!token) return;
+    if (!isAiReady()) return;
     setFaceMatchResult({ loading: true });
     try {
-      const raw = await runFaceMatch({ token, referenceBase64: refBase64, targetBase64 });
+      const raw = await runFaceMatch({ referenceBase64: refBase64, targetBase64 });
       // API returns { verified: boolean }
       // Normalise to { matched } for FaceMatchCard
       setFaceMatchResult({ matched: raw.verified, score: raw.score });
@@ -454,10 +453,10 @@ export default function ActionsTab() {
   }
 
   async function runOCRCheck(imageBase64) {
-    if (!token) return;
+    if (!isAiReady()) return;
     setOcrResult({ loading: true });
     try {
-      const raw = await runOCR({ token, imageBase64 });
+      const raw = await runOCR({ imageBase64 });
       // API returns flat { idType, idNumber, name, dateOfBirth, address, gender, mobileNumber }
       // Normalise to { fields } for OCRResultCard
       setOcrResult({ fields: raw });

@@ -143,7 +143,7 @@ export const CornerDisplayName = ({
       label: "Bitrate",
       audio:
         audioStats && audioStats[0]?.bitrate
-          ? `${parseFloat(audioStats[0]?.bitrate).toFixed(2)} kb/s`
+          ? `${parseFloat(audioStats[0]?.audioLevel)} kb/s`
           : "-",
       video:
         videoStats && videoStats[0]?.bitrate

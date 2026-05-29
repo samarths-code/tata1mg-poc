@@ -27,6 +27,8 @@ import ImageUploadListner from "../components/ImageUploadListner";
 import { TopBar } from "./components/TopBar";
 import useGeolocation from "../hooks/useGeolocation";
 import { getIPGeoInfo } from "../api";
+import { MicSilenceBanner } from "../components/ui/MicSilenceBanner";
+import { useAudioInputSilence } from "../hooks/useAudioInputSilence";
 
 async function reverseGeocode(lat, lng) {
   try {
@@ -212,6 +214,9 @@ export function MeetingContainer({ onMeetingLeave }) {
     });
   }
 
+  const { isSilent, deviceLabel, onAudioInputSilence  } = useAudioInputSilence();
+
+
   const mMeeting = useMeeting({
     onParticipantJoined,
     onParticipantLeft,
@@ -220,6 +225,7 @@ export function MeetingContainer({ onMeetingLeave }) {
     onMeetingStateChanged: _handleOnMeetingStateChanged,
     onError: _handleOnError,
     onRecordingStateChanged: _handleOnRecordingStateChanged,
+    onAudioInputSilence,
   });
 
   const isPresenting = mMeeting.presenterId ? true : false;
@@ -368,10 +374,11 @@ export function MeetingContainer({ onMeetingLeave }) {
 
   return (
     <div className="fixed inset-0">
-      <div ref={containerRef} className="h-full w-full flex flex-col bg-gray-800">
+      <div ref={containerRef} className="h-full w-full flex flex-col bg-gray-800 relative">
         {typeof localParticipantAllowedJoin === "boolean" ? (
           localParticipantAllowedJoin ? (
             <>
+              <MicSilenceBanner isSilent={isSilent} deviceLabel={deviceLabel} />
               <ImageUploadListner />
               <ResolutionListner />
               <SwitchCameraListner />

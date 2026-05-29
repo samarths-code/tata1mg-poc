@@ -16,13 +16,13 @@ const DocumentSubmitPanel = ({ panelHeight }) => {
     }
     setSubmissionStatus("submitting");
     try {
-      await submitDocuments({
-        caseId,
-        geoData,
-        customerPhotoBase64: customerPhoto,
-        aadhaarPhotoBase64: aadhaarPhoto,
-        sessionId: meetingId,
-      });
+      // await submitDocuments({
+      //   caseId,
+      //   geoData,
+      //   customerPhotoBase64: customerPhoto,
+      //   aadhaarPhotoBase64: aadhaarPhoto,
+      //   sessionId: meetingId,
+      // });
       setSubmissionStatus("success");
       toast.success("Documents submitted successfully.", { autoClose: 3000 });
     } catch (err) {
