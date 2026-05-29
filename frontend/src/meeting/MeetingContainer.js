@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, createRef } from "react";
+import React, { useState, useEffect, useRef, createRef, useCallback } from "react";
 import {
   Constants,
   createMicrophoneAudioTrack,
@@ -27,8 +27,6 @@ import ImageUploadListner from "../components/ImageUploadListner";
 import { TopBar } from "./components/TopBar";
 import useGeolocation from "../hooks/useGeolocation";
 import { getIPGeoInfo } from "../api";
-import { MicSilenceBanner } from "../components/ui/MicSilenceBanner";
-import { useAudioInputSilence } from "../hooks/useAudioInputSilence";
 
 async function reverseGeocode(lat, lng) {
   try {
@@ -214,9 +212,6 @@ export function MeetingContainer({ onMeetingLeave }) {
     });
   }
 
-  const { isSilent, deviceLabel, onAudioInputSilence  } = useAudioInputSilence();
-
-
   const mMeeting = useMeeting({
     onParticipantJoined,
     onParticipantLeft,
@@ -321,6 +316,38 @@ export function MeetingContainer({ onMeetingLeave }) {
     onOldMessagesReceived: () => {},
   });
 
+  // ── Mic silence ───────────────────────────────────────────────────────────────
+  // Patient publishes silence events; doctor receives and gets a toast.
+  // Both roles also get their own local toast via onAudioInputSilence.
+
+  const { publish: publishMicSilence } = usePubSub("MIC_SILENCE", {
+    onMessageReceived: ({ payload, senderId }) => {
+      if (!isDoctor || senderId === mMeetingRef.current?.localParticipant?.id) return;
+      if (payload.state === "detected") {
+        toast.warn(
+          `Patient's mic is silent${payload.devicelabel ? ` — ${payload.devicelabel}` : ""}. They may have an incoming call.`,
+          { toastId: "patient-mic-silent", position: "bottom-left", autoClose: false, hideProgressBar: true, closeButton: true, theme: "light" }
+        );
+      } else {
+        toast.dismiss("patient-mic-silent");
+      }
+    },
+  });
+
+  const onAudioInputSilence = useCallback(({ devicelabel, state }) => {
+    const label = devicelabel ? ` — ${devicelabel}` : "";
+    if (state === "detected") {
+      toast.warn(
+        `Your mic is silent${label}. Incoming call or system mute?`,
+        { toastId: "own-mic-silent", position: "bottom-left", autoClose: false, hideProgressBar: true, closeButton: true, theme: "light" }
+      );
+      if (isCustomer) publishMicSilence("MIC_SILENCE", { persist: false }, { state, devicelabel: devicelabel ?? null });
+    } else {
+      toast.dismiss("own-mic-silent");
+      if (isCustomer) publishMicSilence("MIC_SILENCE", { persist: false }, { state, devicelabel: null });
+    }
+  }, [isCustomer, publishMicSilence]);
+
   const { latitude, longitude, timestamp, error: geoError } = useGeolocation();
 
   const lastGeoPublishAtRef = useRef(0);
@@ -378,7 +405,6 @@ export function MeetingContainer({ onMeetingLeave }) {
         {typeof localParticipantAllowedJoin === "boolean" ? (
           localParticipantAllowedJoin ? (
             <>
-              <MicSilenceBanner isSilent={isSilent} deviceLabel={deviceLabel} />
               <ImageUploadListner />
               <ResolutionListner />
               <SwitchCameraListner />
