@@ -6,6 +6,41 @@ import { MeetingContainer } from "./meeting/MeetingContainer";
 import { MeetingAppProvider } from "./context/MeetingAppContext";
 import CreateMeetingPage from "./components/CreateMeetingPage";
 import { getToken, getSessionCredentials } from "./api";
+import { toast } from "react-toastify";
+
+// Catches errors thrown by MeetingProvider / MeetingContainer so a crash
+// shows an error screen instead of going blank white.
+class MeetingErrorBoundary extends React.Component {
+  state = { error: null };
+
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+
+  componentDidCatch(error) {
+    console.error("[MeetingErrorBoundary]", error);
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+          <div className="bg-white rounded-2xl shadow-md border border-gray-200 p-8 max-w-md w-full text-center">
+            <p className="text-lg font-semibold text-gray-800 mb-2">Something went wrong</p>
+            <p className="text-sm text-gray-500 mb-4">{this.state.error?.message || "An unexpected error occurred."}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="bg-orange-450 hover:bg-orange-500 text-white px-6 py-2 rounded-xl font-semibold"
+            >
+              Reload
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 const App = () => {
   const searchParams = new URLSearchParams(window.location.search);
@@ -13,11 +48,8 @@ const App = () => {
   const urlMode = searchParams.get("mode") || "";
   const caseId = searchParams.get("caseId") || "";
 
-  // Normalize: Doctor→DOCTOR, Patient→PATIENT→CUSTOMER, CUSTOMER→CUSTOMER
   const rawMode = urlMode.toUpperCase();
   const participantMode = rawMode === "PATIENT" ? "CUSTOMER" : rawMode || undefined;
-
-  // When both meetingId and mode are in the URL, skip the manual join flow.
   const isAutoJoin = !!(urlMeetingId && urlMode);
 
   const defaultName = isAutoJoin
@@ -40,12 +72,9 @@ const App = () => {
   const isMobile = window.matchMedia("only screen and (max-width: 768px)").matches;
 
   useEffect(() => {
-    if (isMobile) {
-      window.onbeforeunload = () => "Are you sure you want to exit?";
-    }
+    if (isMobile) window.onbeforeunload = () => "Are you sure you want to exit?";
   }, [isMobile]);
 
-  // Auto-fetch token + participantId when landing on a pre-shared link.
   useEffect(() => {
     if (!isAutoJoin) return;
     getSessionCredentials({ meetingId: urlMeetingId, mode: rawMode })
@@ -59,6 +88,24 @@ const App = () => {
       });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const handleStartMeeting = async () => {
+    try {
+      if (!token) {
+        const tok = await getToken({ roomId: meetingId || undefined });
+        setToken(tok);
+      }
+      setMeetingStarted(true);
+    } catch (err) {
+      console.error("Join error:", err);
+      toast.error(
+        err?.message?.includes("roomId")
+          ? "Meeting ID is missing. Please check the link."
+          : "Failed to join meeting. Check your connection and try again.",
+        { position: "bottom-left", autoClose: 5000, hideProgressBar: true, closeButton: true, theme: "light" }
+      );
+    }
+  };
+
   return (
     <MeetingAppProvider
       initialMicOn={micOn}
@@ -68,35 +115,37 @@ const App = () => {
       caseId={caseId}
     >
       {isMeetingStarted ? (
-        <MeetingProvider
-          config={{
-            meetingId,
-            micEnabled: micOn,
-            webcamEnabled: webcamOn,
-            name: participantName || "Guest",
-            participantId: participantId || undefined,
-            multiStream: true,
-            customCameraVideoTrack: customVideoStream,
-            customMicrophoneAudioTrack: customAudioStream,
-          }}
-          token={token}
-          reinitialiseMeetingOnConfigChange={true}
-          joinWithoutUserInteraction={true}
-        >
-          <MeetingContainer
-            onMeetingLeave={() => {
-              setToken("");
-              setParticipantId("");
-              setMeetingId("");
-              setParticipantName("");
-              setWebcamOn(false);
-              setMicOn(false);
-              setSpekerOn(false);
-              setMeetingStarted(false);
-              setIsMeetingLeft(true);
+        <MeetingErrorBoundary>
+          <MeetingProvider
+            config={{
+              meetingId,
+              micEnabled: micOn,
+              webcamEnabled: webcamOn,
+              name: participantName || "Guest",
+              participantId: participantId || undefined,
+              multiStream: true,
+              customCameraVideoTrack: customVideoStream,
+              customMicrophoneAudioTrack: customAudioStream,
             }}
-          />
-        </MeetingProvider>
+            token={token}
+            reinitialiseMeetingOnConfigChange={true}
+            joinWithoutUserInteraction={true}
+          >
+            <MeetingContainer
+              onMeetingLeave={() => {
+                setToken("");
+                setParticipantId("");
+                setMeetingId("");
+                setParticipantName("");
+                setWebcamOn(false);
+                setMicOn(false);
+                setSpekerOn(false);
+                setMeetingStarted(false);
+                setIsMeetingLeft(true);
+              }}
+            />
+          </MeetingProvider>
+        </MeetingErrorBoundary>
       ) : isMeetingLeft ? (
         <LeaveScreen setIsMeetingLeft={setIsMeetingLeft} />
       ) : (
@@ -108,13 +157,7 @@ const App = () => {
           micEnabled={micOn}
           webcamEnabled={webcamOn}
           speakerEnabled={speakerOn}
-          onClickStartMeeting={async () => {
-            if (!token) {
-              const tok = await getToken({ roomId: meetingId || undefined });
-              setToken(tok);
-            }
-            setMeetingStarted(true);
-          }}
+          onClickStartMeeting={handleStartMeeting}
           participantMode={participantMode}
           customAudioStream={customAudioStream}
           setCustomAudioStream={setCustomAudioStream}
@@ -135,9 +178,7 @@ const App = () => {
 };
 
 const AppRouter = () => {
-  if (window.location.pathname === "/create-meeting") {
-    return <CreateMeetingPage />;
-  }
+  if (window.location.pathname === "/create-meeting") return <CreateMeetingPage />;
   return <App />;
 };
 

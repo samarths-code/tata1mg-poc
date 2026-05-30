@@ -335,16 +335,17 @@ export function MeetingContainer({ onMeetingLeave }) {
   });
 
   const onAudioInputSilence = useCallback(({ devicelabel, state }) => {
+    if (!isCustomer) return;
     const label = devicelabel ? ` — ${devicelabel}` : "";
     if (state === "detected") {
       toast.warn(
         `Your mic is silent${label}. Incoming call or system mute?`,
         { toastId: "own-mic-silent", position: "bottom-left", autoClose: false, hideProgressBar: true, closeButton: true, theme: "light" }
       );
-      if (isCustomer) publishMicSilence("MIC_SILENCE", { persist: false }, { state, devicelabel: devicelabel ?? null });
+      publishMicSilence("MIC_SILENCE", { persist: false }, { state, devicelabel: devicelabel ?? null });
     } else {
       toast.dismiss("own-mic-silent");
-      if (isCustomer) publishMicSilence("MIC_SILENCE", { persist: false }, { state, devicelabel: null });
+      publishMicSilence("MIC_SILENCE", { persist: false }, { state, devicelabel: null });
     }
   }, [isCustomer, publishMicSilence]);
 
