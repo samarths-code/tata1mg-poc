@@ -23,7 +23,13 @@ app = Flask(__name__)
 # ── Config ────────────────────────────────────────────────────────────────────
 
 VIDEOSDK_API = "https://api.videosdk.live"
-FRONTEND_ORIGIN = os.environ.get("FRONTEND_ORIGIN", "*")
+
+# Comma-separated list of allowed origins, e.g.:
+#   FRONTEND_ORIGIN=http://localhost:3001,https://your-app.vercel.app
+# Use * to allow all (dev/ngrok only — never in production).
+ALLOWED_ORIGINS = (
+    "*" 
+)
 
 
 def _api_key() -> str:
@@ -44,9 +50,10 @@ def _secret() -> str:
 
 CORS(
     app,
-    origins=[FRONTEND_ORIGIN],
+    origins=ALLOWED_ORIGINS,
     methods=["GET", "POST", "OPTIONS"],
     allow_headers=["Content-Type", "X-Participant-Role"],
+    supports_credentials=False,
 )
 
 
