@@ -124,34 +124,46 @@ export function MeetingContainer({ onMeetingLeave }) {
   const { getVideoTrack } = useMediaStream();
 
   async function onMeetingJoined() {
-    const { muteMic, changeMic, changeWebcam, disableWebcam } = mMeetingRef.current;
+    try {
+      const { muteMic, changeMic, changeWebcam, disableWebcam } = mMeetingRef.current;
 
-    if (initialWebcamOn) {
-      await new Promise((resolve) => {
-        setTimeout(async () => {
-          disableWebcam();
-          const track = await getVideoTrack({ webcamId: selectedWebcam.id });
-          changeWebcam(track);
-          resolve();
-        }, 500);
-      });
+      if (initialWebcamOn) {
+        await new Promise((resolve) => {
+          setTimeout(async () => {
+            try {
+              disableWebcam();
+              const track = await getVideoTrack({ webcamId: selectedWebcam.id });
+              changeWebcam(track);
+            } catch (e) {
+              console.warn("Webcam setup failed:", e);
+            }
+            resolve();
+          }, 500);
+        });
+      }
+
+      if (initialMicOn && selectedMicrophone.id) {
+        await new Promise((resolve) => {
+          muteMic();
+          setTimeout(async () => {
+            try {
+              const audioTrack = await createMicrophoneAudioTrack({
+                encoderConfig: "speech_standard",
+                microphoneId: selectedMicrophone.id,
+              });
+              changeMic(audioTrack);
+            } catch (e) {
+              console.warn("Mic setup failed:", e);
+            }
+            resolve();
+          }, 500);
+        });
+      }
+    } catch (e) {
+      console.warn("onMeetingJoined error:", e);
+    } finally {
+      setLocalParticipantAllowedJoin(true);
     }
-
-    if (initialMicOn && selectedMicrophone.id) {
-      await new Promise((resolve) => {
-        muteMic();
-        setTimeout(async () => {
-          const audioTrack = await createMicrophoneAudioTrack({
-            encoderConfig: "speech_standard",
-            microphoneId: selectedMicrophone.id,
-          });
-          changeMic(audioTrack);
-          resolve();
-        }, 500);
-      });
-    }
-
-    setLocalParticipantAllowedJoin(true);
   }
 
   function onMeetingLeft() {
@@ -403,8 +415,7 @@ export function MeetingContainer({ onMeetingLeave }) {
   return (
     <div className="fixed inset-0">
       <div ref={containerRef} className="h-full w-full flex flex-col bg-gray-800 relative">
-        {typeof localParticipantAllowedJoin === "boolean" ? (
-          localParticipantAllowedJoin ? (
+        {localParticipantAllowedJoin ? (
             <>
               <ImageUploadListner />
               <ResolutionListner />
@@ -444,9 +455,8 @@ export function MeetingContainer({ onMeetingLeave }) {
                 </>
               )}
             </>
-          ) : null
         ) : (
-          !mMeeting.isMeetingJoined && <WaitingToJoinScreen />
+          <WaitingToJoinScreen />
         )}
 
         <ConfirmBox
