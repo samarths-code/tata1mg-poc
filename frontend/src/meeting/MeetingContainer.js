@@ -224,6 +224,41 @@ export function MeetingContainer({ onMeetingLeave }) {
     });
   }
 
+  const isCustomer =
+    !participantMode || participantMode === participantModes.CUSTOMER;
+  const isDoctor =
+    participantMode === participantModes.DOCTOR ||
+    participantMode === participantModes.AGENT;
+
+  const { publish: publishMicSilence } = usePubSub("MIC_SILENCE", {
+    onMessageReceived: ({ payload, senderId }) => {
+      if (!isDoctor || senderId === mMeetingRef.current?.localParticipant?.id) return;
+      if (payload.state === "detected") {
+        toast.warn(
+          `Patient's mic is silent${payload.devicelabel ? ` — ${payload.devicelabel}` : ""}. They may have an incoming call.`,
+          { toastId: "patient-mic-silent", position: "bottom-left", autoClose: false, hideProgressBar: true, closeButton: true, theme: "light" }
+        );
+      } else {
+        toast.dismiss("patient-mic-silent");
+      }
+    },
+  });
+
+  const onAudioInputSilence = useCallback(({ devicelabel, state }) => {
+    if (!isCustomer) return;
+    const label = devicelabel ? ` — ${devicelabel}` : "";
+    if (state === "detected") {
+      toast.warn(
+        `Your mic is silent${label}. Incoming call or system mute?`,
+        { toastId: "own-mic-silent", position: "bottom-left", autoClose: false, hideProgressBar: true, closeButton: true, theme: "light" }
+      );
+      publishMicSilence("MIC_SILENCE", { persist: false }, { state, devicelabel: devicelabel ?? null });
+    } else {
+      toast.dismiss("own-mic-silent");
+      publishMicSilence("MIC_SILENCE", { persist: false }, { state, devicelabel: null });
+    }
+  }, [isCustomer, publishMicSilence]);
+
   const mMeeting = useMeeting({
     onParticipantJoined,
     onParticipantLeft,
@@ -240,13 +275,6 @@ export function MeetingContainer({ onMeetingLeave }) {
   useEffect(() => {
     mMeetingRef.current = mMeeting;
   }, [mMeeting]);
-
-  // Auto geo broadcast: customer publishes location, doctor receives and stores
-  const isCustomer =
-    !participantMode || participantMode === participantModes.CUSTOMER;
-  const isDoctor =
-    participantMode === participantModes.DOCTOR ||
-    participantMode === participantModes.AGENT;
 
   const { publish: publishDeviceInfo } = usePubSub("DEVICE_INFO", {});
 
@@ -328,38 +356,6 @@ export function MeetingContainer({ onMeetingLeave }) {
     onOldMessagesReceived: () => {},
   });
 
-  // ── Mic silence ───────────────────────────────────────────────────────────────
-  // Patient publishes silence events; doctor receives and gets a toast.
-  // Both roles also get their own local toast via onAudioInputSilence.
-
-  const { publish: publishMicSilence } = usePubSub("MIC_SILENCE", {
-    onMessageReceived: ({ payload, senderId }) => {
-      if (!isDoctor || senderId === mMeetingRef.current?.localParticipant?.id) return;
-      if (payload.state === "detected") {
-        toast.warn(
-          `Patient's mic is silent${payload.devicelabel ? ` — ${payload.devicelabel}` : ""}. They may have an incoming call.`,
-          { toastId: "patient-mic-silent", position: "bottom-left", autoClose: false, hideProgressBar: true, closeButton: true, theme: "light" }
-        );
-      } else {
-        toast.dismiss("patient-mic-silent");
-      }
-    },
-  });
-
-  const onAudioInputSilence = useCallback(({ devicelabel, state }) => {
-    if (!isCustomer) return;
-    const label = devicelabel ? ` — ${devicelabel}` : "";
-    if (state === "detected") {
-      toast.warn(
-        `Your mic is silent${label}. Incoming call or system mute?`,
-        { toastId: "own-mic-silent", position: "bottom-left", autoClose: false, hideProgressBar: true, closeButton: true, theme: "light" }
-      );
-      publishMicSilence("MIC_SILENCE", { persist: false }, { state, devicelabel: devicelabel ?? null });
-    } else {
-      toast.dismiss("own-mic-silent");
-      publishMicSilence("MIC_SILENCE", { persist: false }, { state, devicelabel: null });
-    }
-  }, [isCustomer, publishMicSilence]);
 
   const { latitude, longitude, timestamp, error: geoError } = useGeolocation();
 
