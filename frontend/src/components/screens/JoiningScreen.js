@@ -72,7 +72,6 @@ export function JoiningScreen({
 
   const [audioTrack, setAudioTrack] = useState(null);
   const [videoTrack, setVideoTrack] = useState(null);
-  const [dlgMuted, setDlgMuted] = useState(false);
   const [dlgDevices, setDlgDevices] = useState(false);
   const [didDeviceChange, setDidDeviceChange] = useState(false);
   const [testSpeaker, setTestSpeaker] = useState(false)
@@ -105,7 +104,6 @@ export function JoiningScreen({
   useEffect(() => {
     if (micOn) {
       audioTrackRef.current = audioTrack;
-      startMuteListener();
     }
   }, [micOn, audioTrack]);
 
@@ -264,18 +262,6 @@ export function JoiningScreen({
     }
   };
 
-  async function startMuteListener() {
-    const currentAudioTrack = audioTrackRef.current;
-    if (currentAudioTrack) {
-      if (currentAudioTrack.muted) {
-        setDlgMuted(true);
-      }
-      currentAudioTrack.addEventListener("mute", (ev) => {
-        setDlgMuted(true);
-      });
-    }
-  }
-
   async function requestAudioVideoPermission(mediaType) {
     try {
       const permission = await requestPermission(mediaType);
@@ -358,13 +344,7 @@ export function JoiningScreen({
   const getAudioDevices = async () => {
     try {
       if (permissonAvaialble.current?.isMicrophonePermissionAllowed) {
-        let mics = await getMicrophones();
         let speakers = await getPlaybackDevices();
-        const hasMic = mics.length > 0;
-        if (hasMic) {
-          startMuteListener();
-        }
-
         setSelectedSpeaker({
           id: speakers[0]?.deviceId,
           label: speakers[0]?.label,
@@ -535,16 +515,7 @@ export function JoiningScreen({
           </div>
         </div>
       </div>
-      <ConfirmBox
-        open={dlgMuted}
-        successText="OKAY"
-        onSuccess={() => {
-          setDlgMuted(false);
-        }}
-        title="System mic is muted"
-        subTitle="You're default microphone is muted, please unmute it or increase audio
-            input volume from system settings."
-      />
+
 
       <ConfirmBox
         open={dlgDevices}
