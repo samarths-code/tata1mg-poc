@@ -1,42 +1,76 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { useMeetingAppContext } from "../../context/MeetingAppContext";
 import { participantModes } from "../../utils/common";
-import Tata1mgLogo from "../../components/Tata1mgLogo";
 
-export function TopBar({ bottomBarHeight, caseId }) {
+function getCurrentTime() {
+  return new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+export function TopBar({ bottomBarHeight, caseId, meetingTitle, currentStep = 1 }) {
   const { participantMode } = useMeetingAppContext();
   const isDoctor =
     participantMode === participantModes.DOCTOR ||
     participantMode === participantModes.AGENT;
 
+  const [time, setTime] = useState(getCurrentTime());
+  useEffect(() => {
+    const id = setInterval(() => setTime(getCurrentTime()), 30000);
+    return () => clearInterval(id);
+  }, []);
+
+  const steps = [
+    "Step 1: Identity Verification",
+    "Step 2: Face Verification",
+  ];
+
   return (
     <div
+      className="flex items-center justify-between px-5 shrink-0 z-10"
       style={{ height: bottomBarHeight }}
-      className="flex px-3 sm:px-5 bg-gray-750 items-center justify-between border-b border-gray-600 shrink-0 gap-2"
     >
-      <Tata1mgLogo size={28} />
-
-      {isDoctor && caseId && (
-        <div className="flex items-center gap-1.5 sm:gap-2">
-          <span className="hidden sm:block text-gray-900 text-xs">Case ID</span>
-          <span className="font-mono text-xs font-semibold bg-gray-700 text-white px-2 sm:px-3 py-1 rounded-lg max-w-[100px] sm:max-w-none truncate">
-            {caseId}
-          </span>
-        </div>
-      )}
-
-      <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-        <span className="relative flex h-2 w-2">
-          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-250 opacity-75" />
-          <span className="relative inline-flex rounded-full h-2 w-2 bg-green-150" />
-        </span>
+      {/* Left: time + meeting title */}
+      <div className="flex items-center gap-2 text-white">
         <span
-          className={`text-xs px-2 sm:px-2.5 py-1 rounded-full font-semibold whitespace-nowrap ${
-            isDoctor ? "bg-orange-450 text-white" : "bg-green-350 text-green-550"
-          }`}
+          className="text-base font-medium whitespace-nowrap"
+          style={{ textShadow: "1px 1px 3px rgba(0,0,0,0.4)" }}
         >
-          {isDoctor ? "Doctor" : "Customer"}
+          {time}
         </span>
+        {(meetingTitle || caseId) && (
+          <>
+            <div className="h-5 w-px bg-white/30 shrink-0" />
+            <span
+              className="text-base whitespace-nowrap overflow-hidden text-ellipsis max-w-xs"
+              style={{ textShadow: "1px 1px 3px rgba(0,0,0,0.4)" }}
+            >
+              {meetingTitle || (caseId ? `Case: ${caseId}` : "")}
+            </span>
+          </>
+        )}
+      </div>
+
+      {/* Right: step pills (patient) or case badge (doctor) */}
+      <div className="flex items-center gap-2 shrink-0">
+        {isDoctor ? (
+          caseId && (
+            <span className="font-mono text-xs font-semibold bg-[rgba(255,255,255,0.08)] text-white px-3 py-1 rounded-lg border border-[rgba(255,255,255,0.1)] truncate max-w-[140px]">
+              {caseId}
+            </span>
+          )
+        ) : (
+          steps.map((step, i) => (
+            <button
+              key={i}
+              className={`px-3 py-1.5 rounded text-sm font-medium text-white transition-opacity whitespace-nowrap ${
+                i === currentStep - 1
+                  ? "bg-[rgba(255,255,255,0.02)] border border-[rgba(255,255,255,0.2)]"
+                  : "bg-[rgba(255,255,255,0.05)] border border-[rgba(255,255,255,0.02)] opacity-50"
+              }`}
+            >
+              {step}
+            </button>
+          ))
+        )}
       </div>
     </div>
   );

@@ -137,8 +137,8 @@ export default function DropDownSpeaker({ speakers }) {
                               <span className="mr-3">
                                 <TestSpeaker />
                               </span>
-                              {isPlaying ? <div className="w-52 mt-2 bg-orange-100 rounded-full h-2">
-                                <div className="bg-orange-450 h-2 rounded-full" style={{ width: `${audioProgress}%` }}></div>
+                              {isPlaying ? <div className="w-52 mt-2 bg-gray-200 rounded-full h-2">
+                                <div className="bg-gray-400 h-2 rounded-full" style={{ width: `${audioProgress}%` }}></div>
                               </div>
                                 : <span>Test Speakers</span>
                               }

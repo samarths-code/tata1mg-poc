@@ -5,7 +5,6 @@ import React, { useEffect, useRef, useState } from "react";
 import DropMIC from '../icons/DropDown/DropMIC';
 import TestMic from "../icons/DropDown/TestMic"
 import TestMicOff from '../icons/DropDown/TestMicOff';
-import PauseButton from '../icons/DropDown/PauseButton';
 import { useMeetingAppContext } from '../context/MeetingAppContext';
 import useIsMobile from '../hooks/useIsMobile';
 
@@ -24,29 +23,15 @@ export default function DropDownMic({
   const {
     selectedMicrophone,
     setSelectedMicroPhone,
-    selectedSpeaker,
     isMicrophonePermissionAllowed
   } = useMeetingAppContext();
 
-  const [audioProgress, setAudioProgress] = useState(0);
-  const [recordingProgress, setRecordingProgress] = useState(0)
-  const [recordingStatus, setRecordingStatus] = useState("inactive");
-  const [recordingDuration, setRecordingDuration] = useState(0)
   const [volume, setVolume] = useState(null);
-  const [audio, setAudio] = useState(null);
   const [isHovered, setIsHovered] = useState(false);
   const isMobile = useIsMobile()
 
   const audioTrackRef = useRef();
-  const intervalRef = useRef();
   const audioAnalyserIntervalRef = useRef();
-  const mediaRecorder = useRef(null);
-
-  const mimeType = "audio/webm";
-
-  const testingSpeaker = () => {
-    setTestSpeaker(!testSpeaker)
-  }
 
   useEffect(() => {
     audioTrackRef.current = audioTrack;
@@ -61,9 +46,6 @@ export default function DropDownMic({
   useEffect(() => {
     if (didDeviceChange) {
       setDidDeviceChange(false)
-      if (mediaRecorder.current != null && mediaRecorder.current.state === "recording") { stopRecording() }
-      setRecordingProgress(0)
-      setRecordingStatus("inactive")
     }
   }, [didDeviceChange])
 
@@ -94,74 +76,6 @@ export default function DropDownMic({
     clearInterval(audioAnalyserIntervalRef.current);
   };
 
-  const handlePlaying = () => {
-    setRecordingStatus("playing");
-    const audioTags = document.getElementsByTagName("audio");
-
-    for (let i = 0; i < audioTags.length; i++) {
-      audioTags.item(i).setSinkId(selectedSpeaker.id).then(() => {
-        audioTags.item(i).play();
-        audioTags.item(i).addEventListener('timeupdate', () => {
-          const progress = (audioTags.item(i).currentTime / recordingDuration) * 100;
-          setAudioProgress(progress);
-        });
-        audioTags.item(i).addEventListener('ended', () => {
-          setAudioProgress(0);
-        });
-      })
-    }
-  }
-
-  const startRecording = async () => {
-    setRecordingStatus("recording");
-
-    try {
-      const media = new MediaRecorder(customAudioStream, { type: mimeType });
-      mediaRecorder.current = media;
-      mediaRecorder.current.start();
-      let localAudioChunks = [];
-
-      mediaRecorder.current.ondataavailable = (event) => {
-        if (typeof event.data === "undefined") return;
-        if (event.data.size === 0) return;
-        localAudioChunks.push(event.data);
-      };
-
-      mediaRecorder.current.onstop = () => {
-        const audioBlob = new Blob(localAudioChunks, { type: mimeType });
-        const audioUrl = URL.createObjectURL(audioBlob);
-        setAudio(audioUrl);
-        localAudioChunks = []
-        const elapsedTime = Date.now() - startTime;
-        const durationInSeconds = (elapsedTime / 1000);
-        setRecordingDuration(durationInSeconds)
-      };
-
-      const startTime = Date.now();
-      intervalRef.current = setInterval(() => {
-        const elapsedTime = Date.now() - startTime;
-        const progress = (elapsedTime / 7000) * 100;
-        setRecordingProgress(progress);
-      });
-
-      setTimeout(() => {
-        clearInterval(intervalRef.current)
-        stopRecording();
-      }, 7000)
-    } catch (err) {
-      console.log("Error in MediaRecorder:", err)
-    }
-  };
-
-  const stopRecording = () => {
-    if (mediaRecorder.current.state !== "inactive") {
-      setRecordingProgress(0);
-      setRecordingStatus("stopped recording");
-      clearInterval(intervalRef.current)
-      mediaRecorder.current.stop();
-    }
-  };
-
   return (
     <>
       <Popover className="relative w-full ">
@@ -178,11 +92,6 @@ export default function DropDownMic({
                 }
               group inline-flex items-center rounded-md px-1 py-1 w-full text-base font-normal
               ${!isMicrophonePermissionAllowed ? "opacity-50" : ""}`}
-              onClick={() => {
-                if (mediaRecorder.current !== null && mediaRecorder.current.state === "recording") { stopRecording() }
-                setRecordingProgress(0)
-                setRecordingStatus("inactive")
-              }}
             >
               <div>
                 <DropMIC fillColor={isHovered || open ? "#FF6F61" : "#9CA3AF"} />
@@ -229,17 +138,12 @@ export default function DropDownMic({
                                     className={`flex flex-1 w-full text-left`}
                                     value={item?.deviceId}
                                     onClick={() => {
-                                      setSelectedMicroPhone(
-                                        (s) => ({
-                                          ...s,
-                                          label: item?.label,
-                                          id: item?.deviceId,
-                                        })
-                                      );
+                                      setSelectedMicroPhone((s) => ({
+                                        ...s,
+                                        label: item?.label,
+                                        id: item?.deviceId,
+                                      }));
                                       changeMic(item?.deviceId);
-                                      if (mediaRecorder.current !== null && mediaRecorder.current.state === "recording") { stopRecording() }
-                                      setRecordingProgress(0)
-                                      setRecordingStatus("inactive")
                                     }}
                                   >
                                     {item?.label ? (
@@ -254,55 +158,21 @@ export default function DropDownMic({
                           }
                         )}
 
-                        <hr className='border border-orange-100 mt-2 mb-1' />
+                        <hr className='border border-gray-100 mt-2 mb-1' />
 
-                        {micOn ? <div className={`my-1 text-gray-700 flex ${isMobile ? "flex-col" : "flex-1"} w-full text-left mb-2 pl-2`} >
-                          <div className={`flex flex-row ${!isMobile && "w-2/3"} `}>
-                            <span className="mr-4 mt-1">
-                              <TestMic />
-                            </span>
-
-                            <div className={`${isMobile ? "w-full mr-5" : "w-36"} mt-3 bg-orange-100 rounded-full h-1`}>
-                              <div className="bg-orange-450 h-1 rounded-full" style={{ width: `${volume / 256 * 100}%` }} ></div>
+                        {micOn ? (
+                          <div className="flex items-center gap-3 my-1 mb-2 pl-3 pr-2">
+                            <TestMic />
+                            <div className="flex-1 bg-gray-200 rounded-full h-1">
+                              <div className="bg-gray-400 h-1 rounded-full transition-all" style={{ width: `${(volume ?? 0) / 256 * 100}%` }} />
                             </div>
                           </div>
-
-                          {!isMobile && <div className={`${!isMobile && "w-1/3"} w-full flex justify-center `}>
-                            {recordingStatus == "inactive" && <button className='p-2 text-xs rounded bg-orange-50 text-orange-450 border border-orange-200 hover:bg-orange-100' onClick={startRecording}>
-                              Record
-                            </button>}
-
-                            {recordingStatus == "stopped recording" && <button className='p-2 text-xs rounded bg-orange-50 text-orange-450 border border-orange-200 hover:bg-orange-100' onClick={handlePlaying}>
-                              Play
-                            </button>}
-
-                            {recordingStatus == "recording" && <button className='p-2 mx-1 py-4 text-xs rounded w-full bg-orange-100 relative z-0' onClick={stopRecording}>
-                              <div className='h-full rounded bg-orange-350 absolute top-0 left-0' style={{ width: `${recordingProgress}%` }} >
-                                <PauseButton />
-                              </div>
-                            </button>}
-
-                            {recordingStatus == "playing" && <button className='p-2 mx-1 py-4 text-xs rounded w-full bg-orange-100 relative z-0' onClick={handlePlaying}>
-                              <div className='h-full rounded bg-orange-350 absolute top-0 left-0' style={{ width: `${audioProgress}%` }} >
-                                <PauseButton />
-                              </div>
-                            </button>}
-                          </div>}
-                          {isMobile &&
-                            <div className='flex flex-col mt-1 items-center justify-center'>
-                              {testSpeaker && <p className='text-xs text-gray-500 text-center'>Speak to test mic & speakers...</p>}
-                              <button className='p-2 text-xs mt-1 rounded w-fit bg-orange-50 text-orange-450 border border-orange-200 hover:bg-orange-100' onClick={testingSpeaker}>
-                                {!testSpeaker ? "Test Mic and Speaker" : "Stop Test"}
-                              </button></div>
-                          }
-
-                        </div>
-                          :
-                          <div className='text-gray-400 flex flex-1 items-center w-full mb-2 pl-5'>
+                        ) : (
+                          <div className='text-gray-400 flex flex-1 items-center gap-2 w-full mb-2 pl-3'>
                             <TestMicOff />
-                            Unmute to test your mic
+                            <span className="text-xs">Unmute to test your mic</span>
                           </div>
-                        }
+                        )}
                       </div>
                     </div>
                   </div>
@@ -312,7 +182,6 @@ export default function DropDownMic({
           </>
         )}
       </Popover>
-      <audio src={audio} ></audio>
     </>
   )
 }

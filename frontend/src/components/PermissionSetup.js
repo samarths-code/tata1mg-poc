@@ -1,76 +1,73 @@
 import { useEffect, useState } from "react";
 import { getNetworkStats } from "@videosdk.live/react-sdk";
-import { ArrowRightIcon } from "@heroicons/react/24/outline";
+import { XMarkIcon, ChevronRightIcon } from "@heroicons/react/24/outline";
 
 const STATUS = { IDLE: "idle", CHECKING: "checking", GRANTED: "granted", DENIED: "denied" };
 
-function StatusDot({ status }) {
-  if (status === STATUS.CHECKING) {
-    return (
-      <span className="w-6 h-6 flex items-center justify-center shrink-0">
-        <span className="w-5 h-5 rounded-full border-[3px] border-orange-450 border-t-transparent animate-spin block" />
-      </span>
-    );
-  }
-  if (status === STATUS.GRANTED) {
-    return (
-      <span className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center shrink-0">
-        <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-        </svg>
-      </span>
-    );
-  }
-  if (status === STATUS.DENIED) {
-    return (
-      <span className="w-6 h-6 rounded-full bg-red-500 flex items-center justify-center shrink-0">
-        <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-        </svg>
-      </span>
-    );
-  }
-  return <span className="w-6 h-6 rounded-full border-2 border-gray-200 shrink-0" />;
-}
+// Lucide-style 16×16 stroke icons (currentColor inherits text-orange-450)
+const CameraIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M23 7l-7 5 7 5V7z" />
+    <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+  </svg>
+);
 
-function PermissionRow({ emoji, label, detail, status, critical }) {
+const MicIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+    <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+    <line x1="12" y1="19" x2="12" y2="23" />
+    <line x1="8" y1="23" x2="16" y2="23" />
+  </svg>
+);
+
+const VolumeIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+    <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+    <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+  </svg>
+);
+
+const MapPinIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+    <circle cx="12" cy="10" r="3" />
+  </svg>
+);
+
+const GlobeIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10" />
+    <line x1="2" y1="12" x2="22" y2="12" />
+    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+  </svg>
+);
+
+function PermissionRow({ icon: Icon, label, detail, status }) {
+  const isGranted = status === STATUS.GRANTED;
+  const isChecking = status === STATUS.CHECKING;
+
   return (
-    <div
-      className={`flex items-center gap-4 p-4 rounded-2xl border transition-all duration-300 ${
-        status === STATUS.GRANTED
-          ? "bg-green-50 border-green-200"
-          : status === STATUS.DENIED
-          ? "bg-red-50 border-red-200"
-          : status === STATUS.CHECKING
-          ? "bg-orange-50 border-orange-200"
-          : "bg-gray-50 border-gray-200"
-      }`}
-    >
-      <div
-        className={`w-12 h-12 rounded-2xl flex items-center justify-center text-2xl shrink-0 transition-colors duration-300 ${
-          status === STATUS.GRANTED
-            ? "bg-green-100"
-            : status === STATUS.DENIED
-            ? "bg-red-100"
-            : status === STATUS.CHECKING
-            ? "bg-orange-100"
-            : "bg-white"
-        }`}
-      >
-        {emoji}
+    <div className="flex items-center gap-2 p-2 rounded-xl border border-[rgba(0,0,0,0.05)]">
+      <div className="bg-[rgba(255,111,97,0.1)] p-1.5 rounded-full shrink-0 text-orange-450">
+        <Icon />
       </div>
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 flex-wrap">
-          <p className="text-sm font-semibold text-gray-800">{label}</p>
-          {critical && (
-            <span className="text-[10px] font-bold uppercase tracking-wider text-orange-450 bg-orange-450/10 px-1.5 py-0.5 rounded-md">
-              Required
-            </span>
-          )}
-        </div>
-        <p className="text-xs text-gray-400 mt-0.5 truncate">{detail}</p>
+        <p className="text-sm font-medium text-black leading-5">{label}</p>
+        <p className="text-xs text-[#919093] leading-4 mt-0.5">{detail}</p>
       </div>
-      <StatusDot status={status} />
+      {isChecking ? (
+        <span className="w-4 h-4 rounded-full border-2 border-orange-450 border-t-transparent animate-spin shrink-0" />
+      ) : (
+        <span className={`text-[10px] font-normal px-1.5 py-0.5 rounded-full shrink-0 whitespace-nowrap leading-4 ${
+          isGranted
+            ? "bg-[#dcfce7] text-[#16a34a]"
+            : "bg-[#fee2e2] text-[#dc2626]"
+        }`}>
+          {isGranted ? "Access granted" : "REQUIRED"}
+        </span>
+      )}
     </div>
   );
 }
@@ -99,6 +96,7 @@ function permissionErrMsg(errorName, isLocation = false) {
 export default function PermissionSetup({ onDone }) {
   const [camera,   setCamera]   = useState(STATUS.IDLE);
   const [mic,      setMic]      = useState(STATUS.IDLE);
+  const [speaker,  setSpeaker]  = useState(STATUS.IDLE);
   const [location, setLocation] = useState(STATUS.IDLE);
   const [network,  setNetwork]  = useState(STATUS.IDLE);
   const [networkDetail,  setNetworkDetail]  = useState(null);
@@ -107,23 +105,16 @@ export default function PermissionSetup({ onDone }) {
   const [micError,      setMicError]      = useState(null);
   const [locationError, setLocationError] = useState(null);
 
-  // Hard block — camera, mic AND location must all be granted before proceeding
   const criticalDone =
     camera   === STATUS.GRANTED &&
     mic      === STATUS.GRANTED &&
     location === STATUS.GRANTED;
-
-  const totalDone = [camera, mic, location, network].filter(
-    (s) => s === STATUS.GRANTED || s === STATUS.DENIED
-  ).length;
-  const progress = Math.round((totalDone / 4) * 100);
 
   useEffect(() => {
     runChecks();
   }, []);
 
   async function runChecks() {
-    // Some USB audio/video devices hang getUserMedia indefinitely — cap at 10s
     const withTimeout = (promise, ms = 10000) =>
       Promise.race([
         promise,
@@ -149,8 +140,10 @@ export default function PermissionSetup({ onDone }) {
       const stream = await withTimeout(navigator.mediaDevices.getUserMedia({ audio: true }));
       stream.getTracks().forEach((t) => t.stop());
       setMic(STATUS.GRANTED);
+      setSpeaker(STATUS.GRANTED);
     } catch (err) {
       setMic(STATUS.DENIED);
+      setSpeaker(STATUS.DENIED);
       setMicError(err?.message === "timeout" ? "timeout" : (err?.name || "unknown"));
     }
 
@@ -172,7 +165,6 @@ export default function PermissionSetup({ onDone }) {
       setLocation(STATUS.GRANTED);
     } catch (err) {
       setLocation(STATUS.DENIED);
-      // GeolocationPositionError codes: 1=PERMISSION_DENIED, 2=POSITION_UNAVAILABLE, 3=TIMEOUT
       const code = err?.code;
       setLocationError(
         code === 1 ? "NotAllowedError" :
@@ -191,72 +183,69 @@ export default function PermissionSetup({ onDone }) {
     }
   }
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-gray-900/80 backdrop-blur-sm p-0 sm:p-6">
-      <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden">
+  const hasDenied = camera === STATUS.DENIED || mic === STATUS.DENIED || location === STATUS.DENIED;
 
-        {/* Gradient header */}
-        <div className="bg-gradient-to-br from-orange-450 to-orange-500 px-7 pt-7 pb-6">
-          <div className="flex items-center gap-3 mb-5">
-            <img
-              src="https://play-lh.googleusercontent.com/yjbAu08_Ahes38IEMV8slP91zgjh2mdh5xpZefvcbYuZxR8O7FZFderRn2Ivaz0uR2Lw"
-              alt="Tata 1mg"
-              className="w-10 h-10 rounded-xl object-contain bg-white/20"
-            />
-            <div className="leading-none">
-              <p className="text-white font-bold text-sm">Tata 1mg</p>
-              <p className="text-white/70 text-xs mt-0.5">Video MER</p>
-            </div>
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(0,0,0,0.6)] backdrop-blur-sm p-4">
+      <div className="bg-white w-full max-w-[500px] rounded-3xl border border-[rgba(0,0,0,0.05)] shadow-2xl flex flex-col overflow-hidden">
+
+        {/* Header */}
+        <div className="flex flex-col gap-2 p-5">
+          <div className="flex items-center gap-2.5">
+            <h2 className="flex-1 text-[18px] font-semibold text-black leading-[26px]">
+              Before you begin
+            </h2>
+            <button
+              onClick={onDone}
+              className="p-1 rounded-md hover:bg-gray-100 transition-colors text-[#919093] hover:text-gray-600"
+            >
+              <XMarkIcon className="w-4 h-4" />
+            </button>
           </div>
-          <h2 className="text-white text-2xl font-bold tracking-tight">Before we begin</h2>
-          <p className="text-white/75 text-sm mt-1.5">
-            Allow these permissions to join your consultation
+          <p className="text-xs text-[#919093] leading-4">
+            Please allow the following permissions to join your video consultation smoothly.
           </p>
         </div>
 
-        {/* Progress bar */}
-        <div className="h-1.5 bg-orange-100">
-          <div
-            className="h-1.5 bg-orange-450 transition-all duration-700 ease-out"
-            style={{ width: `${progress}%` }}
-          />
-        </div>
+        {/* Divider */}
+        <div className="h-px bg-[rgba(0,0,0,0.05)]" />
 
         {/* Permission list */}
-        <div className="px-6 pt-5 pb-4 space-y-3">
+        <div className="px-5 py-4 space-y-3 overflow-y-auto">
           <PermissionRow
-            emoji="📹"
+            icon={CameraIcon}
             label="Camera"
-            detail="For video consultation"
+            detail="Required for video consultation with the doctor."
             status={camera}
-            critical
           />
           <PermissionRow
-            emoji="🎙️"
+            icon={MicIcon}
             label="Microphone"
-            detail="For voice communication"
+            detail="Required for clear voice communication during the call."
             status={mic}
-            critical
           />
           <PermissionRow
-            emoji="📍"
+            icon={VolumeIcon}
+            label="Speaker / Sound"
+            detail="Required to hear the doctor clearly during the consultation."
+            status={speaker}
+          />
+          <PermissionRow
+            icon={MapPinIcon}
             label="Location"
-            detail={locationDetail || "Required for MER report"}
+            detail={locationDetail || "Required for verification and service availability."}
             status={location}
-            critical
           />
           <PermissionRow
-            emoji="🌐"
+            icon={GlobeIcon}
             label="Network Speed"
-            detail={networkDetail || "Checking your connection…"}
+            detail={networkDetail || "Checking your internet connection for a stable consultation experience."}
             status={network}
           />
-        </div>
 
-        {/* Continue button */}
-        <div className="px-6 pb-8 pt-1">
-          {(camera === STATUS.DENIED || mic === STATUS.DENIED || location === STATUS.DENIED) && (
-            <div className="mb-3 p-3 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700 space-y-1.5 leading-relaxed">
+          {/* Inline error block for denied permissions */}
+          {hasDenied && (
+            <div className="p-3 rounded-xl bg-[#fee2e2] border border-[#fca5a5] text-xs text-[#dc2626] space-y-1.5 leading-relaxed">
               {camera === STATUS.DENIED && (
                 <p><span className="font-bold">Camera — </span>{permissionErrMsg(cameraError)}</p>
               )}
@@ -268,35 +257,45 @@ export default function PermissionSetup({ onDone }) {
               )}
             </div>
           )}
-          <button
-            disabled={!criticalDone}
-            onClick={onDone}
-            className={`w-full py-4 rounded-2xl text-sm font-semibold transition-all duration-300 flex items-center justify-center gap-2 ${
-              criticalDone
-                ? "bg-orange-450 hover:bg-orange-500 text-white shadow-lg shadow-orange-450/25 active:scale-95"
-                : "bg-gray-100 text-gray-400 cursor-not-allowed"
-            }`}
-          >
-            {criticalDone ? (
-              <>
-                Continue to call
-                <ArrowRightIcon className="w-4 h-4" />
-              </>
-            ) : camera === STATUS.CHECKING || mic === STATUS.CHECKING || location === STATUS.CHECKING ? (
-              "Checking permissions…"
-            ) : (
-              "Allow camera, mic & location to continue"
-            )}
-          </button>
-          {(camera === STATUS.DENIED || mic === STATUS.DENIED || location === STATUS.DENIED) && (
-            <button
-              onClick={runChecks}
-              className="mt-2 w-full py-3 rounded-2xl text-sm font-semibold text-orange-450 border border-orange-450/40 hover:bg-orange-450/5 active:scale-95 transition-all"
-            >
-              ↺ Retry permission check
-            </button>
-          )}
         </div>
+
+        {/* Divider */}
+        <div className="h-px bg-[rgba(0,0,0,0.05)]" />
+
+        {/* Footer */}
+        <div className="p-5">
+          <div className="flex items-center justify-between">
+            {/* Retry link shown only when something is denied */}
+            {hasDenied ? (
+              <button
+                onClick={runChecks}
+                className="text-sm font-medium text-orange-450 hover:underline transition-colors"
+              >
+                ↺ Retry
+              </button>
+            ) : (
+              <span />
+            )}
+
+            <button
+              disabled={!criticalDone}
+              onClick={onDone}
+              className={`flex items-center gap-1 px-3 py-1.5 rounded text-sm font-medium text-white transition-colors ${
+                criticalDone
+                  ? "bg-orange-450 hover:bg-orange-500 active:scale-95"
+                  : "bg-gray-200 text-gray-400 cursor-not-allowed"
+              }`}
+            >
+              {criticalDone
+                ? "Continue to Call"
+                : camera === STATUS.CHECKING || mic === STATUS.CHECKING || location === STATUS.CHECKING
+                ? "Checking…"
+                : "Allow permissions to continue"}
+              <ChevronRightIcon className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
       </div>
     </div>
   );

@@ -19,6 +19,8 @@ import useMediaStream from "../../hooks/useMediaStream";
 import useIsMobile from "../../hooks/useIsMobile";
 import PermissionSetup from "../PermissionSetup";
 import { participantModes } from "../../utils/common";
+import Tata1mgLogo from "../Tata1mgLogo";
+import { ShieldCheckIcon, ChevronRightIcon } from "@heroicons/react/24/outline";
 
 export function JoiningScreen({
   setSpekerOn,
@@ -37,6 +39,7 @@ export function JoiningScreen({
   isAutoJoin,
   tokenReady,
   credentialError,
+  meetingTitle,
 }) {
   const {
     selectedWebcam,
@@ -51,8 +54,6 @@ export function JoiningScreen({
     participantMode,
   } = useMeetingAppContext();
 
-  const isCustomer = participantMode === participantModes.CUSTOMER;
-  // Always show PermissionSetup for both doctor and patient — everyone does a pre-call check.
   const [permissionDone, setPermissionDone] = useState(false);
   const isMobile = useIsMobile();
 
@@ -74,8 +75,7 @@ export function JoiningScreen({
   const [videoTrack, setVideoTrack] = useState(null);
   const [dlgDevices, setDlgDevices] = useState(false);
   const [didDeviceChange, setDidDeviceChange] = useState(false);
-  const [testSpeaker, setTestSpeaker] = useState(false)
-
+  const [testSpeaker, setTestSpeaker] = useState(false);
 
   const videoPlayerRef = useRef();
   const audioPlayerRef = useRef();
@@ -86,13 +86,8 @@ export function JoiningScreen({
   const webcamRef = useRef();
   const micRef = useRef();
 
-  useEffect(() => {
-    webcamRef.current = webcamOn;
-  }, [webcamOn]);
-
-  useEffect(() => {
-    micRef.current = micOn;
-  }, [micOn]);
+  useEffect(() => { webcamRef.current = webcamOn; }, [webcamOn]);
+  useEffect(() => { micRef.current = micOn; }, [micOn]);
 
   useEffect(() => {
     permissonAvaialble.current = {
@@ -102,32 +97,23 @@ export function JoiningScreen({
   }, [isCameraPermissionAllowed, isMicrophonePermissionAllowed]);
 
   useEffect(() => {
-    if (micOn) {
-      audioTrackRef.current = audioTrack;
-    }
+    if (micOn) { audioTrackRef.current = audioTrack; }
   }, [micOn, audioTrack]);
 
   useEffect(() => {
     if (micOn) {
-      // Close the existing audio track if there's a new one
       if (audioTrackRef.current && audioTrackRef.current !== audioTrack) {
         audioTrackRef.current.stop();
       }
-
       audioTrackRef.current = audioTrack;
-
       if (audioTrack) {
         const audioSrcObject = new MediaStream([audioTrack]);
         if (audioPlayerRef.current) {
           audioPlayerRef.current.srcObject = audioSrcObject;
-          audioPlayerRef.current
-            .play()
-            .catch((error) => console.log("audio play error", error));
+          audioPlayerRef.current.play().catch((e) => console.log("audio play error", e));
         }
       } else {
-        if (audioPlayerRef.current) {
-          audioPlayerRef.current.srcObject = null;
-        }
+        if (audioPlayerRef.current) audioPlayerRef.current.srcObject = null;
       }
     }
   }, [micOn, audioTrack]);
@@ -135,56 +121,37 @@ export function JoiningScreen({
   useEffect(() => {
     if (webcamOn) {
       videoTrackRef.current = videoTrack;
-
-      var isPlaying =
+      const isPlaying =
         videoPlayerRef.current.currentTime > 0 &&
         !videoPlayerRef.current.paused &&
         !videoPlayerRef.current.ended &&
-        videoPlayerRef.current.readyState >
-        videoPlayerRef.current.HAVE_CURRENT_DATA;
-
+        videoPlayerRef.current.readyState > videoPlayerRef.current.HAVE_CURRENT_DATA;
       if (videoTrack) {
         const videoSrcObject = new MediaStream([videoTrack]);
-
         if (videoPlayerRef.current) {
           videoPlayerRef.current.srcObject = videoSrcObject;
           if (videoPlayerRef.current.pause && !isPlaying) {
-            videoPlayerRef.current
-              .play()
-              .catch((error) => console.log("error", error));
+            videoPlayerRef.current.play().catch((e) => console.log("error", e));
           }
         }
       } else {
-        if (videoPlayerRef.current) {
-          videoPlayerRef.current.srcObject = null;
-        }
+        if (videoPlayerRef.current) videoPlayerRef.current.srcObject = null;
       }
     }
   }, [webcamOn, videoTrack]);
 
-  useEffect(() => {
-    getCameraDevices();
-  }, [isCameraPermissionAllowed]);
-
-  useEffect(() => {
-    getAudioDevices();
-  }, [isMicrophonePermissionAllowed]);
+  useEffect(() => { getCameraDevices(); }, [isCameraPermissionAllowed]);
+  useEffect(() => { getAudioDevices(); }, [isMicrophonePermissionAllowed]);
 
   useEffect(() => {
     if (permissionDone) checkMediaPermission();
-    return () => { };
+    return () => {};
   }, [permissionDone]);
 
   const _toggleWebcam = () => {
-    const videoTrack = videoTrackRef.current;
-
+    const track = videoTrackRef.current;
     if (webcamOn) {
-      if (videoTrack) {
-        videoTrack.stop();
-        setVideoTrack(null);
-        setCustomVideoStream(null);
-        setWebcamOn(false);
-      }
+      if (track) { track.stop(); setVideoTrack(null); setCustomVideoStream(null); setWebcamOn(false); }
     } else {
       getDefaultMediaTracks({ mic: false, webcam: true });
       setWebcamOn(true);
@@ -192,16 +159,9 @@ export function JoiningScreen({
   };
 
   const _toggleMic = () => {
-    const audioTrack = audioTrackRef.current;
-
+    const track = audioTrackRef.current;
     if (micOn) {
-      if (audioTrack) {
-        audioTrack.stop();
-        setAudioTrack(null);
-        setCustomAudioStream(null);
-        setMicOn(false);
-        setSpekerOn(false);
-      }
+      if (track) { track.stop(); setAudioTrack(null); setCustomAudioStream(null); setMicOn(false); setSpekerOn(false); }
     } else {
       getDefaultMediaTracks({ mic: true, webcam: false });
       setMicOn(true);
@@ -211,86 +171,64 @@ export function JoiningScreen({
 
   const changeWebcam = async (deviceId) => {
     if (webcamOn) {
-      const currentvideoTrack = videoTrackRef.current;
-      if (currentvideoTrack) {
-        currentvideoTrack.stop();
-      }
-
-      const stream = await getVideoTrack({
-        webcamId: deviceId,
-      });
+      const cur = videoTrackRef.current;
+      if (cur) cur.stop();
+      const stream = await getVideoTrack({ webcamId: deviceId });
       setCustomVideoStream(stream);
-      const videoTracks = stream?.getVideoTracks();
-      const videoTrack = videoTracks.length ? videoTracks[0] : null;
-      setVideoTrack(videoTrack);
+      const tracks = stream?.getVideoTracks();
+      setVideoTrack(tracks?.length ? tracks[0] : null);
     }
   };
+
   const changeMic = async (deviceId) => {
     if (micOn) {
-      const currentAudioTrack = audioTrackRef.current;
-      currentAudioTrack && currentAudioTrack.stop();
-      const stream = await getAudioTrack({
-        micId: deviceId,
-      });
+      const cur = audioTrackRef.current;
+      cur && cur.stop();
+      const stream = await getAudioTrack({ micId: deviceId });
       setCustomAudioStream(stream);
-      const audioTracks = stream?.getAudioTracks();
-      const audioTrack = audioTracks.length ? audioTracks[0] : null;
+      const tracks = stream?.getAudioTracks();
       clearInterval(audioAnalyserIntervalRef.current);
-      setAudioTrack(audioTrack);
+      setAudioTrack(tracks?.length ? tracks[0] : null);
     }
   };
 
   const getDefaultMediaTracks = async ({ mic, webcam }) => {
     if (mic) {
-      const stream = await getAudioTrack({
-        micId: selectedMicrophone?.id,
-      });
+      const stream = await getAudioTrack({ micId: selectedMicrophone?.id });
       setCustomAudioStream(stream);
-      const audioTracks = stream?.getAudioTracks();
-      const audioTrack = audioTracks?.length ? audioTracks[0] : null;
-      setAudioTrack(audioTrack);
+      const tracks = stream?.getAudioTracks();
+      setAudioTrack(tracks?.length ? tracks[0] : null);
     }
-
     if (webcam) {
-      const stream = await getVideoTrack({
-        webcamId: selectedWebcam?.id,
-      });
+      const stream = await getVideoTrack({ webcamId: selectedWebcam?.id });
       setCustomVideoStream(stream);
-      const videoTracks = stream?.getVideoTracks();
-      const videoTrack = videoTracks.length ? videoTracks[0] : null;
-      setVideoTrack(videoTrack);
+      const tracks = stream?.getVideoTracks();
+      setVideoTrack(tracks?.length ? tracks[0] : null);
     }
   };
 
   async function requestAudioVideoPermission(mediaType) {
     try {
       const permission = await requestPermission(mediaType);
-
       if (mediaType === Constants.permission.AUDIO) {
-        setIsMicrophonePermissionAllowed(
-          permission.get(Constants.permission.AUDIO)
-        );
+        setIsMicrophonePermissionAllowed(permission.get(Constants.permission.AUDIO));
       }
-
       if (mediaType === Constants.permission.VIDEO) {
-        setIsCameraPermissionAllowed(
-          permission.get(Constants.permission.VIDEO)
-        );
+        setIsCameraPermissionAllowed(permission.get(Constants.permission.VIDEO));
       }
-
       if (permission.get(Constants.permission.AUDIO)) {
         setMicOn(true);
         getDefaultMediaTracks({ mic: true, webcam: false });
       }
-
       if (permission.get(Constants.permission.VIDEO)) {
         setWebcamOn(true);
         getDefaultMediaTracks({ mic: false, webcam: true });
       }
     } catch (ex) {
-      console.log("Error in requestPermission ", ex);
+      console.log("Error in requestPermission", ex);
     }
   }
+
   function onDeviceChanged() {
     setDidDeviceChange(true);
     getCameraDevices();
@@ -299,79 +237,49 @@ export function JoiningScreen({
   }
 
   const checkMediaPermission = async () => {
-    const checkAudioVideoPermission = await checkPermissions();
-    const cameraPermissionAllowed = checkAudioVideoPermission.get(
-      Constants.permission.VIDEO
-    );
-    const microphonePermissionAllowed = checkAudioVideoPermission.get(
-      Constants.permission.AUDIO
-    );
-
-    setIsCameraPermissionAllowed(cameraPermissionAllowed);
-    setIsMicrophonePermissionAllowed(microphonePermissionAllowed);
-
-    if (microphonePermissionAllowed) {
-      setMicOn(true);
-      getDefaultMediaTracks({ mic: true, webcam: false });
-    } else {
-      await requestAudioVideoPermission(Constants.permission.AUDIO);
-    }
-    if (cameraPermissionAllowed) {
-      setWebcamOn(true);
-      getDefaultMediaTracks({ mic: false, webcam: true });
-    } else {
-      await requestAudioVideoPermission(Constants.permission.VIDEO);
-    }
+    const result = await checkPermissions();
+    const camAllowed = result.get(Constants.permission.VIDEO);
+    const micAllowed = result.get(Constants.permission.AUDIO);
+    setIsCameraPermissionAllowed(camAllowed);
+    setIsMicrophonePermissionAllowed(micAllowed);
+    if (micAllowed) { setMicOn(true); getDefaultMediaTracks({ mic: true, webcam: false }); }
+    else { await requestAudioVideoPermission(Constants.permission.AUDIO); }
+    if (camAllowed) { setWebcamOn(true); getDefaultMediaTracks({ mic: false, webcam: true }); }
+    else { await requestAudioVideoPermission(Constants.permission.VIDEO); }
   };
 
   const getCameraDevices = async () => {
     try {
       if (permissonAvaialble.current?.isCameraPermissionAllowed) {
-        let webcams = await getCameras();
-        setSelectedWebcam({
-          id: webcams[0]?.deviceId,
-          label: webcams[0]?.label,
-        });
-        setDevices((devices) => {
-          return { ...devices, webcams };
-        });
+        let cams = await getCameras();
+        setSelectedWebcam({ id: cams[0]?.deviceId, label: cams[0]?.label });
+        setDevices((d) => ({ ...d, webcams: cams }));
       }
     } catch (err) {
-      console.log("Error in getting camera devices", err);
+      console.log("Error getting camera devices", err);
     }
   };
 
   const getAudioDevices = async () => {
     try {
       if (permissonAvaialble.current?.isMicrophonePermissionAllowed) {
-        let speakers = await getPlaybackDevices();
-        setSelectedSpeaker({
-          id: speakers[0]?.deviceId,
-          label: speakers[0]?.label,
-        });
-        setSelectedMicroPhone({ id: mics[0]?.deviceId, label: mics[0]?.label });
-
-        setDevices((devices) => {
-          return { ...devices, mics, speakers };
-        });
+        const [micList, spkrList] = await Promise.all([getMicrophones(), getPlaybackDevices()]);
+        if (micList?.length) {
+          setSelectedMicroPhone({ id: micList[0]?.deviceId, label: micList[0]?.label });
+        }
+        if (spkrList?.length) {
+          setSelectedSpeaker({ id: spkrList[0]?.deviceId, label: spkrList[0]?.label });
+        }
+        setDevices((d) => ({ ...d, mics: micList ?? [], speakers: spkrList ?? [] }));
       }
     } catch (err) {
-      console.log("Error in getting audio devices", err);
+      console.log("Error getting audio devices", err);
     }
   };
 
-  const ButtonWithTooltip = ({ onClick, onState, OnIcon, OffIcon }) => {
-    return (
-      <button
-        onClick={onClick}
-        className={`rounded-full w-12 h-12 flex items-center justify-center shadow-lg transition-all ${
-          onState ? "bg-orange-450 hover:bg-orange-500" : "bg-red-650 hover:bg-red-500"
-        }`}
-      >
-        {onState ? <OnIcon fillcolor="white" /> : <OffIcon fillcolor="white" />}
-      </button>
-    );
-  };
+  // Video height: fixed on desktop, proportional on mobile
+  const videoHeight = isMobile ? "56vw" : 375;
+  const videoWidth = isMobile ? "100%" : 647;
 
   return (
     <>
@@ -379,150 +287,188 @@ export function JoiningScreen({
         <PermissionSetup onDone={() => setPermissionDone(true)} />
       )}
 
-      <div className="min-h-screen bg-gray-50 flex flex-col overflow-y-auto">
-        {/* Orange header */}
-        <header className="bg-orange-450 px-5 py-3 flex items-center gap-3 shrink-0 shadow-md">
-          <img
-            src="https://play-lh.googleusercontent.com/yjbAu08_Ahes38IEMV8slP91zgjh2mdh5xpZefvcbYuZxR8O7FZFderRn2Ivaz0uR2Lw"
-            alt="Tata 1mg"
-            className="w-9 h-9 rounded-xl object-contain"
-          />
-          <div className="leading-none">
-            <p className="text-white font-bold text-sm">Tata 1mg</p>
-            <p className="text-white/70 text-xs mt-0.5">Video MER</p>
-          </div>
-        </header>
+      <div className="bg-white min-h-screen relative overflow-x-hidden">
 
-        {/* Main content */}
-        <div className="flex flex-1 items-start md:items-center justify-center px-4 py-8 md:py-10">
-          <div className="w-full max-w-4xl">
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+        {/* Logo — top-left */}
+        <div className="absolute left-[30px] top-[30px] z-10">
+          <Tata1mgLogo dark />
+        </div>
 
-              {/* Left column: one unified card (video on top, device bar on bottom) */}
-              <div className="md:col-span-7">
-                {/*
-                  overflow-hidden is NOT on the outer card so dropdown panels
-                  opened with `absolute bottom-full` can escape upward.
-                  It IS on the inner video wrapper to round the top corners.
-                */}
-                <div className="rounded-2xl shadow-md border border-gray-200 bg-white">
+        {/* Main content — centered vertically and horizontally */}
+        <div className={`flex flex-col gap-4 w-full max-w-[1126px] mx-auto px-4 ${
+          isMobile ? "pt-24 pb-16" : "absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
+        }`}>
 
-                  {/* Video area — own overflow-hidden keeps the dark bg clipped to rounded-t corners */}
-                  <div className="rounded-t-2xl overflow-hidden relative bg-gray-900" style={{ height: isMobile ? "52vw" : 300, minHeight: 180 }}>
-                    <div className={`absolute z-10 ${isMobile ? "right-2 top-2" : "right-3 top-3"}`}>
-                      <NetworkStats />
-                    </div>
-                    {isMobile && (
-                      <audio autoPlay playsInline muted={!testSpeaker} ref={audioPlayerRef} controls={false} />
-                    )}
-                    <video
-                      autoPlay playsInline muted ref={videoPlayerRef} controls={false}
-                      style={{ backgroundColor: "#111827" }}
-                      className="h-full w-full object-cover flip"
-                    />
-                    <div className="absolute bottom-4 left-0 right-0 flex items-center justify-center gap-4">
-                      {isMicrophonePermissionAllowed ? (
-                        <ButtonWithTooltip onClick={_toggleMic} onState={micOn} mic={true} OnIcon={MicOnIcon} OffIcon={MicOffIcon} />
-                      ) : (
-                        <MicPermissionDenied />
-                      )}
-                      {isCameraPermissionAllowed ? (
-                        <ButtonWithTooltip onClick={_toggleWebcam} onState={webcamOn} mic={false} OnIcon={WebcamOnIcon} OffIcon={WebcamOffIcon} />
-                      ) : (
-                        <CameraPermissionDenied />
-                      )}
-                    </div>
-                  </div>
+          {/* Top row: video + right panel */}
+          <div className={`flex ${isMobile ? "flex-col gap-6" : "flex-row items-center justify-between"}`}>
 
-                  {/* Device selectors — inside the card, no overflow-hidden */}
-                  <div className="rounded-b-2xl border-t border-gray-100 bg-white px-4 py-3">
-                    <div className={`flex gap-2 ${isMobile ? "flex-col" : "flex-row"}`}>
-                      <div className={isMobile ? "w-full" : "flex-1 min-w-0"}>
-                        <DropDownMic
-                          mics={mics}
-                          changeMic={changeMic}
-                          customAudioStream={customAudioStream}
-                          audioTrack={audioTrack}
-                          micOn={micOn}
-                          didDeviceChange={didDeviceChange}
-                          setDidDeviceChange={setDidDeviceChange}
-                          testSpeaker={testSpeaker}
-                          setTestSpeaker={setTestSpeaker}
-                        />
+            {/* LEFT — video preview + device bar */}
+            <div className="flex flex-col gap-3">
+              {/* Video card */}
+              <div
+                className="relative bg-gray-900 rounded-3xl overflow-hidden shrink-0"
+                style={{ width: videoWidth, height: videoHeight, minHeight: 180 }}
+              >
+                {/* Network stats badge */}
+                <div className="absolute right-5 top-5 z-10">
+                  <NetworkStats />
+                </div>
+
+                {/* Audio (hidden) */}
+                <audio autoPlay playsInline muted={!testSpeaker} ref={audioPlayerRef} controls={false} />
+
+                {/* Camera feed */}
+                <video
+                  autoPlay playsInline muted ref={videoPlayerRef} controls={false}
+                  style={{ backgroundColor: "#111827" }}
+                  className="h-full w-full object-cover flip"
+                />
+
+                {/* Bottom media control pills */}
+                <div className="absolute bottom-[10px] left-1/2 -translate-x-1/2 flex items-center gap-2.5">
+                  {/* Mic */}
+                  {isMicrophonePermissionAllowed ? (
+                    <button
+                      onClick={_toggleMic}
+                      className="bg-[rgba(0,0,0,0.5)] border border-white/80 rounded flex items-center gap-1 h-8 pl-1 pr-2 py-1"
+                    >
+                      <div className="flex items-center justify-center p-1.5 rounded-lg">
+                        {micOn
+                          ? <MicOnIcon fillcolor="white" style={{ width: 20, height: 20 }} />
+                          : <MicOffIcon fillcolor="white" style={{ width: 20, height: 20 }} />
+                        }
                       </div>
-                      {!isMobile && (
-                        <div className="flex-1 min-w-0">
-                          <DropDownSpeaker speakers={speakers} />
-                        </div>
-                      )}
-                      <div className={isMobile ? "w-full" : "flex-1 min-w-0"}>
-                        <DropDownCam changeWebcam={changeWebcam} webcams={webcams} />
+                      {/* Voice wave bars */}
+                      <div className="flex gap-0.5 items-center h-2.5">
+                        <div className="bg-white w-0.5 h-[3px] rounded-sm" />
+                        <div className="bg-white w-0.5 h-[3px] rounded-sm" />
+                        <div className="bg-white w-0.5 h-[3px] rounded-sm" />
                       </div>
-                    </div>
-                  </div>
+                    </button>
+                  ) : (
+                    <MicPermissionDenied />
+                  )}
 
+                  {/* Webcam */}
+                  {isCameraPermissionAllowed ? (
+                    <button
+                      onClick={_toggleWebcam}
+                      className="bg-[rgba(0,0,0,0.5)] border border-white/80 rounded flex items-center h-8 p-1"
+                    >
+                      <div className="flex items-center justify-center p-1.5 rounded-lg">
+                        {webcamOn
+                          ? <WebcamOnIcon fillcolor="white" style={{ width: 20, height: 20 }} />
+                          : <WebcamOffIcon fillcolor="white" style={{ width: 20, height: 20 }} />
+                        }
+                      </div>
+                    </button>
+                  ) : (
+                    <CameraPermissionDenied />
+                  )}
+
+                  {/* Speaker (test toggle on mobile) */}
+                  <button
+                    onClick={() => setTestSpeaker((s) => !s)}
+                    className="bg-[rgba(0,0,0,0.5)] border border-white/80 rounded flex items-center h-8 p-1"
+                  >
+                    <div className="flex items-center justify-center p-1.5 rounded-lg">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                        <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+                        <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+                      </svg>
+                    </div>
+                  </button>
                 </div>
               </div>
 
-              {/* Right column: meeting form */}
-              <div className="md:col-span-5">
-                <div className="bg-white rounded-2xl shadow-md border border-gray-200 p-6 h-full flex flex-col justify-center">
-                  {isAutoJoin ? (
-                    <AutoJoinPanel
-                      participantName={participantName}
-                      setParticipantName={setParticipantName}
-                      participantMode={participantMode}
-                      tokenReady={tokenReady}
-                      credentialError={credentialError}
-                      onClickStartMeeting={onClickStartMeeting}
-                    />
-                  ) : (
-                    <>
-                      <div className="mb-5">
-                        <h2 className="text-xl font-bold text-gray-800">Ready to join?</h2>
-                        <p className="text-gray-500 text-sm mt-1">Enter your details to join the consultation</p>
-                      </div>
-                      <MeetingDetailsScreen
-                        participantName={participantName}
-                        setParticipantName={setParticipantName}
-                        onClickStartMeeting={onClickStartMeeting}
-                        onClickJoin={async (id) => {
-                          const valid = await validateMeeting({ roomId: id });
-                          if (valid) {
-                            const token = await getToken({ roomId: id });
-                            setToken(token);
-                            setMeetingId(id);
-                            onClickStartMeeting();
-                          } else {
-                            toast(`Invalid Meeting ID`, {
-                              position: "bottom-left",
-                              autoClose: 4000,
-                              hideProgressBar: true,
-                              closeButton: false,
-                              pauseOnHover: true,
-                              draggable: true,
-                              progress: undefined,
-                              theme: "light",
-                            });
-                          }
-                        }}
-                      />
-                    </>
-                  )}
+              {/* Device selector row */}
+              <div className={`flex gap-3 ${isMobile ? "flex-col" : "flex-row"}`} style={{ width: videoWidth }}>
+                <div className={isMobile ? "w-full" : "flex-1 min-w-0"}>
+                  <DropDownMic
+                    mics={mics}
+                    changeMic={changeMic}
+                    customAudioStream={customAudioStream}
+                    audioTrack={audioTrack}
+                    micOn={micOn}
+                    didDeviceChange={didDeviceChange}
+                    setDidDeviceChange={setDidDeviceChange}
+                    testSpeaker={testSpeaker}
+                    setTestSpeaker={setTestSpeaker}
+                  />
+                </div>
+                {!isMobile && (
+                  <div className="flex-1 min-w-0">
+                    <DropDownSpeaker speakers={speakers} />
+                  </div>
+                )}
+                <div className={isMobile ? "w-full" : "flex-1 min-w-0"}>
+                  <DropDownCam changeWebcam={changeWebcam} webcams={webcams} />
                 </div>
               </div>
             </div>
+
+            {/* RIGHT — meeting info / join form */}
+            <div className={`flex flex-col items-center justify-center gap-8 ${isMobile ? "w-full" : "flex-1 px-6 py-5 self-stretch"}`}>
+              {isAutoJoin ? (
+                <AutoJoinPanel
+                  participantName={participantName}
+                  setParticipantName={setParticipantName}
+                  participantMode={participantMode}
+                  tokenReady={tokenReady}
+                  credentialError={credentialError}
+                  onClickStartMeeting={onClickStartMeeting}
+                  meetingTitle={meetingTitle}
+                />
+              ) : (
+                <div className="w-full max-w-sm">
+                  <div className="mb-5 text-center">
+                    <h2 className="text-xl font-semibold text-black">Ready to join?</h2>
+                    <p className="text-[#919093] text-sm mt-1">Enter your details to join the consultation</p>
+                  </div>
+                  <MeetingDetailsScreen
+                    participantName={participantName}
+                    setParticipantName={setParticipantName}
+                    onClickStartMeeting={onClickStartMeeting}
+                    onClickJoin={async (id) => {
+                      const valid = await validateMeeting({ roomId: id });
+                      if (valid) {
+                        const token = await getToken({ roomId: id });
+                        setToken(token);
+                        setMeetingId(id);
+                        onClickStartMeeting();
+                      } else {
+                        toast("Invalid Meeting ID", {
+                          position: "bottom-left",
+                          autoClose: 4000,
+                          hideProgressBar: true,
+                          closeButton: false,
+                          pauseOnHover: true,
+                          draggable: true,
+                          theme: "light",
+                        });
+                      }
+                    }}
+                  />
+                </div>
+              )}
+            </div>
           </div>
         </div>
-      </div>
 
+        {/* Security footer */}
+        <div className={`flex items-center justify-center gap-2.5 text-[#5e5e61] text-sm font-medium ${
+          isMobile ? "py-6" : "absolute bottom-[22px] left-1/2 -translate-x-1/2 whitespace-nowrap"
+        }`}>
+          <ShieldCheckIcon className="w-4 h-4 shrink-0" />
+          <p>Your meeting is secure and encrypted. No one can join unless they are invited.</p>
+        </div>
+      </div>
 
       <ConfirmBox
         open={dlgDevices}
         successText="DISMISS"
-        onSuccess={() => {
-          setDlgDevices(false);
-        }}
+        onSuccess={() => setDlgDevices(false)}
         title="Mic or webcam not available"
         subTitle="Please connect a mic and webcam to speak and share your video in the meeting. You can also join without them."
       />
@@ -537,48 +483,55 @@ function AutoJoinPanel({
   tokenReady,
   credentialError,
   onClickStartMeeting,
+  meetingTitle,
 }) {
   const roleLabel = participantMode === participantModes.DOCTOR ? "Doctor" : "Patient";
   const canJoin = participantName.length >= 3 && tokenReady && !credentialError;
 
   return (
-    <>
-      <div className="mb-5">
-        <h2 className="text-xl font-bold text-gray-800">Join as {roleLabel}</h2>
-        <p className="text-gray-500 text-sm mt-1">
-          {credentialError
-            ? "Session setup failed"
-            : tokenReady
-            ? "Your session is ready"
-            : "Setting up your session…"}
+    <div className="flex flex-col items-center gap-8 text-center w-full">
+      {/* Meeting info */}
+      <div className="flex flex-col gap-2 items-center">
+        <p className="text-[#5e5e61] text-sm font-medium leading-5">
+          Join your Tata 1mg consultation instantly
         </p>
+        {credentialError ? (
+          <p className="text-sm text-[#dc2626] bg-[#fee2e2] border border-[#fca5a5] rounded-xl px-4 py-3 mt-1">
+            {credentialError}
+          </p>
+        ) : (
+          <h2 className="text-black text-2xl font-medium leading-8">
+            {meetingTitle || `${roleLabel} Consultation`}
+          </h2>
+        )}
       </div>
 
-      {credentialError ? (
-        <p className="text-sm text-red-500 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
-          {credentialError}
-        </p>
-      ) : (
-        <>
+      {/* Name + Join */}
+      {!credentialError && (
+        <div className="flex flex-col items-center gap-4 w-full max-w-xs">
+          {!tokenReady && (
+            <p className="text-xs text-[#919093]">Setting up your session…</p>
+          )}
           <input
             value={participantName}
             onChange={(e) => setParticipantName(e.target.value)}
             placeholder="Enter your name"
-            className="px-4 py-3 bg-white border border-orange-200 rounded-xl text-gray-800 w-full text-center focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-450 transition-colors placeholder-gray-400"
+            className="w-full px-4 py-3 bg-white border border-orange-200 rounded-xl text-black text-center text-sm focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-450 transition-colors placeholder-[#919093]"
           />
           <button
             disabled={!canJoin}
             onClick={onClickStartMeeting}
-            className={`w-full text-white px-2 py-3 rounded-xl mt-4 font-semibold transition-colors ${
+            className={`flex items-center gap-1 px-4 py-2 rounded text-base font-medium text-white transition-colors ${
               canJoin
-                ? "bg-orange-450 hover:bg-orange-500"
+                ? "bg-orange-450 hover:bg-orange-500 active:scale-95"
                 : "bg-gray-200 text-gray-400 cursor-not-allowed"
             }`}
           >
             {tokenReady ? "Join Meeting" : "Setting up…"}
+            <ChevronRightIcon className="w-5 h-5" />
           </button>
-        </>
+        </div>
       )}
-    </>
+    </div>
   );
 }

@@ -410,7 +410,7 @@ export function MeetingContainer({ onMeetingLeave }) {
 
   return (
     <div className="fixed inset-0">
-      <div ref={containerRef} className="h-full w-full flex flex-col bg-gray-800 relative">
+      <div ref={containerRef} className="h-full w-full flex flex-col bg-[#1b1b1e] relative">
         {localParticipantAllowedJoin ? (
             <>
               <ImageUploadListner />
@@ -423,7 +423,7 @@ export function MeetingContainer({ onMeetingLeave }) {
                 <>
                   <TopBar bottomBarHeight={bottomBarHeight} caseId={caseId} />
 
-                  <div className={`flex flex-1 ${isPresenting && isMobile ? "flex-col md:flex-row" : "flex-row"} bg-gray-800 overflow-hidden`}>
+                  <div className={`flex flex-1 ${isPresenting && isMobile ? "flex-col md:flex-row" : "flex-row"} bg-[#1b1b1e] overflow-hidden`}>
                     {isPresenting && isMobile ? (
                       <div className="flex flex-1 flex-col">
                         <div className="flex flex-1">
