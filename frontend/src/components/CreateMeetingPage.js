@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { CheckIcon, ClipboardIcon } from "@heroicons/react/24/outline";
 import { createMeeting } from "../api";
+import Tata1mgLogo from "./Tata1mgLogo";
 
 export default function CreateMeetingPage() {
   const [meetingId, setMeetingId] = useState("");
@@ -33,16 +34,8 @@ export default function CreateMeetingPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-      <header className="bg-orange-450 px-5 py-3 flex items-center gap-3 shrink-0 shadow-md">
-        <img
-          src="https://play-lh.googleusercontent.com/yjbAu08_Ahes38IEMV8slP91zgjh2mdh5xpZefvcbYuZxR8O7FZFderRn2Ivaz0uR2Lw"
-          alt="Tata 1mg"
-          className="w-9 h-9 rounded-xl object-contain"
-        />
-        <div className="leading-none">
-          <p className="text-white font-bold text-sm">Tata 1mg</p>
-          <p className="text-white/70 text-xs mt-0.5">Video MER</p>
-        </div>
+      <header className="px-[30px] py-[22px] flex items-center">
+        <Tata1mgLogo height={36} dark />
       </header>
 
       <div className="flex flex-1 items-center justify-center px-4 py-10">

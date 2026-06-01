@@ -1,160 +1,107 @@
-import { Popover, Transition } from '@headlessui/react'
-// import { CheckIcon, ChevronDownIcon } from "@heroicons/react/outline";
-import { Fragment } from 'react'
-import React, { useState } from "react";
-import DropSpeaker from '../icons/DropDown/DropSpeaker';
-import TestSpeaker from '../icons/DropDown/TestSpeaker';
-import test_sound from '../sounds/test_sound.mp3'
-import { useMeetingAppContext } from '../context/MeetingAppContext';
-import { CheckIcon, ChevronDownIcon } from '@heroicons/react/24/outline';
+import { Popover, Transition } from "@headlessui/react";
+import { CheckIcon, ChevronUpDownIcon } from "@heroicons/react/24/outline";
+import { Fragment, useState } from "react";
+import DropSpeaker from "../icons/DropDown/DropSpeaker";
+import test_sound from "../sounds/test_sound.mp3";
+import { useMeetingAppContext } from "../context/MeetingAppContext";
 
 export default function DropDownSpeaker({ speakers }) {
+  const { setSelectedSpeaker, selectedSpeaker, isMicrophonePermissionAllowed } =
+    useMeetingAppContext();
 
-  const {
-    setSelectedSpeaker,
-    selectedSpeaker,
-    isMicrophonePermissionAllowed
-  } = useMeetingAppContext()
-  const [audioProgress, setAudioProgress] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(false)
-  const [isHovered, setIsHovered] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
 
   const testSpeakers = () => {
-    const selectedSpeakerDeviceId = selectedSpeaker.id
-    if (selectedSpeakerDeviceId) {
-      const audio = new Audio(test_sound);
-      try {
-        audio.setSinkId(selectedSpeakerDeviceId)
-          .then(() => {
-            audio.play();
-            setIsPlaying(true)
-            audio.addEventListener('timeupdate', () => {
-              const progress = (audio.currentTime / audio.duration) * 100;
-              setAudioProgress(progress);
-            });
-            audio.addEventListener('ended', () => {
-              setAudioProgress(0);
-              setIsPlaying(false)
-            });
-          })
-      } catch (error) {
-        console.log(error);
-      };
-      audio.play().catch(error => {
-        console.error('Failed to set sinkId:', error);
+    if (!selectedSpeaker?.id) return;
+    const audio = new Audio(test_sound);
+    try {
+      audio.setSinkId(selectedSpeaker.id).then(() => {
+        audio.play();
+        setIsPlaying(true);
+        audio.addEventListener("timeupdate", () =>
+          setProgress((audio.currentTime / audio.duration) * 100)
+        );
+        audio.addEventListener("ended", () => {
+          setProgress(0);
+          setIsPlaying(false);
+        });
       });
-    } else {
-      console.error('Selected speaker deviceId not found.');
+    } catch (e) {
+      audio.play().catch(console.error);
     }
   };
 
   return (
-    <>
-      <Popover className={`relative w-full`}>
-        {({ open }) => (
-          <>
-            <Popover.Button
-              onMouseEnter={() => { setIsHovered(true) }}
-              onMouseLeave={() => { setIsHovered(false) }}
-              disabled={!isMicrophonePermissionAllowed}
-              className={`focus:outline-none hover:ring-1 hover:ring-orange-200 hover:bg-orange-50
-              ${open
-                  ? "text-gray-800 ring-1 ring-orange-200 bg-orange-50"
-                  : "text-gray-600 hover:text-gray-900"
-                }
-              group inline-flex items-center rounded-md px-1 py-1 w-full text-base font-normal
-              ${!isMicrophonePermissionAllowed ? "opacity-50" : ""}`}
-            >
-              <div>
-                <DropSpeaker fillColor={isHovered || open ? "#FF6F61" : "#9CA3AF"} />
+    <Popover className="relative w-full">
+      {({ open }) => (
+        <>
+          <Popover.Button
+            disabled={!isMicrophonePermissionAllowed}
+            className="w-full flex items-center gap-1.5 px-2 py-[6px] bg-black/[0.02] border border-black/[0.05] rounded text-sm text-gray-900 focus:outline-none hover:bg-black/[0.05] transition-colors disabled:opacity-50"
+          >
+            <DropSpeaker fillColor="#6B7280" />
+            <span className="flex-1 truncate text-left font-normal">
+              {isMicrophonePermissionAllowed
+                ? (selectedSpeaker?.label || "Default speaker")
+                : "Permission Needed"}
+            </span>
+            <ChevronUpDownIcon className="w-4 h-4 text-gray-400 shrink-0" />
+          </Popover.Button>
 
-              </div>
-              <span className=" overflow-hidden whitespace-nowrap overflow-ellipsis w-full ml-6">
-                {isMicrophonePermissionAllowed ? selectedSpeaker?.label : "Permission Needed"}
-              </span>
-              <ChevronDownIcon
-                className={`${open ? 'text-orange-300' : 'text-orange-300/70'}
-                ml-8 h-5 w-10 transition duration-150 ease-in-out group-hover:text-orange-300/80 mt-1`}
-                aria-hidden="true"
-              />
-            </Popover.Button>
-            <Transition
-              as={Fragment}
-              enter="transition ease-out duration-200"
-              enterFrom="opacity-0 translate-y-1"
-              enterTo="opacity-100 translate-y-0"
-              leave="transition ease-in duration-150"
-              leaveFrom="opacity-100 translate-y-0"
-              leaveTo="opacity-0 translate-y-1"
-            >
-              <Popover.Panel className="absolute bottom-full z-10 mt-3 w-full px-4 sm:px-0 pb-2">
-                <div className="rounded-lg shadow-lg">
-                  <div className="bg-white border border-orange-100 rounded-lg">
-                    <div>
-                      <div className="flex flex-col">
-                        {speakers.map(
-                          (item, index) => {
-                            return (
-                              item?.kind === "audiooutput" && (
-                                <div
-                                  key={`speaker_${index}`}
-                                  className={` my-1 pl-4 pr-2 text-gray-700 text-left flex `} >
-                                  <span className="w-6 mr-2 flex items-center justify-center">
-                                    {selectedSpeaker?.label === item?.label && (
-                                      <CheckIcon className='h-5 w-5' />
-                                    )}
-                                  </span>
-                                  <button
-                                    className={`flex flex-1 w-full text-left `}
-                                    value={item?.deviceId}
-                                    onClick={() => {
-                                      setSelectedSpeaker(
-                                        (s) => ({
-                                          ...s,
-                                          id: item?.deviceId,
-                                          label: item?.label
-                                        })
-                                      );
-                                    }}
-                                  >
-                                    {item?.label ? (
-                                      <span>{item?.label}</span>
-                                    ) : (
-                                      <span >{`Speaker ${index + 1}`}</span>
-                                    )}
-                                  </button>
-                                </div>
-                              )
-                            );
-                          }
-                        )}
-                        {speakers.length && <> <hr className='border border-orange-100 mt-2 mb-1' />
-                          <div className={`my-1 pl-4 pr-2 text-gray-700 text-left`} >
-                            <button
-                              className={`flex flex-1 w-full text-left mb-1 pl-1 focus:outline-none`}
-                              onClick={testSpeakers}
-                            >
-                              <span className="mr-3">
-                                <TestSpeaker />
-                              </span>
-                              {isPlaying ? <div className="w-52 mt-2 bg-gray-200 rounded-full h-2">
-                                <div className="bg-gray-400 h-2 rounded-full" style={{ width: `${audioProgress}%` }}></div>
-                              </div>
-                                : <span>Test Speakers</span>
-                              }
-                            </button>
-                          </div>
-                        </>}
-                      </div>
-                    </div>
-                  </div>
+          <Transition
+            as={Fragment}
+            enter="transition ease-out duration-150"
+            enterFrom="opacity-0 translate-y-1"
+            enterTo="opacity-100 translate-y-0"
+            leave="transition ease-in duration-100"
+            leaveFrom="opacity-100 translate-y-0"
+            leaveTo="opacity-0 translate-y-1"
+          >
+            <Popover.Panel className="absolute bottom-full mb-1 z-10 w-full min-w-[180px]">
+              <div className="bg-gray-900 rounded-lg shadow-xl border border-white/10 overflow-hidden">
+                <div className="flex flex-col py-1">
+                  {speakers.map((item, i) =>
+                    item?.kind === "audiooutput" ? (
+                      <button
+                        key={`spk_${i}`}
+                        onClick={() =>
+                          setSelectedSpeaker({ id: item.deviceId, label: item.label })
+                        }
+                        className="flex items-center gap-2 px-3 py-2 text-sm text-white text-left hover:bg-white/10 transition-colors w-full"
+                      >
+                        <span className="w-4 shrink-0">
+                          {selectedSpeaker?.label === item.label && (
+                            <CheckIcon className="w-4 h-4 text-orange-400" />
+                          )}
+                        </span>
+                        <span className="truncate">{item.label || `Speaker ${i + 1}`}</span>
+                      </button>
+                    ) : null
+                  )}
                 </div>
-              </Popover.Panel>
-            </Transition>
-          </>
-        )}
-      </Popover>
-    </>
-  )
+                {speakers.length > 0 && (
+                  <button
+                    onClick={testSpeakers}
+                    className="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-[#ff6f61] hover:bg-[#ff5a4a] text-white text-sm font-medium transition-colors"
+                  >
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+                    </svg>
+                    {isPlaying ? (
+                      <div className="w-20 bg-white/30 rounded-full h-1 overflow-hidden">
+                        <div className="bg-white h-1 rounded-full transition-all" style={{ width: `${progress}%` }} />
+                      </div>
+                    ) : (
+                      "Test Speakers"
+                    )}
+                  </button>
+                )}
+              </div>
+            </Popover.Panel>
+          </Transition>
+        </>
+      )}
+    </Popover>
+  );
 }
-
