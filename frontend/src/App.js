@@ -136,7 +136,6 @@ const App = () => {
                 setToken("");
                 setParticipantId("");
                 setMeetingId("");
-                setParticipantName("");
                 setWebcamOn(false);
                 setMicOn(false);
                 setSpekerOn(false);
@@ -147,7 +146,7 @@ const App = () => {
           </MeetingProvider>
         </MeetingErrorBoundary>
       ) : isMeetingLeft ? (
-        <LeaveScreen setIsMeetingLeft={setIsMeetingLeft} />
+        <LeaveScreen participantName={participantName} />
       ) : (
         <JoiningScreen
           participantName={participantName}
