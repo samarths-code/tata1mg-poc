@@ -60,11 +60,6 @@ All endpoints are prefixed with `/api/video`.
 
 Creates a new VideoSDK room. Requires the caller to identify as a doctor.
 
-**Request headers:**
-```
-X-Participant-Role: DOCTOR
-```
-
 **Response:**
 ```json
 { "roomId": "abc-1234-xyz" }
@@ -147,16 +142,7 @@ Liveness check used by load balancers and uptime monitors.
 | `DOCTOR` | `allow_join`, `allow_mod` (can mute/remove participants) |
 | `PATIENT` / anything else | `allow_join` only |
 
-Role can be sent either as an `X-Participant-Role` header or as a `"role"` field in the request body. The header takes precedence.
 
----
-
-## Production notes
-
-- **Never commit `.env`** — it contains your VideoSDK secret.
-- Set `FLASK_DEBUG=0` in production (it is `0` by default).
-- Run behind a WSGI server (Gunicorn, uWSGI) — do not use `python app.py` in production.
-- Lock `ALLOWED_ORIGINS` in `app.py` to your actual frontend domain before deploying.
 
 ### Running with Gunicorn
 
