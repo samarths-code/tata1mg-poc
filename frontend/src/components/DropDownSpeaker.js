@@ -1,5 +1,5 @@
 import { Popover, Transition } from "@headlessui/react";
-import { CheckIcon, ChevronUpDownIcon } from "@heroicons/react/24/outline";
+import { CheckCircleIcon, ChevronUpDownIcon } from "@heroicons/react/24/outline";
 import { Fragment, useState } from "react";
 import DropSpeaker from "../icons/DropDown/DropSpeaker";
 import test_sound from "../sounds/test_sound.mp3";
@@ -58,8 +58,8 @@ export default function DropDownSpeaker({ speakers }) {
             leaveFrom="opacity-100 translate-y-0"
             leaveTo="opacity-0 translate-y-1"
           >
-            <Popover.Panel className="absolute bottom-full mb-1 z-10 w-full min-w-[180px]">
-              <div className="bg-gray-900 rounded-lg shadow-xl border border-white/10 overflow-hidden">
+            <Popover.Panel className="absolute bottom-full mb-1 z-20 min-w-full w-max">
+              <div className="bg-[#e8e8e8] rounded-xl shadow-lg border border-black/10 overflow-hidden">
                 <div className="flex flex-col py-1">
                   {speakers.map((item, i) =>
                     item?.kind === "audiooutput" ? (
@@ -68,14 +68,12 @@ export default function DropDownSpeaker({ speakers }) {
                         onClick={() =>
                           setSelectedSpeaker({ id: item.deviceId, label: item.label })
                         }
-                        className="flex items-center gap-2 px-3 py-2 text-sm text-white text-left hover:bg-white/10 transition-colors w-full"
+                        className="flex items-center justify-between gap-6 px-4 py-2.5 text-sm text-gray-900 text-left hover:bg-black/5 transition-colors w-full whitespace-nowrap"
                       >
-                        <span className="w-4 shrink-0">
-                          {selectedSpeaker?.label === item.label && (
-                            <CheckIcon className="w-4 h-4 text-orange-400" />
-                          )}
-                        </span>
-                        <span className="truncate">{item.label || `Speaker ${i + 1}`}</span>
+                        <span className="font-normal">{item.label || `Speaker ${i + 1}`}</span>
+                        {selectedSpeaker?.label === item.label && (
+                          <CheckCircleIcon className="w-5 h-5 text-gray-500 shrink-0" />
+                        )}
                       </button>
                     ) : null
                   )}
