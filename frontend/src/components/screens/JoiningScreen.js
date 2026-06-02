@@ -76,18 +76,53 @@ export function JoiningScreen({
   const [dlgDevices, setDlgDevices] = useState(false);
   const [didDeviceChange, setDidDeviceChange] = useState(false);
   const [testSpeaker, setTestSpeaker] = useState(false);
+  const [micVolume, setMicVolume] = useState(0);
 
   const videoPlayerRef = useRef();
   const audioPlayerRef = useRef();
   const videoTrackRef = useRef();
   const audioTrackRef = useRef();
   const audioAnalyserIntervalRef = useRef();
+  const audioCtxRef = useRef(null);
   const permissonAvaialble = useRef();
   const webcamRef = useRef();
   const micRef = useRef();
 
   useEffect(() => { webcamRef.current = webcamOn; }, [webcamOn]);
   useEffect(() => { micRef.current = micOn; }, [micOn]);
+
+  // Audio level analysis — runs in JoiningScreen so AudioContext is created
+  // after a confirmed user gesture (mic toggle), avoiding browser autoplay blocks.
+  useEffect(() => {
+    clearInterval(audioAnalyserIntervalRef.current);
+    if (audioCtxRef.current) { audioCtxRef.current.close(); audioCtxRef.current = null; }
+    if (!audioTrack || !micOn) { setMicVolume(0); return; }
+
+    let cancelled = false;
+    const ctx = new AudioContext();
+    audioCtxRef.current = ctx;
+
+    ctx.resume().then(() => {
+      if (cancelled) return;
+      const src = ctx.createMediaStreamSource(new MediaStream([audioTrack]));
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 512;
+      analyser.smoothingTimeConstant = 0.4;
+      src.connect(analyser);
+      const buf = new Uint8Array(analyser.frequencyBinCount);
+      audioAnalyserIntervalRef.current = setInterval(() => {
+        analyser.getByteFrequencyData(buf);
+        setMicVolume(buf.reduce((s, v) => s + v, 0) / buf.length);
+      }, 100);
+    });
+
+    return () => {
+      cancelled = true;
+      clearInterval(audioAnalyserIntervalRef.current);
+      ctx.close();
+      audioCtxRef.current = null;
+    };
+  }, [audioTrack, micOn]);
 
   useEffect(() => {
     permissonAvaialble.current = {
@@ -338,12 +373,6 @@ export function JoiningScreen({
                           : <MicOffIcon fillcolor="white" style={{ width: 20, height: 20 }} />
                         }
                       </div>
-                      {/* Voice wave bars */}
-                      <div className="flex gap-0.5 items-center h-2.5">
-                        <div className="bg-white w-0.5 h-[3px] rounded-sm" />
-                        <div className="bg-white w-0.5 h-[3px] rounded-sm" />
-                        <div className="bg-white w-0.5 h-[3px] rounded-sm" />
-                      </div>
                     </button>
                   ) : (
                     <MicPermissionDenied />
@@ -389,8 +418,8 @@ export function JoiningScreen({
                     mics={mics}
                     changeMic={changeMic}
                     customAudioStream={customAudioStream}
-                    audioTrack={audioTrack}
                     micOn={micOn}
+                    volume={micVolume}
                     didDeviceChange={didDeviceChange}
                     setDidDeviceChange={setDidDeviceChange}
                     testSpeaker={testSpeaker}

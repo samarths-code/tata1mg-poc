@@ -17,7 +17,7 @@ export default function DropDownCam({ webcams, changeWebcam }) {
             className="w-full flex items-center gap-1.5 px-2 py-[6px] bg-black/[0.02] border border-black/[0.05] rounded text-sm text-gray-900 focus:outline-none hover:bg-black/[0.05] transition-colors disabled:opacity-50"
           >
             <DropCAM fillColor="#6B7280" />
-            <span className="flex-1 truncate text-left font-normal">
+            <span className="flex-1 truncate text-left font-normal text-black">
               {isCameraPermissionAllowed
                 ? (selectedWebcam?.label || "Default camera")
                 : "Permission Needed"}
@@ -47,9 +47,9 @@ export default function DropDownCam({ webcams, changeWebcam }) {
                         }}
                         className="flex items-center justify-between gap-6 px-4 py-2.5 text-sm text-gray-900 text-left hover:bg-black/5 transition-colors w-full whitespace-nowrap"
                       >
-                        <span className="font-normal">{item.label || `Camera ${i + 1}`}</span>
+                        <span className="font-normal text-black">{item.label || `Camera ${i + 1}`}</span>
                         {selectedWebcam?.label === item.label && (
-                          <CheckCircleIcon className="w-5 h-5 text-gray-500 shrink-0" />
+                          <CheckCircleIcon className="w-5 h-5 text-black shrink-0" />
                         )}
                       </button>
                     ) : null
