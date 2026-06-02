@@ -27,3 +27,6 @@ yarn.lock
 package-lock.json
 
 .claude
+
+# Graphify knowledge graph output (generated, not committed)
+graphify-out/
