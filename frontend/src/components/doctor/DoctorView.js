@@ -18,7 +18,10 @@ import { VideoCameraIcon } from "@heroicons/react/24/outline";
 const bottomBarHeight = 80;
 
 function nowTime() {
-  return new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const now = new Date();
+  const date = now.toLocaleDateString([], { day: "2-digit", month: "short", year: "numeric" });
+  const time = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return `${date}, ${time}`;
 }
 
 export default function DoctorView() {
@@ -163,10 +166,8 @@ export default function DoctorView() {
       if (!isAiReady()) throw new Error("AI not ready");
       const raw = await runOCR({ imageBase64 });
       setOcrResult({ fields: raw });
-    } catch {
-      // TODO(temporary): OCR is forced to "success" for now — the AI endpoint
-      // is unreliable in this environment. Restore `{ error: true }` once stable.
-      setOcrResult({ fields: {}, forced: true });
+    } catch (err) {
+      setOcrResult({ error: true, message: err.message });
     }
   }, []);
 
@@ -348,7 +349,7 @@ export default function DoctorView() {
       <div className="flex-1 flex relative overflow-hidden">
         {/* Video stage */}
         <div className="relative flex-1 px-4 pt-2" style={{ paddingBottom: bottomBarHeight }}>
-          <div className="relative w-full h-full rounded-2xl overflow-hidden bg-gray-800">
+          <div className="relative w-full h-full rounded-[24px] overflow-hidden bg-gray-800">
             {customerId ? (
               <MemoizedParticipant participantId={customerId} showImageCapture={false} showResolution={true} />
             ) : (

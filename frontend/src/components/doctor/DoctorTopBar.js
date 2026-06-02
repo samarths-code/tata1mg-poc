@@ -53,12 +53,15 @@ export default function DoctorTopBar({
       {/* Right: active step pill + hamburger */}
       <div className="flex items-center gap-2 shrink-0" ref={menuRef}>
 
-        {/* Current active step pill */}
-        <div className="bg-white/[0.02] border border-white/5 flex items-center px-3 py-[6px] rounded-[4px]">
+        {/* Current active step pill — clickable to open drawer or capture overlay */}
+        <button
+          onClick={() => onStepClick?.(activeStep.id)}
+          className="bg-white/[0.02] border border-white/5 flex items-center px-3 py-[6px] rounded-[4px] hover:bg-white/5 transition-colors cursor-pointer"
+        >
           <span className="text-sm font-medium text-white whitespace-nowrap">
             Step {activeStep.id}: {activeStep.label}
           </span>
-        </div>
+        </button>
 
         {/* Hamburger — shows all steps, locks future ones */}
         <div className="relative">

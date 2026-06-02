@@ -43,11 +43,21 @@ function GreenBadge({ children }) {
   );
 }
 
-function MetricRow({ label, value, badge }) {
+function RedBadge({ children }) {
+  return (
+    <span className="px-2 py-0.5 rounded-md text-xs font-semibold text-[#fca5a5] bg-[rgba(252,165,165,0.12)]">
+      {children}
+    </span>
+  );
+}
+
+function MetricRow({ label, value, badge, error }) {
   return (
     <div className="flex items-center justify-between py-2 border-b border-[#303033] last:border-0">
       <span className="text-[#919093] text-sm">{label}</span>
-      {badge ? <GreenBadge>{value}</GreenBadge> : <span className="text-white text-sm">{value}</span>}
+      {badge ? <GreenBadge>{value}</GreenBadge>
+        : error ? <RedBadge>{value}</RedBadge>
+        : <span className="text-white text-sm">{value}</span>}
     </div>
   );
 }
@@ -197,7 +207,7 @@ export function IdentityVerificationPanel({
           </button>
           <button
             onClick={onApprove}
-            disabled={!ocrOk}
+            disabled={ocrResult?.loading}
             className="ml-auto px-5 py-2.5 rounded-lg text-sm font-semibold text-white bg-orange-450 hover:bg-orange-500 disabled:opacity-40 transition-colors"
           >
             Approve Document
@@ -212,7 +222,17 @@ export function IdentityVerificationPanel({
           {!frontImage && !backImage && <p className="text-[#77777a] text-xs italic">No document captured yet</p>}
         </div>
         <div className="mt-3">
-          <MetricRow label="OCR Detection" value={ocrOk ? "Successful" : ocrResult?.loading ? "Running…" : "—"} badge={ocrOk} />
+          <MetricRow
+            label="OCR Detection"
+            value={
+              ocrResult?.loading ? "Running…"
+              : ocrOk ? "Successful"
+              : ocrResult?.error ? (ocrResult.message || "Failed")
+              : "—"
+            }
+            badge={ocrOk}
+            error={!ocrOk && !ocrResult?.loading && !!ocrResult?.error}
+          />
           {confPct != null && (
             <MetricRow label="Confidence" value={`${confPct}%`} badge={ocrOk} />
           )}
