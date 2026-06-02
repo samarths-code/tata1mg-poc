@@ -9,7 +9,6 @@ import useIsTab from "../hooks/useIsTab";
 import { useMediaQuery } from "react-responsive";
 import useWindowSize from "../hooks/useWindowSize";
 import MicOffSmallIcon from "../icons/MicOffSmallIcon";
-import SpeakerIcon from "../icons/SpeakerIcon";
 import {
   getQualityScore,
   nameTructed,
@@ -243,19 +242,6 @@ export const CornerDisplayName = ({
             }}
           >
             <MicOffSmallIcon fillcolor="white" />
-          </div>
-        ) : micOn && isActiveSpeaker ? (
-          <div
-            style={{
-              padding: isMobile ? 2 : isTab ? 3 : 1,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              borderRadius: 24,
-              marginRight: 6,
-            }}
-          >
-            <SpeakerIcon />
           </div>
         ) : null}
         <p className="text-sm text-white">

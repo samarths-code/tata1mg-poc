@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 
-const useGeolocation = () => {
+const useGeolocation = ({ enabled = true } = {}) => {
   const [location, setLocation] = useState({
     latitude: null,
     longitude: null,
@@ -9,6 +9,7 @@ const useGeolocation = () => {
   });
 
   useEffect(() => {
+    if (!enabled) return;
     if (!navigator.geolocation) {
       setLocation((prev) => ({
         ...prev,
@@ -44,7 +45,7 @@ const useGeolocation = () => {
     });
 
     return () => navigator.geolocation.clearWatch(watchId);
-  }, []);
+  }, [enabled]);
 
   return location;
 };

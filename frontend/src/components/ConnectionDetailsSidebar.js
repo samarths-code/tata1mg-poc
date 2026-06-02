@@ -58,6 +58,8 @@ export default function ConnectionDetailsSidebar({ onClose, data = {} }) {
     network = {},
   } = data;
 
+
+
   return (
     <div className="bg-[#101113] border-l border-[rgba(255,255,255,0.05)] h-full flex flex-col w-[400px] min-w-[320px] rounded-bl-3xl rounded-tl-3xl">
       {/* Header */}
@@ -101,13 +103,14 @@ export default function ConnectionDetailsSidebar({ onClose, data = {} }) {
         </div>
 
         {/* Audio output */}
-        {audioOutputs.length > 0 && (
-          <div>
-            <SectionCard title="Audio Output">
-              <DeviceList items={audioOutputs} />
-            </SectionCard>
-          </div>
-        )}
+        <div>
+          <SectionCard title="Audio Output">
+            {console.log("audioOutputs", audioOutputs)}
+            <DeviceList
+              items={audioOutputs.length ? audioOutputs : [{ label: "System Default", active: true }]}
+            />
+          </SectionCard>
+        </div>
 
         {/* Location */}
         <SectionCard

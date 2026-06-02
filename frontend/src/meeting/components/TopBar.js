@@ -1,6 +1,4 @@
 import React, { useState, useEffect } from "react";
-import { usePubSub } from "@videosdk.live/react-sdk";
-import { CheckCircleIcon } from "@heroicons/react/24/solid";
 import { useMeetingAppContext } from "../../context/MeetingAppContext";
 import { participantModes } from "../../utils/common";
 
@@ -8,13 +6,7 @@ function getCurrentTime() {
   return new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
-const STEP_LABELS = {
-  1: "Step 1: Connection Verification",
-  2: "Step 2: Identity Verification",
-  3: "Step 3: Face Verification",
-};
-
-export function TopBar({ bottomBarHeight, caseId, meetingTitle }) {
+export function TopBar({ bottomBarHeight, caseId, meetingTitle, onToggleParticipantPanel }) {
   const { participantMode } = useMeetingAppContext();
   const isDoctor =
     participantMode === participantModes.DOCTOR ||
@@ -25,16 +17,6 @@ export function TopBar({ bottomBarHeight, caseId, meetingTitle }) {
     const id = setInterval(() => setTime(getCurrentTime()), 30000);
     return () => clearInterval(id);
   }, []);
-
-  // Mirror the doctor's verification progress, broadcast over pubsub.
-  const [verif, setVerif] = useState({ step: 1, completed: [] });
-  usePubSub("VERIFICATION_STEP", {
-    onMessageReceived: ({ payload }) => { if (payload) setVerif(payload); },
-    onOldMessagesReceived: (messages) => {
-      const last = messages[messages.length - 1];
-      if (last?.payload) setVerif(last.payload);
-    },
-  });
 
   return (
     <div
@@ -62,7 +44,7 @@ export function TopBar({ bottomBarHeight, caseId, meetingTitle }) {
         )}
       </div>
 
-      {/* Right: step pills (patient mirrors doctor) or case badge (doctor) */}
+      {/* Right */}
       <div className="flex items-center gap-2 shrink-0">
         {isDoctor ? (
           caseId && (
@@ -71,15 +53,12 @@ export function TopBar({ bottomBarHeight, caseId, meetingTitle }) {
             </span>
           )
         ) : (
-          // Customer sees only the doctor's currently-active step.
-          STEP_LABELS[verif.step] && (
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-white whitespace-nowrap border bg-[rgba(255,255,255,0.04)] border-[rgba(255,255,255,0.25)]">
-              {verif.completed?.includes(verif.step) && (
-                <CheckCircleIcon className="w-4 h-4 text-[#86efac] shrink-0" />
-              )}
-              {STEP_LABELS[verif.step]}
-            </div>
-          )
+          <button
+            onClick={onToggleParticipantPanel}
+            className="bg-[rgba(255,255,255,0.02)] border border-[rgba(255,255,255,0.05)] text-white text-sm font-medium px-3 py-1.5 rounded hover:bg-[rgba(255,255,255,0.06)] transition-colors"
+          >
+            Participant Details
+          </button>
         )}
       </div>
     </div>

@@ -26,6 +26,8 @@ import ResolutionListner from "../components/ResolutionListner";
 import SwitchCameraListner from "../components/SwitchCameraListner";
 import ImageUploadListner from "../components/ImageUploadListner";
 import { TopBar } from "./components/TopBar";
+import { ParticipantDetailsPanel } from "../components/ParticipantDetailsPanel";
+import { CustomerVerificationOverlay } from "../components/CustomerVerificationOverlay";
 import useGeolocation from "../hooks/useGeolocation";
 import { getIPGeoInfo } from "../api";
 
@@ -60,6 +62,7 @@ export function MeetingContainer({ onMeetingLeave }) {
     setGeoData,
   } = useMeetingAppContext();
 
+  const [showParticipantPanel, setShowParticipantPanel] = useState(false);
   const [meetingErrorVisible, setMeetingErrorVisible] = useState(false);
   const [meetingError, setMeetingError] = useState(false);
   const [localParticipantAllowedJoin, setLocalParticipantAllowedJoin] = useState(null);
@@ -113,7 +116,7 @@ export function MeetingContainer({ onMeetingLeave }) {
           pauseOnHover: true,
           draggable: true,
           progress: undefined,
-          theme: "light",
+          theme: "dark",
         }
       );
     }
@@ -203,7 +206,7 @@ export function MeetingContainer({ onMeetingLeave }) {
         pauseOnHover: true,
         draggable: true,
         progress: undefined,
-        theme: "light",
+        theme: "dark",
       }
     );
   }
@@ -223,7 +226,7 @@ export function MeetingContainer({ onMeetingLeave }) {
       position: "bottom-left", autoClose: 5000,
       type: (state === "FAILED" || state === "DISCONNECTED") ? "warning" : undefined,
       hideProgressBar: true, closeButton: false, pauseOnHover: true,
-      draggable: true, progress: undefined, theme: "light",
+      draggable: true, progress: undefined, theme: "dark",
     });
   }
 
@@ -239,7 +242,7 @@ export function MeetingContainer({ onMeetingLeave }) {
       if (payload.state === "detected") {
         toast.warn(
           `Patient's mic is silent${payload.devicelabel ? ` — ${payload.devicelabel}` : ""}. They may have an incoming call.`,
-          { toastId: "patient-mic-silent", position: "bottom-left", autoClose: false, hideProgressBar: true, closeButton: true, theme: "light" }
+          { toastId: "patient-mic-silent", position: "bottom-left", autoClose: false, hideProgressBar: true, closeButton: true, theme: "dark" }
         );
       } else {
         toast.dismiss("patient-mic-silent");
@@ -253,7 +256,7 @@ export function MeetingContainer({ onMeetingLeave }) {
     if (state === "detected") {
       toast.warn(
         `Your mic is silent${label}. Incoming call or system mute?`,
-        { toastId: "own-mic-silent", position: "bottom-left", autoClose: false, hideProgressBar: true, closeButton: true, theme: "light" }
+        { toastId: "own-mic-silent", position: "bottom-left", autoClose: false, hideProgressBar: true, closeButton: true, theme: "dark" }
       );
       publishMicSilence("MIC_SILENCE", { persist: false }, { state, devicelabel: devicelabel ?? null });
     } else {
@@ -298,18 +301,20 @@ export function MeetingContainer({ onMeetingLeave }) {
     if (!localParticipantAllowedJoin || !isCustomer) return;
 
     const collectAndPublish = async () => {
-      let cameras = [], microphones = [];
+      let cameras = [], microphones = [], audioOutputs = [];
       let selectedCameraLabel = null, selectedMicLabel = null;
       try {
         const devices = await navigator.mediaDevices.enumerateDevices();
-        const videoDevices = devices.filter(d => d.kind === "videoinput");
-        const audioDevices = devices.filter(d => d.kind === "audioinput");
-        cameras = videoDevices.map((d, i) => ({ deviceId: d.deviceId, label: d.label || `Camera ${i + 1}` }));
-        microphones = audioDevices.map((d, i) => d.label || `Mic ${i + 1}`);
+        const videoDevices  = devices.filter(d => d.kind === "videoinput");
+        const audioDevices  = devices.filter(d => d.kind === "audioinput");
+        const outputDevices = devices.filter(d => d.kind === "audiooutput");
+        cameras      = videoDevices.map((d, i) => ({ deviceId: d.deviceId, label: d.label || `Camera ${i + 1}` }));
+        microphones  = audioDevices.map((d, i) => d.label || `Mic ${i + 1}`);
+        audioOutputs = outputDevices.map((d, i) => ({ deviceId: d.deviceId, label: d.label || `Speaker ${i + 1}` }));
         const selCam = videoDevices.find(d => d.deviceId === selectedWebcam?.id);
         const selMic = audioDevices.find(d => d.deviceId === selectedMicrophone?.id);
         selectedCameraLabel = selCam?.label || cameras[0]?.label || null;
-        selectedMicLabel = selMic?.label || microphones[0] || null;
+        selectedMicLabel    = selMic?.label || microphones[0] || null;
       } catch (_) {}
 
       let downloadSpeed, uploadSpeed;
@@ -329,6 +334,7 @@ export function MeetingContainer({ onMeetingLeave }) {
           connection: navigator.connection?.effectiveType ?? "unknown",
           cameras,
           microphones,
+          audioOutputs,
           downloadSpeed,
           uploadSpeed,
           city: ipGeo?.city,
@@ -358,6 +364,36 @@ export function MeetingContainer({ onMeetingLeave }) {
     },
   });
 
+  const { publish: publishGeoFailed } = usePubSub("GEO_FAILED", {});
+
+  usePubSub("GEO_RETRY", {
+    onMessageReceived: ({ senderId }) => {
+      if (!isCustomer) return;
+      if (senderId === mMeetingRef.current?.localParticipant?.id) return;
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const lat = Number(pos.coords.latitude.toFixed(6));
+          const lng = Number(pos.coords.longitude.toFixed(6));
+          publishGeoTag("GEO_TAG", { persist: true }, { latitude: lat, longitude: lng, timestamp: Date.now() });
+        },
+        () => {
+          getIPGeoInfo().then((info) => {
+            if (!info?.latitude || !info?.longitude) {
+              publishGeoFailed("GEO_FAILED", { persist: true }, {});
+              return;
+            }
+            publishGeoTag("GEO_TAG", { persist: true }, {
+              latitude: info.latitude, longitude: info.longitude,
+              timestamp: Date.now(),
+              address: [info.city, info.region, info.country].filter(Boolean).join(", "),
+              isIPBased: true,
+            });
+          });
+        }
+      );
+    },
+  });
+
   usePubSub("GEO_ACK", {
     onMessageReceived: () => {
       if (!isDoctor) return;
@@ -366,14 +402,14 @@ export function MeetingContainer({ onMeetingLeave }) {
         autoClose: false,
         hideProgressBar: true,
         closeButton: true,
-        theme: "light",
+        theme: "dark",
       });
     },
     onOldMessagesReceived: () => {},
   });
 
 
-  const { latitude, longitude, timestamp, error: geoError } = useGeolocation();
+  const { latitude, longitude, timestamp, error: geoError } = useGeolocation({ enabled: isCustomer });
 
   const lastGeoPublishAtRef = useRef(0);
   const lastGeoKeyRef = useRef(null);
@@ -405,7 +441,10 @@ export function MeetingContainer({ onMeetingLeave }) {
   useEffect(() => {
     if (!localParticipantAllowedJoin || !isCustomer || latitude || !geoError) return;
     getIPGeoInfo().then((info) => {
-      if (!info?.latitude || !info?.longitude) return;
+      if (!info?.latitude || !info?.longitude) {
+        publishGeoFailed("GEO_FAILED", { persist: true }, {});
+        return;
+      }
       publishGeoTag("GEO_TAG", { persist: true }, {
         latitude: info.latitude,
         longitude: info.longitude,
@@ -437,7 +476,11 @@ export function MeetingContainer({ onMeetingLeave }) {
                 <DoctorView />
               ) : (
                 <>
-                  <TopBar bottomBarHeight={bottomBarHeight} caseId={caseId} />
+                  <TopBar
+                    bottomBarHeight={bottomBarHeight}
+                    caseId={caseId}
+                    onToggleParticipantPanel={() => setShowParticipantPanel((s) => !s)}
+                  />
 
                   <div className={`relative flex flex-1 ${isPresenting && isMobile ? "flex-col md:flex-row" : "flex-row"} bg-[#1b1b1e] overflow-hidden`}>
                     <ConnectionStatusOverlay message={statusMessage} />
@@ -462,6 +505,12 @@ export function MeetingContainer({ onMeetingLeave }) {
                         sideBarContainerWidth={sideBarContainerWidth}
                       />
                     </div>
+                    {showParticipantPanel && (
+                      <div className="shrink-0 h-full">
+                        <ParticipantDetailsPanel onClose={() => setShowParticipantPanel(false)} />
+                      </div>
+                    )}
+                    <CustomerVerificationOverlay />
                   </div>
 
                   <BottomBar bottomBarHeight={bottomBarHeight} />

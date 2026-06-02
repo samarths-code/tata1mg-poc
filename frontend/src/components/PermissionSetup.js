@@ -105,10 +105,10 @@ export default function PermissionSetup({ onDone }) {
   const [micError,      setMicError]      = useState(null);
   const [locationError, setLocationError] = useState(null);
 
+  // Camera + mic are required; location is requested but non-blocking
   const criticalDone =
-    camera   === STATUS.GRANTED &&
-    mic      === STATUS.GRANTED &&
-    location === STATUS.GRANTED;
+    camera === STATUS.GRANTED &&
+    mic    === STATUS.GRANTED;
 
   useEffect(() => {
     runChecks();

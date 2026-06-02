@@ -59,7 +59,7 @@ export function MeetingDetailsScreen({
                   pauseOnHover: true,
                   draggable: true,
                   progress: undefined,
-                  theme: "light",
+                  theme: "dark",
                 });
               } else {
                 setMeetingIdError(true);

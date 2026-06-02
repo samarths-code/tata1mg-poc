@@ -65,21 +65,31 @@ export default function DropDownSpeaker({ speakers }) {
             <Popover.Panel className="absolute bottom-full mb-1 z-20 min-w-full w-max">
               <div className="bg-[#e8e8e8] rounded-xl shadow-lg border border-black/10 overflow-hidden">
                 <div className="flex flex-col py-1">
-                  {speakers.map((item, i) =>
-                    item?.kind === "audiooutput" ? (
-                      <button
-                        key={`spk_${i}`}
-                        onClick={() =>
-                          setSelectedSpeaker({ id: item.deviceId, label: item.label })
-                        }
-                        className="flex items-center justify-between gap-6 px-4 py-2.5 text-sm text-gray-900 text-left hover:bg-black/5 transition-colors w-full whitespace-nowrap"
-                      >
-                        <span className="font-normal text-black">{item.label || `Speaker ${i + 1}`}</span>
-                        {selectedSpeaker?.label === item.label && (
-                          <CheckCircleIcon className="w-5 h-5 text-black shrink-0" />
-                        )}
-                      </button>
-                    ) : null
+                  {speakers.filter((s) => s?.kind === "audiooutput").length === 0 ? (
+                    <button
+                      onClick={() => setSelectedSpeaker({ id: "default", label: "System Default" })}
+                      className="flex items-center justify-between gap-6 px-4 py-2.5 text-sm text-gray-900 text-left hover:bg-black/5 transition-colors w-full whitespace-nowrap"
+                    >
+                      <span className="font-normal text-black">System Default</span>
+                      <CheckCircleIcon className="w-5 h-5 text-black shrink-0" />
+                    </button>
+                  ) : (
+                    speakers.map((item, i) =>
+                      item?.kind === "audiooutput" ? (
+                        <button
+                          key={`spk_${i}`}
+                          onClick={() =>
+                            setSelectedSpeaker({ id: item.deviceId, label: item.label })
+                          }
+                          className="flex items-center justify-between gap-6 px-4 py-2.5 text-sm text-gray-900 text-left hover:bg-black/5 transition-colors w-full whitespace-nowrap"
+                        >
+                          <span className="font-normal text-black">{item.label || `Speaker ${i + 1}`}</span>
+                          {selectedSpeaker?.label === item.label && (
+                            <CheckCircleIcon className="w-5 h-5 text-black shrink-0" />
+                          )}
+                        </button>
+                      ) : null
+                    )
                   )}
                 </div>
                 {speakers.length > 0 && (

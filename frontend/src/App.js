@@ -8,8 +8,6 @@ import CreateMeetingPage from "./components/CreateMeetingPage";
 import { getToken, getSessionCredentials, getSessionParticipantId } from "./api";
 import { toast } from "react-toastify";
 
-// Catches errors thrown by MeetingProvider / MeetingContainer so a crash
-// shows an error screen instead of going blank white.
 class MeetingErrorBoundary extends React.Component {
   state = { error: null };
 
@@ -44,33 +42,36 @@ class MeetingErrorBoundary extends React.Component {
 
 const App = () => {
   const searchParams = new URLSearchParams(window.location.search);
-  const urlMeetingId = searchParams.get("meetingId") || "";
-  const urlMode = searchParams.get("mode") || "";
-  const caseId = searchParams.get("caseId") || "";
-  const urlToken = searchParams.get("token") || "";
+  const urlMeetingId    = searchParams.get("meetingId")    || "";
+  const urlMode         = searchParams.get("mode")         || "";
+  const caseId          = searchParams.get("caseId")       || "";
+  const urlToken         = searchParams.get("token")         || "";
+  const urlParticipantId = searchParams.get("participantId") || "";
+  const urlMeetingTitle  = searchParams.get("meetingTitle")  || "";
 
   const rawMode = urlMode.toUpperCase();
   const participantMode = rawMode === "PATIENT" ? "CUSTOMER" : rawMode || undefined;
   // When a token is supplied directly via the URL, skip the credentials API and
   // show the join form with the meeting ID pre-filled & locked (name stays editable).
-  const isAutoJoin = !!(urlMeetingId && urlMode) && !urlToken;
+  const isAutoJoin = !!(urlMeetingId && urlMode);
 
   const defaultName = urlMode
     ? urlMode.charAt(0).toUpperCase() + urlMode.slice(1).toLowerCase()
     : "";
 
-  const [token, setToken] = useState(urlToken);
-  const [participantId, setParticipantId] = useState("");
-  const [meetingId, setMeetingId] = useState(urlMeetingId);
+  // Pre-populate token and participantId from URL when present (pre-auth flow).
+  const [token, setToken]               = useState(urlToken);
+  const [participantId, setParticipantId] = useState(urlParticipantId);
+  const [meetingId, setMeetingId]       = useState(urlMeetingId);
   const [participantName, setParticipantName] = useState(defaultName);
-  const [micOn, setMicOn] = useState(true);
-  const [webcamOn, setWebcamOn] = useState(true);
+  const [micOn, setMicOn]               = useState(true);
+  const [webcamOn, setWebcamOn]         = useState(true);
   const [customAudioStream, setCustomAudioStream] = useState(null);
   const [customVideoStream, setCustomVideoStream] = useState(null);
-  const [isMeetingStarted, setMeetingStarted] = useState(false);
-  const [isMeetingLeft, setIsMeetingLeft] = useState(false);
-  const [speakerOn, setSpekerOn] = useState(true);
-  const [credentialError, setCredentialError] = useState("");
+  const [isMeetingStarted, setMeetingStarted]     = useState(false);
+  const [isMeetingLeft, setIsMeetingLeft]         = useState(false);
+  const [speakerOn, setSpekerOn]        = useState(true);
+  const [credentialError, setCredentialError]     = useState("");
 
   const isMobile = window.matchMedia("only screen and (max-width: 768px)").matches;
 
@@ -79,7 +80,9 @@ const App = () => {
   }, [isMobile]);
 
   useEffect(() => {
-    if (!isAutoJoin) return;
+    // Skip backend call when token was embedded in the URL.
+    if (!isAutoJoin || urlToken) return;
+
     getSessionCredentials({ meetingId: urlMeetingId, mode: rawMode })
       .then(({ token: tok, participantId: pid }) => {
         setToken(tok);
@@ -104,7 +107,7 @@ const App = () => {
         err?.message?.includes("roomId")
           ? "Meeting ID is missing. Please check the link."
           : "Failed to join meeting. Check your connection and try again.",
-        { position: "bottom-left", autoClose: 5000, hideProgressBar: true, closeButton: true, theme: "light" }
+        { position: "bottom-left", autoClose: 5000, hideProgressBar: true, closeButton: true, theme: "dark" }
       );
     }
   };
@@ -142,6 +145,7 @@ const App = () => {
                 setToken("");
                 setParticipantId("");
                 setMeetingId("");
+                setParticipantName("");
                 setWebcamOn(false);
                 setMicOn(false);
                 setSpekerOn(false);
@@ -176,6 +180,7 @@ const App = () => {
           isAutoJoin={isAutoJoin}
           tokenReady={!!token}
           credentialError={credentialError}
+          meetingTitle={urlMeetingTitle}
         />
       )}
     </MeetingAppProvider>

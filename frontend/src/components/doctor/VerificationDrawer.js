@@ -1,5 +1,5 @@
-import React from "react";
-import { XMarkIcon, ExclamationTriangleIcon } from "@heroicons/react/24/outline";
+import React, { useState } from "react";
+import { XMarkIcon, ExclamationCircleIcon, InformationCircleIcon } from "@heroicons/react/24/outline";
 
 /* ───────────────────────── Shared primitives ───────────────────────── */
 
@@ -74,16 +74,24 @@ function DeviceList({ devices = [] }) {
 
 /* ───────────────────────── Connection Details ───────────────────────── */
 
-export function ConnectionDetailsPanel({ onClose, deviceInfo, geoData, onNextStep }) {
+export function ConnectionDetailsPanel({ onClose, deviceInfo, geoData, geoFailed, onRequestLocation, onNextStep }) {
+  const [requesting, setRequesting] = useState(false);
+
   const cameras = deviceInfo?.cameras || [];
   const mics = deviceInfo?.microphones || [];
-  const outputs = deviceInfo?.audioOutputs || deviceInfo?.microphones || [];
+  const outputs = deviceInfo?.audioOutputs || [];
   const region = [geoData?.city || deviceInfo?.city, geoData?.region || deviceInfo?.region, geoData?.country || deviceInfo?.country]
     .filter(Boolean)
     .join(", ");
-  const connType = deviceInfo?.connection
-    ? `${deviceInfo.connection.toUpperCase()} ${/cellular|[2-5]g/i.test(deviceInfo.connection) ? "Mobile Network" : "Network"}`
-    : null;
+
+  async function handleRequestLocation() {
+    setRequesting(true);
+    try {
+      await onRequestLocation?.();
+    } finally {
+      setRequesting(false);
+    }
+  }
 
   return (
     <DrawerShell
@@ -111,19 +119,39 @@ export function ConnectionDetailsPanel({ onClose, deviceInfo, geoData, onNextSte
             <MetricRow label="Latitude" value={geoData.latitude.toFixed(6)} />
             <MetricRow label="Longitude" value={geoData.longitude.toFixed(6)} />
             {region && <MetricRow label="Region" value={region} />}
-            {connType && <MetricRow label="Connection Type" value={connType} />}
           </div>
         ) : (
-          <div className="rounded-lg bg-[rgba(252,165,165,0.08)] border border-[rgba(252,165,165,0.2)] p-3">
-            <div className="flex items-center gap-2 mb-1.5">
-              <ExclamationTriangleIcon className="w-4 h-4 text-[#fca5a5] shrink-0" />
-              <span className="text-[#fca5a5] text-sm font-semibold">Failed to Retrieve Location</span>
+          <div className="flex flex-col gap-2">
+            {/* Notification card — red bg when failed, neutral when pending */}
+            <div className={`flex gap-2 items-start pl-3 pr-2 py-2 rounded-lg border border-[rgba(255,255,255,0.05)] ${
+              geoFailed ? "bg-[rgba(153,27,27,0.1)]" : "bg-[rgba(255,255,255,0.02)]"
+            }`}>
+              <div className="flex items-center py-0.5 shrink-0">
+                {geoFailed
+                  ? <ExclamationCircleIcon className="w-4 h-4 text-white" />
+                  : <InformationCircleIcon className="w-4 h-4 text-white" />
+                }
+              </div>
+              <div className="flex flex-col gap-1 min-w-0">
+                <p className="text-sm font-medium text-white leading-5">
+                  {geoFailed ? "Failed to Retrieve Location" : "Location Access Required"}
+                </p>
+                <p className="text-xs text-[#c7c6c9] leading-4">
+                  {geoFailed
+                    ? "Please ensure location access is enabled on your device to continue with the consultation verification process."
+                    : "To continue with your consultation verification, please allow location access on your device."
+                  }
+                </p>
+              </div>
             </div>
-            <p className="text-[#919093] text-xs leading-relaxed mb-3">
-              Please ensure location access is enabled on your device to continue with the consultation verification process.
-            </p>
-            <button className="w-full py-2 rounded-lg text-sm font-medium text-white border border-[#404043] hover:bg-[#303033] transition-colors">
-              Grant Location Access
+
+            {/* Request button */}
+            <button
+              onClick={handleRequestLocation}
+              disabled={requesting}
+              className="w-full flex items-center justify-center px-3 py-1.5 rounded-lg border border-[rgba(255,255,255,0.05)] bg-[rgba(255,255,255,0.02)] text-sm font-medium text-white hover:bg-[rgba(255,255,255,0.06)] disabled:opacity-50 transition-colors"
+            >
+              {requesting ? "Requesting…" : "Request Location Access"}
             </button>
           </div>
         )}
@@ -139,6 +167,21 @@ export function IdentityVerificationPanel({
   onRetake, onApprove,
 }) {
   const ocrOk = ocrResult && !ocrResult.error && !ocrResult.loading;
+  const f = ocrResult?.fields || {};
+
+  // Confidence: VideoSDK may return 0–1 or 0–100; normalise to percent
+  const rawConf = f.confidence ?? f.accuracy ?? f.score ?? f.confidenceScore;
+  const confPct = rawConf != null ? Math.round(rawConf <= 1 ? rawConf * 100 : rawConf) : null;
+
+  // Extracted personal fields — show whichever the API returned
+  const extracted = [
+    { label: "Name",          value: f.name },
+    { label: "Date of Birth", value: f.dob || f.dateOfBirth || f.date_of_birth },
+    { label: "Gender",        value: f.gender },
+    { label: "ID Number",     value: f.idNumber || f.uid || f.aadhaarNumber },
+    { label: "Address",       value: f.address },
+  ].filter((row) => row.value);
+
   return (
     <DrawerShell
       title="Identity Verification"
@@ -169,19 +212,25 @@ export function IdentityVerificationPanel({
           {!frontImage && !backImage && <p className="text-[#77777a] text-xs italic">No document captured yet</p>}
         </div>
         <div className="mt-3">
-          <MetricRow label="Verification Score" value={ocrOk ? "94% Match" : "—"} badge={ocrOk} />
           <MetricRow label="OCR Detection" value={ocrOk ? "Successful" : ocrResult?.loading ? "Running…" : "—"} badge={ocrOk} />
-          <MetricRow label="Document Quality" value={ocrOk ? "Good" : "—"} badge={ocrOk} />
+          {confPct != null && (
+            <MetricRow label="Confidence" value={`${confPct}%`} badge={ocrOk} />
+          )}
+          <MetricRow label="Document Type" value={f.idType || "Aadhaar Card"} />
           <MetricRow label="Verification Time" value={verifiedAt || "—"} />
         </div>
       </Card>
 
-      <Card title="Document Preview Details">
-        <MetricRow label="Document Type" value={ocrResult?.fields?.idType || "Aadhaar Card"} />
+      {ocrOk && extracted.length > 0 && (
+        <Card title="Extracted Information">
+          {extracted.map(({ label, value }) => (
+            <MetricRow key={label} label={label} value={String(value)} />
+          ))}
+        </Card>
+      )}
+
+      <Card title="Capture Details">
         <MetricRow label="Capture Device" value={captureDevice || "—"} />
-        <MetricRow label="Resolution" value="1280 × 720" />
-        <MetricRow label="Image Clarity" value="Clear" />
-        <MetricRow label="Glare Detection" value="Not Detected" />
       </Card>
     </DrawerShell>
   );
@@ -195,9 +244,18 @@ export function FaceVerificationPanel({
 }) {
   const matched = faceMatchResult && !faceMatchResult.loading && !faceMatchResult.error &&
     (faceMatchResult.matched ?? faceMatchResult.match);
-  const score = faceMatchResult?.score ?? faceMatchResult?.similarity ?? faceMatchResult?.confidence;
-  const pct = score != null ? Math.round(score * 100) : 94;
   const live = spoofResult && !spoofResult.loading && !spoofResult.error && spoofResult.isReal;
+
+  // Face match score: 0–1 → percent
+  const rawScore = faceMatchResult?.score ?? faceMatchResult?.similarity ?? faceMatchResult?.confidence;
+  const matchPct = rawScore != null ? Math.round(rawScore <= 1 ? rawScore * 100 : rawScore) : null;
+
+  // Liveness confidence: 0–1 or 0–100 → percent
+  const rawLiveness = spoofResult?.confidence ?? spoofResult?.accuracy;
+  const livenessPct = rawLiveness != null ? Math.round(rawLiveness <= 1 ? rawLiveness * 100 : rawLiveness) : null;
+
+  const faceMatchLoading = faceMatchResult?.loading;
+  const spoofLoading = spoofResult?.loading;
 
   return (
     <DrawerShell
@@ -229,16 +287,33 @@ export function FaceVerificationPanel({
           <p className="text-[#77777a] text-xs italic">No photo captured yet</p>
         )}
         <div className="mt-3">
-          <MetricRow label="Face Match Score" value={matched ? `${pct}% Match` : "—"} badge={matched} />
-          <MetricRow label="Liveness Check" value={live ? "Passed" : spoofResult?.loading ? "Checking…" : "—"} badge={live} />
-          <MetricRow label="Image Quality" value={photo ? "Good" : "—"} badge={!!photo} />
+          <MetricRow
+            label="Face Match Score"
+            value={
+              faceMatchLoading ? "Checking…"
+              : matched && matchPct != null ? `${matchPct}% Match`
+              : matched ? "Matched"
+              : "—"
+            }
+            badge={matched}
+          />
+          <MetricRow
+            label="Liveness Check"
+            value={
+              spoofLoading ? "Checking…"
+              : live && livenessPct != null ? `Passed · ${livenessPct}% confidence`
+              : live ? "Passed"
+              : spoofResult && !spoofLoading ? "Failed"
+              : "—"
+            }
+            badge={live}
+          />
           <MetricRow label="Verification Time" value={verifiedAt || "—"} />
         </div>
       </Card>
 
-      <Card title="Captured Photo Details">
+      <Card title="Capture Details">
         <MetricRow label="Capture Device" value={captureDevice || "—"} />
-        <MetricRow label="Resolution" value="1280 × 720" />
       </Card>
 
       <Card title="Patient Information">

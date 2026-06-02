@@ -4,7 +4,7 @@ import { toast } from "react-toastify";
 import { useMeetingStore } from "../../store/meetingStore";
 import { MemoizedParticipant } from "../ParticipantView";
 import { BottomBar } from "../../meeting/components/BottomBar";
-import { runOCR, runFaceMatch, runAntiSpoof, isAiReady } from "../../api";
+import { runOCR, runFaceMatch, runAntiSpoof, isAiReady, maskAadhaarImage } from "../../api";
 import DoctorTopBar from "./DoctorTopBar";
 import CaptureOverlay from "./CaptureOverlay";
 import PhotoEditModal from "../PhotoEditModal";
@@ -73,9 +73,19 @@ export default function DoctorView() {
 
   const captureDeviceLabel = deviceInfo?.selectedCameraLabel || customerCameras[0]?.label || "MacBook Air Camera";
 
+  const [geoFailed, setGeoFailed] = useState(false);
+  // Clear failed flag once real geo data arrives
+  React.useEffect(() => { if (geoData) setGeoFailed(false); }, [geoData]);
+
   // ── pubsub wiring (mirrors the proven ActionsTab engine) ───────────────────
   const { publish: triggerCapture } = usePubSub(`IMAGE_CAPTURE_${pid}`, {});
   const { publish: switchCam } = usePubSub(`SWITCH_PARTICIPANT_CAMERA_${pid}`, {});
+  const { publish: publishGeoRetry } = usePubSub("GEO_RETRY", {});
+
+  usePubSub("GEO_FAILED", {
+    onMessageReceived: () => setGeoFailed(true),
+    onOldMessagesReceived: (msgs) => { if (msgs.length > 0) setGeoFailed(true); },
+  });
   // Restore persisted verification progress on (re)load instead of resetting to step 1.
   const { publish: publishStep } = usePubSub("VERIFICATION_STEP", {
     onOldMessagesReceived: (messages) => {
@@ -223,28 +233,40 @@ export default function DoctorView() {
     if (target === "aadhaarBack") setDrawer({ open: true, type: "identity" });
   }
 
+  async function applyAadhaarMask(dataUrl) {
+    try {
+      const result = await maskAadhaarImage({ imageBase64: dataUrl });
+      if (result.maskedImage) return `data:image/jpeg;base64,${result.maskedImage}`;
+    } catch (e) {
+      console.warn("Aadhaar mask failed, using original:", e);
+    }
+    return dataUrl;
+  }
+
   // ── Crop save → route to AI / storage ──────────────────────────────────────
-  function handleCropSave(cropped) {
+  async function handleCropSave(cropped) {
     const target = cropTargetRef.current;
     setCropImage(null);
     const t = nowTime();
 
     if (target === "aadhaarFront") {
-      setDocFront(cropped);
-      runOCRCheck(cropped);
+      const masked = await applyAadhaarMask(cropped);
+      setDocFront(masked);
+      runOCRCheck(masked);
       setIdentityTime(t);
       // Chain into back-side capture (Cancel skips straight to the drawer).
       startCapture("document-back", "aadhaarBack");
     } else if (target === "aadhaarBack") {
-      setDocBack(cropped);
-      setAadhaarPhoto(cropped);
+      const masked = await applyAadhaarMask(cropped);
+      setDocBack(masked);
+      setAadhaarPhoto(masked);
       setDrawer({ open: true, type: "identity" });
     } else if (target === "customerPhoto") {
       setCustomerPhoto(cropped);
       setFaceTime(t);
       runSpoofCheck(cropped);
       // Always run — face match is forced to success for now (see runFaceMatchCheck).
-      runFaceMatchCheck(referencePhotoRef.current, cropped);
+      runFaceMatchCheck(docFront, cropped);
       setDrawer({ open: true, type: "face" });
     }
   }
@@ -264,6 +286,11 @@ export default function DoctorView() {
 
   // ── Step pill clicks ───────────────────────────────────────────────────────
   function handleStepClick(step) {
+    // Enforce sequential order — all prior steps must be completed
+    const allPriorDone = Array.from({ length: step - 1 }, (_, i) => i + 1)
+      .every((s) => completedSteps.includes(s));
+    if (!allPriorDone) return;
+
     setCurrentStep(step);
     if (step === 1) {
       setDrawer({ open: true, type: "connection" });
@@ -279,10 +306,19 @@ export default function DoctorView() {
   function approveStep(step) {
     setCompletedSteps((s) => (s.includes(step) ? s : [...s, step]));
     toast.success(`Step ${step} verified.`, { autoClose: 1500 });
-    const next = Math.min(step + 1, 3);
-    if (next > step) {
-      // Auto-advance into the next step's flow (opens its capture overlay / drawer).
-      handleStepClick(next);
+    const next = step + 1;
+    if (next <= 3) {
+      // Navigate directly — avoids stale-state: setCompletedSteps is async so
+      // calling handleStepClick(next) here would read the old completedSteps
+      // and the sequential guard would silently block navigation.
+      setCurrentStep(next);
+      if (next === 2) {
+        if (docFront) setDrawer({ open: true, type: "identity" });
+        else startCapture("document-front", "aadhaarFront");
+      } else if (next === 3) {
+        if (customerPhoto) setDrawer({ open: true, type: "face" });
+        else startCapture("face", "customerPhoto");
+      }
     } else {
       setDrawer({ open: false, type: null });
     }
@@ -352,6 +388,8 @@ export default function DoctorView() {
               <ConnectionDetailsPanel
                 deviceInfo={deviceInfo}
                 geoData={geoData}
+                geoFailed={geoFailed}
+                onRequestLocation={() => publishGeoRetry("GEO_RETRY", { persist: false }, {})}
                 onClose={() => setDrawer({ open: false, type: null })}
                 onNextStep={() => approveStep(1)}
               />
@@ -390,6 +428,7 @@ export default function DoctorView() {
       <div className="absolute bottom-0 left-0 right-0 z-20">
         <BottomBar
           bottomBarHeight={bottomBarHeight}
+          completedSteps={completedSteps}
           onShowConnectionDetails={() => setDrawer({ open: true, type: "connection" })}
         />
       </div>

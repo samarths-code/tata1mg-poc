@@ -480,7 +480,7 @@ export function JoiningScreen({
                           closeButton: false,
                           pauseOnHover: true,
                           draggable: true,
-                          theme: "light",
+                          theme: "dark",
                         });
                       }
                     }}
@@ -536,7 +536,7 @@ function AutoJoinPanel({
           </p>
         ) : (
           <h2 className="text-black text-2xl font-medium leading-8">
-            {meetingTitle || `${roleLabel} Consultation`}
+            {meetingTitle}
           </h2>
         )}
       </div>

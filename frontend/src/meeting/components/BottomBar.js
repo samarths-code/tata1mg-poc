@@ -28,6 +28,7 @@ import { useMeetingAppContext } from "../../context/MeetingAppContext";
 import useMediaStream from "../../hooks/useMediaStream";
 import { toast } from "react-toastify";
 import { nameTructed, trimSnackBarText } from "../../utils/helper";
+import VerificationPendingModal from "../../components/doctor/VerificationPendingModal";
 import SpeakerIcon from "../../icons/Bottombar/SpeakerIcon";
 import SpeakerOffIcon from "../../icons/Bottombar/SpeakerOffIcon";
 
@@ -305,7 +306,7 @@ function useCallTimer() {
   return `${mm}:${ss}`;
 }
 
-export function BottomBar({ bottomBarHeight, onShowConnectionDetails }) {
+export function BottomBar({ bottomBarHeight, onShowConnectionDetails, completedSteps = [] }) {
   const { sideBarMode, setSideBarMode, participantMode } = useMeetingAppContext();
 
   const isDoctor =
@@ -315,7 +316,12 @@ export function BottomBar({ bottomBarHeight, onShowConnectionDetails }) {
   const isMobile = useIsMobile();
   const isTab = useIsTab();
   const [open, setOpen] = useState(false);
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
   const timer = useCallTimer();
+
+  // Ref so LeaveBTN always reads the latest completedSteps regardless of closure staleness
+  const completedStepsRef = useRef(completedSteps);
+  useEffect(() => { completedStepsRef.current = completedSteps; }, [completedSteps]);
 
   function getBrowserName(ua) {
     if (ua.includes("Firefox")) return "Firefox";
@@ -351,27 +357,46 @@ export function BottomBar({ bottomBarHeight, onShowConnectionDetails }) {
 
   const LeaveBTN = () => {
     const { leave, end, localParticipant } = useMeeting();
+
+    const allVerified = !isDoctor || [1, 2, 3].every((s) => completedStepsRef.current.includes(s));
+
+    console.log("completedStepsRef",completedStepsRef);
+    
+  
+    console.log("allVerified",allVerified);
+    
+
+    const performLeave = () => {
+      const name = trimSnackBarText(nameTructed(localParticipant.displayName, 15));
+      if (isDoctor) {
+        toast(`${name} ended the consultation.`, {
+          position: "bottom-left", autoClose: 4000, hideProgressBar: true, closeButton: false, pauseOnHover: true, draggable: true, theme: "dark",
+        });
+        end();
+      } else {
+        toast(`${name} left the meeting.`, {
+          position: "bottom-left", autoClose: 4000, hideProgressBar: true, closeButton: false, pauseOnHover: true, draggable: true, theme: "dark",
+        });
+        leave();
+      }
+    };
+
     return (
-      <button
-        onClick={() => {
-          const name = trimSnackBarText(nameTructed(localParticipant.displayName, 15));
-          // Doctor ends the meeting for everyone; others just leave.
-          if (isDoctor) {
-            toast(`${name} ended the consultation.`, {
-              position: "bottom-left", autoClose: 4000, hideProgressBar: true, closeButton: false, pauseOnHover: true, draggable: true, theme: "light",
-            });
-            end();
-          } else {
-            toast(`${name} left the meeting.`, {
-              position: "bottom-left", autoClose: 4000, hideProgressBar: true, closeButton: false, pauseOnHover: true, draggable: true, theme: "light",
-            });
-            leave();
-          }
-        }}
-        className="bg-[#991b1b] text-[#fecaca] font-medium text-sm px-3 py-1.5 rounded-lg whitespace-nowrap hover:bg-[#7f1d1d] transition-colors"
-      >
-        End Call
-      </button>
+      <>
+        <button
+          onClick={() => allVerified ? performLeave() : setShowLeaveModal(true)}
+          className="bg-[#991b1b] text-[#fecaca] font-medium text-sm px-3 py-1.5 rounded-lg whitespace-nowrap hover:bg-[#7f1d1d] transition-colors"
+        >
+          End Call
+        </button>
+        {showLeaveModal && (
+          <VerificationPendingModal
+            completedSteps={completedSteps}
+            onLeaveAnyway={() => { setShowLeaveModal(false); performLeave(); }}
+            onClose={() => setShowLeaveModal(false)}
+          />
+        )}
+      </>
     );
   };
 
