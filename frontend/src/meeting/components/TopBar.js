@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from "react";
+import { usePubSub } from "@videosdk.live/react-sdk";
+import { CheckCircleIcon } from "@heroicons/react/24/solid";
 import { useMeetingAppContext } from "../../context/MeetingAppContext";
 import { participantModes } from "../../utils/common";
 
@@ -6,7 +8,13 @@ function getCurrentTime() {
   return new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
-export function TopBar({ bottomBarHeight, caseId, meetingTitle, currentStep = 1 }) {
+const STEP_LABELS = {
+  1: "Step 1: Connection Verification",
+  2: "Step 2: Identity Verification",
+  3: "Step 3: Face Verification",
+};
+
+export function TopBar({ bottomBarHeight, caseId, meetingTitle }) {
   const { participantMode } = useMeetingAppContext();
   const isDoctor =
     participantMode === participantModes.DOCTOR ||
@@ -18,10 +26,15 @@ export function TopBar({ bottomBarHeight, caseId, meetingTitle, currentStep = 1 
     return () => clearInterval(id);
   }, []);
 
-  const steps = [
-    "Step 1: Identity Verification",
-    "Step 2: Face Verification",
-  ];
+  // Mirror the doctor's verification progress, broadcast over pubsub.
+  const [verif, setVerif] = useState({ step: 1, completed: [] });
+  usePubSub("VERIFICATION_STEP", {
+    onMessageReceived: ({ payload }) => { if (payload) setVerif(payload); },
+    onOldMessagesReceived: (messages) => {
+      const last = messages[messages.length - 1];
+      if (last?.payload) setVerif(last.payload);
+    },
+  });
 
   return (
     <div
@@ -49,7 +62,7 @@ export function TopBar({ bottomBarHeight, caseId, meetingTitle, currentStep = 1 
         )}
       </div>
 
-      {/* Right: step pills (patient) or case badge (doctor) */}
+      {/* Right: step pills (patient mirrors doctor) or case badge (doctor) */}
       <div className="flex items-center gap-2 shrink-0">
         {isDoctor ? (
           caseId && (
@@ -58,18 +71,15 @@ export function TopBar({ bottomBarHeight, caseId, meetingTitle, currentStep = 1 
             </span>
           )
         ) : (
-          steps.map((step, i) => (
-            <button
-              key={i}
-              className={`px-3 py-1.5 rounded text-sm font-medium text-white transition-opacity whitespace-nowrap ${
-                i === currentStep - 1
-                  ? "bg-[rgba(255,255,255,0.02)] border border-[rgba(255,255,255,0.2)]"
-                  : "bg-[rgba(255,255,255,0.05)] border border-[rgba(255,255,255,0.02)] opacity-50"
-              }`}
-            >
-              {step}
-            </button>
-          ))
+          // Customer sees only the doctor's currently-active step.
+          STEP_LABELS[verif.step] && (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-white whitespace-nowrap border bg-[rgba(255,255,255,0.04)] border-[rgba(255,255,255,0.25)]">
+              {verif.completed?.includes(verif.step) && (
+                <CheckCircleIcon className="w-4 h-4 text-[#86efac] shrink-0" />
+              )}
+              {STEP_LABELS[verif.step]}
+            </div>
+          )
         )}
       </div>
     </div>

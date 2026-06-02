@@ -18,7 +18,7 @@ function PipLayout({ participantIds }) {
   // }
 
   return (
-    <div className="flex flex-grow w-full h-full relative p-4 md:px-16 md:py-10 ">
+    <div className="flex flex-grow w-full h-full relative px-4 pt-2 pb-4">
       {participantIds.length > 1 && (
         <div
           // style={{

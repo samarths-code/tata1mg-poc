@@ -14,8 +14,6 @@ import {
   ClipboardDocumentListIcon,
   ComputerDesktopIcon,
 } from "@heroicons/react/24/outline";
-import MicOnIcon from "../../icons/Bottombar/MicOnIcon";
-import MicOffIcon from "../../icons/Bottombar/MicOffIcon";
 import WebcamOnIcon from "../../icons/Bottombar/WebcamOnIcon";
 import WebcamOffIcon from "../../icons/Bottombar/WebcamOffIcon";
 import ScreenShareIcon from "../../icons/Bottombar/ScreenShareIcon";
@@ -34,7 +32,7 @@ import SpeakerIcon from "../../icons/Bottombar/SpeakerIcon";
 import SpeakerOffIcon from "../../icons/Bottombar/SpeakerOffIcon";
 
 // Dark pill-style device button matching Figma design
-function PillBtn({ onToggle, icon: Icon, iconOn, showVoiceBars, children, disabled }) {
+function PillBtn({ onToggle, icon: Icon, iconOn, showVoiceBars, micActive = true, children, disabled }) {
   return (
     <div
       className="flex items-center h-8 bg-[#1b1b1e] border border-[#303033] rounded-lg pl-1 pr-2 py-1 relative"
@@ -55,9 +53,9 @@ function PillBtn({ onToggle, icon: Icon, iconOn, showVoiceBars, children, disabl
       </button>
       {showVoiceBars && (
         <div className="flex gap-0.5 items-center h-2.5 mr-1 shrink-0">
-          <div className="bg-white w-0.5 h-[3px] rounded-sm" />
-          <div className="bg-white w-0.5 h-[3px] rounded-sm" />
-          <div className="bg-white w-0.5 h-[3px] rounded-sm" />
+          <div className={`w-0.5 h-[3px] rounded-sm ${micActive ? "bg-white" : "bg-[#95959E]"}`} />
+          <div className={`w-0.5 h-[3px] rounded-sm ${micActive ? "bg-white" : "bg-[#95959E]"}`} />
+          <div className={`w-0.5 h-[3px] rounded-sm ${micActive ? "bg-white" : "bg-[#95959E]"}`} />
         </div>
       )}
       {children}
@@ -94,12 +92,33 @@ const MicBTN = () => {
   const [mics, setMics] = useState([]);
   const localMicOn = mMeeting?.localMicOn;
 
+  // Fixed 16×16 inline icon — only the path changes on toggle, so there is no
+  // layout shift (the old MicOnIcon/MicOffIcon components had different widths).
+  const MicIcon = () =>
+    localMicOn ? (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+        <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+        <line x1="12" y1="19" x2="12" y2="23" />
+        <line x1="8" y1="23" x2="16" y2="23" />
+      </svg>
+    ) : (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#95959E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="1" y1="1" x2="23" y2="23" />
+        <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6" />
+        <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23" />
+        <line x1="12" y1="19" x2="12" y2="23" />
+        <line x1="8" y1="23" x2="16" y2="23" />
+      </svg>
+    );
+
   return (
     <PillBtn
       onToggle={() => mMeeting.toggleMic()}
-      icon={localMicOn ? MicOnIcon : MicOffIcon}
+      icon={MicIcon}
       iconOn={localMicOn}
       showVoiceBars
+      micActive={localMicOn}
       disabled={!isMicrophonePermissionAllowed}
     >
       <Popover className="relative">
@@ -134,14 +153,22 @@ const OutputMicBTN = () => {
   const { getPlaybackDevices } = useMediaDevice();
   const [outputmics, setOutputMics] = useState([]);
 
-  // Volume SVG icon (inline, matches Figma)
-  const VolumeIcon = () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-      <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
-      <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-    </svg>
-  );
+  // muteSpeaker === true means the speaker is ON (audio audible). Swap to a
+  // muted icon when off — same 16×16 box so there is no layout shift.
+  const VolumeIcon = () =>
+    muteSpeaker ? (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+        <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+        <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+      </svg>
+    ) : (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#95959E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+        <line x1="23" y1="9" x2="17" y2="15" />
+        <line x1="17" y1="9" x2="23" y2="15" />
+      </svg>
+    );
 
   return (
     <div
@@ -193,13 +220,19 @@ const WebCamBTN = () => {
 
   const { getVideoTrack } = useMediaStream();
 
-  // Video SVG icon
-  const VideoIcon = () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polygon points="23 7 16 12 23 17 23 7" />
-      <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
-    </svg>
-  );
+  // Video SVG icon — swaps to a slashed/muted icon when the camera is off.
+  const VideoIcon = () =>
+    localWebcamOn ? (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polygon points="23 7 16 12 23 17 23 7" />
+        <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+      </svg>
+    ) : (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#95959E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M16 16v1a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2m5.66 0H14a2 2 0 0 1 2 2v3.34l1 1L23 7v10" />
+        <line x1="1" y1="1" x2="23" y2="23" />
+      </svg>
+    );
 
   return (
     <div

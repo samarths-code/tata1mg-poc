@@ -76,6 +76,27 @@ export default function DoctorView() {
   // ── pubsub wiring (mirrors the proven ActionsTab engine) ───────────────────
   const { publish: triggerCapture } = usePubSub(`IMAGE_CAPTURE_${pid}`, {});
   const { publish: switchCam } = usePubSub(`SWITCH_PARTICIPANT_CAMERA_${pid}`, {});
+  // Restore persisted verification progress on (re)load instead of resetting to step 1.
+  const { publish: publishStep } = usePubSub("VERIFICATION_STEP", {
+    onOldMessagesReceived: (messages) => {
+      const last = messages[messages.length - 1];
+      if (!last?.payload) return;
+      if (typeof last.payload.step === "number") setCurrentStep(last.payload.step);
+      if (Array.isArray(last.payload.completed)) setCompletedSteps(last.payload.completed);
+    },
+  });
+
+  // Broadcast step transitions so the customer UI mirrors the doctor's progress.
+  // Skip the first (mount) publish so the default step-1 state doesn't overwrite
+  // the persisted progress before onOldMessagesReceived restores it.
+  const firstStepPublishRef = useRef(true);
+  useEffect(() => {
+    if (firstStepPublishRef.current) { firstStepPublishRef.current = false; return; }
+    try {
+      publishStep("step", { persist: true }, { step: currentStep, completed: completedSteps });
+    } catch (e) { /* noop */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentStep, completedSteps]);
 
   usePubSub("DEVICE_INFO", {
     onMessageReceived: ({ payload }) => {
@@ -168,6 +189,10 @@ export default function DoctorView() {
   // ── Capture orchestration ──────────────────────────────────────────────────
   function startCapture(variant, target) {
     if (!customerId) { toast.error("Patient not connected yet."); return; }
+    // Already capturing this exact target — ignore repeat clicks so we don't
+    // reset captureReady (which would leave the Capture button stuck disabled,
+    // since the ready-timer effect only restarts when the variant changes).
+    if (capture.active && captureTargetRef.current === target) return;
     captureTargetRef.current = target;
     setCapture({ active: true, variant });
     setCaptureReady(false);
@@ -253,9 +278,14 @@ export default function DoctorView() {
 
   function approveStep(step) {
     setCompletedSteps((s) => (s.includes(step) ? s : [...s, step]));
-    setDrawer({ open: false, type: null });
-    setCurrentStep(Math.min(step + 1, 3));
     toast.success(`Step ${step} verified.`, { autoClose: 1500 });
+    const next = Math.min(step + 1, 3);
+    if (next > step) {
+      // Auto-advance into the next step's flow (opens its capture overlay / drawer).
+      handleStepClick(next);
+    } else {
+      setDrawer({ open: false, type: null });
+    }
   }
 
   function handleCameraSelect(deviceId) {
@@ -284,7 +314,7 @@ export default function DoctorView() {
         <div className="relative flex-1 px-4 pt-2" style={{ paddingBottom: bottomBarHeight }}>
           <div className="relative w-full h-full rounded-2xl overflow-hidden bg-gray-800">
             {customerId ? (
-              <MemoizedParticipant participantId={customerId} showImageCapture={false} showResolution={false} />
+              <MemoizedParticipant participantId={customerId} showImageCapture={false} showResolution={true} />
             ) : (
               <div className="w-full h-full flex flex-col items-center justify-center gap-4">
                 <div className="w-16 h-16 rounded-full bg-[#303033] flex items-center justify-center">
