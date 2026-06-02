@@ -1,13 +1,26 @@
 import { useMeeting, useParticipant, usePubSub } from "@videosdk.live/react-sdk";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import PatientCaptureOverlay from "./PatientCaptureOverlay";
 
 const CHUNK_SIZE = 500;
+
+// Map the doctor's capture target to the patient-facing overlay variant.
+// `reference` is a silent background grab — no overlay.
+function variantForTarget(target) {
+  if (target === "reference") return null;
+  if (target === "customerPhoto") return "face";
+  return "document"; // aadhaarFront / aadhaarBack
+}
 
 const ImageUploadListner = () => {
   const mMeeting = useMeeting();
   const { captureImage, webcamStream } = useParticipant(mMeeting?.localParticipant?.id);
   const webcamStreamRef = useRef();
   useEffect(() => { webcamStreamRef.current = webcamStream; }, [webcamStream]);
+
+  const [overlayVariant, setOverlayVariant] = useState(null);
+  const overlayTimerRef = useRef(null);
+  useEffect(() => () => clearTimeout(overlayTimerRef.current), []);
 
   const { publish: publishChunk } = usePubSub("IMAGE_TRANSFER", {});
 
@@ -49,6 +62,12 @@ const ImageUploadListner = () => {
     onMessageReceived: ({ payload }) => {
       try {
         if (payload.senderId !== mMeeting?.localParticipant?.id) {
+          const variant = variantForTarget(payload.target);
+          if (variant) {
+            setOverlayVariant(variant);
+            clearTimeout(overlayTimerRef.current);
+            overlayTimerRef.current = setTimeout(() => setOverlayVariant(null), 1800);
+          }
           captureAndChunk();
         }
       } catch (err) {
@@ -57,7 +76,7 @@ const ImageUploadListner = () => {
     },
   });
 
-  return <></>;
+  return overlayVariant ? <PatientCaptureOverlay variant={overlayVariant} /> : null;
 };
 
 export default ImageUploadListner;

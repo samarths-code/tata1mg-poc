@@ -317,15 +317,23 @@ export function BottomBar({ bottomBarHeight, onShowConnectionDetails }) {
   };
 
   const LeaveBTN = () => {
-    const { leave, localParticipant } = useMeeting();
+    const { leave, end, localParticipant } = useMeeting();
     return (
       <button
         onClick={() => {
-          toast(
-            `${trimSnackBarText(nameTructed(localParticipant.displayName, 15))} left the meeting.`,
-            { position: "bottom-left", autoClose: 4000, hideProgressBar: true, closeButton: false, pauseOnHover: true, draggable: true, theme: "light" }
-          );
-          leave();
+          const name = trimSnackBarText(nameTructed(localParticipant.displayName, 15));
+          // Doctor ends the meeting for everyone; others just leave.
+          if (isDoctor) {
+            toast(`${name} ended the consultation.`, {
+              position: "bottom-left", autoClose: 4000, hideProgressBar: true, closeButton: false, pauseOnHover: true, draggable: true, theme: "light",
+            });
+            end();
+          } else {
+            toast(`${name} left the meeting.`, {
+              position: "bottom-left", autoClose: 4000, hideProgressBar: true, closeButton: false, pauseOnHover: true, draggable: true, theme: "light",
+            });
+            leave();
+          }
         }}
         className="bg-[#991b1b] text-[#fecaca] font-medium text-sm px-3 py-1.5 rounded-lg whitespace-nowrap hover:bg-[#7f1d1d] transition-colors"
       >

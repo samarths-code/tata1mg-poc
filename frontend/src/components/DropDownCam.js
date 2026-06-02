@@ -6,7 +6,11 @@ import { useMeetingAppContext } from "../context/MeetingAppContext";
 
 export default function DropDownCam({ webcams, changeWebcam }) {
   const { setSelectedWebcam, selectedWebcam, isCameraPermissionAllowed } =
-    useMeetingAppContext();
+    useMeetingAppContext((s) => ({
+      setSelectedWebcam: s.setSelectedWebcam,
+      selectedWebcam: s.selectedWebcam,
+      isCameraPermissionAllowed: s.isCameraPermissionAllowed,
+    }));
 
   return (
     <Popover className="relative w-full">

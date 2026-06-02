@@ -18,7 +18,7 @@ const SwitchCameraListner = () => {
   }, []);
 
   const mMeeting = useMeeting();
-  const { setSelectedWebcam } = useMeetingAppContext();
+  const setSelectedWebcam = useMeetingAppContext((s) => s.setSelectedWebcam);
   const { getVideoTrack } = useMediaStream();
 
   const { publish: publishDeviceInfo } = usePubSub("DEVICE_INFO", {});

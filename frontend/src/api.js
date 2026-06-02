@@ -20,6 +20,10 @@ let _cachedAiToken = null;
 
 export const isAiReady = () => !!_cachedAiToken;
 
+// The participantId baked into tokens minted by the manual-join flow (getToken).
+// Exposed so the join config can pass the SAME id the token was issued for.
+export const getSessionParticipantId = () => _sessionParticipantId;
+
 function getParticipantRole() {
   const mode = new URLSearchParams(window.location.search).get("mode")?.toUpperCase();
   return mode === "DOCTOR" ? "DOCTOR" : "CUSTOMER";

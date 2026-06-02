@@ -431,6 +431,12 @@ export function JoiningScreen({
                     setParticipantName={setParticipantName}
                     onClickStartMeeting={onClickStartMeeting}
                     onClickJoin={async (id) => {
+                      // Token already provided (e.g. via URL) — join directly, no backend call.
+                      if (tokenReady) {
+                        setMeetingId(id);
+                        onClickStartMeeting();
+                        return;
+                      }
                       const valid = await validateMeeting({ roomId: id });
                       if (valid) {
                         const token = await getToken({ roomId: id });

@@ -1,135 +1,41 @@
-import { createContext, useContext, useEffect, useState } from "react";
-import { VirtualBackgroundProcessor } from "@videosdk.live/videosdk-media-processor-web";
-import { participantModes } from "../utils/common";
-import useIsMobile from "../hooks/useIsMobile";
+import { useEffect, useRef } from "react";
+import { useMeetingStore, useMeetingAppContext } from "../store/meetingStore";
 
-export const MeetingAppContext = createContext();
-
-export const useMeetingAppContext = () => useContext(MeetingAppContext);
+/**
+ * Backwards-compatible shim over the zustand meeting store.
+ *
+ * `MeetingAppProvider` no longer holds state in a Context value object — it
+ * just seeds the store from props. `useMeetingAppContext` is re-exported from
+ * the store and is selector-aware, so existing call sites keep working while
+ * new/hot code can subscribe to a single slice to avoid re-renders.
+ */
+export { useMeetingAppContext };
 
 export const MeetingAppProvider = ({
   children,
   initialMicOn,
   initialWebcamOn,
-  participantMode,
   initialSpeakerOn,
+  participantMode,
   caseId,
 }) => {
-  const isMobile = useIsMobile();
+  // Seed the store once, synchronously, before children first render.
+  const seeded = useRef(false);
+  if (!seeded.current) {
+    useMeetingStore.getState().setSessionConfig({
+      initialMicOn,
+      initialWebcamOn,
+      initialSpeakerOn,
+      participantMode,
+      caseId,
+    });
+    seeded.current = true;
+  }
 
-  const [sideBarMode, setSideBarMode] = useState(null);
-
-  const [selectedMicrophone, setSelectedMicroPhone] = useState({ id: null, label: null });
-  const [selectedMicDevice, setSelectedMicDevice] = useState(selectedMicrophone);
-  const [selectedWebcam, setSelectedWebcam] = useState({ id: null, label: null });
-  const [selectedSpeaker, setSelectedSpeaker] = useState({ id: null, label: null });
-
-  const [isCameraPermissionAllowed, setIsCameraPermissionAllowed] = useState(null);
-  const [isMicrophonePermissionAllowed, setIsMicrophonePermissionAllowed] = useState(null);
-
-  const [raisedHandsParticipants, setRaisedHandsParticipants] = useState([]);
-  const [useVirtualBackground, setUseVirtualBackground] = useState(false);
-  const [webCamResolution, setWebCamResolution] = useState("h480p_w640p");
-  const [participantLeftReason, setParticipantLeftReason] = useState(null);
-  const [cameraFacingMode, setCameraFacingMode] = useState({ facingMode: "front" });
-  const [meetingMode, setMeetingMode] = useState(null);
-  const [muteSpeaker, setMuteSpeaker] = useState(initialSpeakerOn);
-  const [selectedOutputDevice, setSelectedOutputDevice] = useState(selectedMicrophone);
-
-  // Standard images array (for IMAGE_PANEL sidebar compatibility)
-  const [images, setImages] = useState([]);
-
-  // MER-specific captured data
-  const [geoData, setGeoData] = useState(null);           // { latitude, longitude, timestamp }
-  const [customerPhoto, setCustomerPhoto] = useState(null); // base64 data URL string
-  const [aadhaarPhoto, setAadhaarPhoto] = useState(null);   // base64 data URL string
-  const [submissionStatus, setSubmissionStatus] = useState("idle"); // idle | submitting | success | error
-
-  // Vision AI
-  const [referencePhoto, setReferencePhoto] = useState(null); // base64 for face-match reference
-  const [customerSpoofStatus, setCustomerSpoofStatus] = useState(null); // null | 'checking' | 'real' | 'spoof'
-
-  const videoProcessor = new VirtualBackgroundProcessor();
-
-  const isDoctor =
-    participantMode === participantModes.DOCTOR ||
-    participantMode === participantModes.AGENT;
-
+  // Keep muteSpeaker in sync if the speaker prop changes after mount.
   useEffect(() => {
-    setMuteSpeaker(initialSpeakerOn);
+    useMeetingStore.getState().setMuteSpeaker(initialSpeakerOn);
   }, [initialSpeakerOn]);
 
-  return (
-    <MeetingAppContext.Provider
-      value={{
-        initialMicOn,
-        initialWebcamOn,
-        participantMode,
-        caseId,
-
-        allowedVirtualBackground: false,
-        maintainVideoAspectRatio: isDoctor,
-        maintainLandscapeVideoAspectRatio: true,
-        canRemoveOtherParticipant: isDoctor,
-
-        sideBarMode,
-        selectedWebcam,
-        selectedMicrophone,
-        selectedMicDevice,
-        raisedHandsParticipants,
-        useVirtualBackground,
-        participantLeftReason,
-        meetingMode,
-        muteSpeaker,
-        selectedOutputDevice,
-        webCamResolution,
-        cameraFacingMode,
-        selectedSpeaker,
-        isCameraPermissionAllowed,
-        isMicrophonePermissionAllowed,
-        images,
-
-        // MER captured data
-        geoData,
-        customerPhoto,
-        aadhaarPhoto,
-        submissionStatus,
-        referencePhoto,
-        customerSpoofStatus,
-
-        setSideBarMode,
-        setRaisedHandsParticipants,
-        setUseVirtualBackground,
-        setParticipantLeftReason,
-        setMeetingMode,
-        setMuteSpeaker,
-        setSelectedOutputDevice,
-        setWebCamResolution,
-        setCameraFacingMode,
-        setSelectedWebcam,
-        setSelectedSpeaker,
-        setIsCameraPermissionAllowed,
-        setIsMicrophonePermissionAllowed,
-        setSelectedMicroPhone,
-        setSelectedMicDevice,
-        setImages,
-
-        // MER setters
-        setGeoData,
-        setCustomerPhoto,
-        setAadhaarPhoto,
-        setSubmissionStatus,
-
-        // Vision AI
-        referencePhoto,
-        setReferencePhoto,
-        customerSpoofStatus,
-        setCustomerSpoofStatus,
-
-        videoProcessor,
-      }}
-    >
-      {children}
-    </MeetingAppContext.Provider>
-  );
+  return children;
 };

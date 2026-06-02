@@ -13,7 +13,11 @@ export default function DropDownMic({
   setDidDeviceChange,
 }) {
   const { selectedMicrophone, setSelectedMicroPhone, isMicrophonePermissionAllowed } =
-    useMeetingAppContext();
+    useMeetingAppContext((s) => ({
+      selectedMicrophone: s.selectedMicrophone,
+      setSelectedMicroPhone: s.setSelectedMicroPhone,
+      isMicrophonePermissionAllowed: s.isMicrophonePermissionAllowed,
+    }));
 
   const [volume, setVolume] = useState(0);
   const audioAnalyserRef = useRef();

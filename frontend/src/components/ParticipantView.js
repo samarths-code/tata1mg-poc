@@ -462,7 +462,11 @@ function ParticipantView({
   const mMeeting = useMeeting();
 
   const { participantMode, cameraFacingMode, setCameraFacingMode } =
-    useMeetingAppContext();
+    useMeetingAppContext((s) => ({
+      participantMode: s.participantMode,
+      cameraFacingMode: s.cameraFacingMode,
+      setCameraFacingMode: s.setCameraFacingMode,
+    }));
 
   const isAgent =
     participantMode === participantModes.DOCTOR ||
@@ -507,7 +511,11 @@ function ParticipantView({
   const { publish: imageCaptureUpload } = usePubSub(`IMAGE_CAPTURE_${participantId}`, {});
 
   const { maintainLandscapeVideoAspectRatio, muteSpeaker, selectedSpeaker } =
-    useMeetingAppContext();
+    useMeetingAppContext((s) => ({
+      maintainLandscapeVideoAspectRatio: s.maintainLandscapeVideoAspectRatio,
+      muteSpeaker: s.muteSpeaker,
+      selectedSpeaker: s.selectedSpeaker,
+    }));
 
   const micRef = useRef(null);
   const [mouseOver, setMouseOver] = useState(false);

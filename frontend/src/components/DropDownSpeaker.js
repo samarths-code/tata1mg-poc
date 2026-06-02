@@ -7,7 +7,11 @@ import { useMeetingAppContext } from "../context/MeetingAppContext";
 
 export default function DropDownSpeaker({ speakers }) {
   const { setSelectedSpeaker, selectedSpeaker, isMicrophonePermissionAllowed } =
-    useMeetingAppContext();
+    useMeetingAppContext((s) => ({
+      setSelectedSpeaker: s.setSelectedSpeaker,
+      selectedSpeaker: s.selectedSpeaker,
+      isMicrophonePermissionAllowed: s.isMicrophonePermissionAllowed,
+    }));
 
   const [progress, setProgress] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);

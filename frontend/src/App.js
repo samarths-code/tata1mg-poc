@@ -5,7 +5,7 @@ import { JoiningScreen } from "./components/screens/JoiningScreen";
 import { MeetingContainer } from "./meeting/MeetingContainer";
 import { MeetingAppProvider } from "./context/MeetingAppContext";
 import CreateMeetingPage from "./components/CreateMeetingPage";
-import { getToken, getSessionCredentials } from "./api";
+import { getToken, getSessionCredentials, getSessionParticipantId } from "./api";
 import { toast } from "react-toastify";
 
 // Catches errors thrown by MeetingProvider / MeetingContainer so a crash
@@ -47,16 +47,19 @@ const App = () => {
   const urlMeetingId = searchParams.get("meetingId") || "";
   const urlMode = searchParams.get("mode") || "";
   const caseId = searchParams.get("caseId") || "";
+  const urlToken = searchParams.get("token") || "";
 
   const rawMode = urlMode.toUpperCase();
   const participantMode = rawMode === "PATIENT" ? "CUSTOMER" : rawMode || undefined;
-  const isAutoJoin = !!(urlMeetingId && urlMode);
+  // When a token is supplied directly via the URL, skip the credentials API and
+  // show the join form with the meeting ID pre-filled & locked (name stays editable).
+  const isAutoJoin = !!(urlMeetingId && urlMode) && !urlToken;
 
-  const defaultName = isAutoJoin
+  const defaultName = urlMode
     ? urlMode.charAt(0).toUpperCase() + urlMode.slice(1).toLowerCase()
     : "";
 
-  const [token, setToken] = useState("");
+  const [token, setToken] = useState(urlToken);
   const [participantId, setParticipantId] = useState("");
   const [meetingId, setMeetingId] = useState(urlMeetingId);
   const [participantName, setParticipantName] = useState(defaultName);
@@ -122,7 +125,7 @@ const App = () => {
               micEnabled: micOn,
               webcamEnabled: webcamOn,
               name: participantName || "Guest",
-              participantId: participantId || undefined,
+              participantId: participantId || (urlToken ? undefined : getSessionParticipantId()),
               multiStream: true,
               customCameraVideoTrack: customVideoStream,
               customMicrophoneAudioTrack: customAudioStream,
@@ -133,6 +136,9 @@ const App = () => {
           >
             <MeetingContainer
               onMeetingLeave={() => {
+                // Replace the tokened meeting URL with /thank-you so the client
+                // can't Back/refresh into the ended session (removes it from history).
+                window.history.replaceState(null, "", "/thank-you");
                 setToken("");
                 setParticipantId("");
                 setMeetingId("");
@@ -178,7 +184,12 @@ const App = () => {
 };
 
 const AppRouter = () => {
-  if (window.location.pathname === "/create-meeting") return <CreateMeetingPage />;
+  const path = window.location.pathname;
+  if (path === "/create-meeting") return <CreateMeetingPage />;
+  // Standalone Thank-You route — shown after a meeting ends and on refresh of
+  // /thank-you, instead of falling back into the join flow.
+  if (path === "/thank-you")
+    return <LeaveScreen setIsMeetingLeft={() => { window.location.href = "/"; }} />;
   return <App />;
 };
 

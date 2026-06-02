@@ -13,6 +13,7 @@ import { PresenterView } from "../components/PresenterView";
 import DoctorView from "../components/doctor/DoctorView";
 import { nameTructed, trimSnackBarText } from "../utils/helper";
 import WaitingToJoinScreen from "../components/screens/WaitingToJoinScreen";
+import ConnectionStatusOverlay from "../components/screens/ConnectionStatusOverlay";
 import ConfirmBox from "../components/ConfirmBox";
 import useIsMobile from "../hooks/useIsMobile";
 import useIsTab from "../hooks/useIsTab";
@@ -62,6 +63,7 @@ export function MeetingContainer({ onMeetingLeave }) {
   const [meetingErrorVisible, setMeetingErrorVisible] = useState(false);
   const [meetingError, setMeetingError] = useState(false);
   const [localParticipantAllowedJoin, setLocalParticipantAllowedJoin] = useState(null);
+  const [meetingState, setMeetingState] = useState("CONNECTED");
 
   const mMeetingRef = useRef();
   const containerRef = createRef();
@@ -208,11 +210,12 @@ export function MeetingContainer({ onMeetingLeave }) {
 
   function _handleOnMeetingStateChanged(data) {
     const { state } = data;
+    setMeetingState(state);
     const msg =
       state === "CONNECTED" ? "Meeting is connected"
       : state === "CONNECTING" ? "Meeting is connecting"
       : state === "FAILED" ? "Meeting connection failed"
-      : state === "DISCONNECTED" ? "Meeting connection disconnected abruptly"
+      : state === "DISCONNECTED" ? "Meeting connection closed"
       : state === "CLOSING" ? "Meeting is closing"
       : state === "CLOSED" ? "Meeting connection closed"
       : "";
@@ -271,6 +274,19 @@ export function MeetingContainer({ onMeetingLeave }) {
   });
 
   const isPresenting = mMeeting.presenterId ? true : false;
+
+  // Transient connection-status message shown over the patient's video.
+  const remoteParticipantCount = [...mMeeting.participants.keys()].filter(
+    (id) =>
+      id !== mMeeting.localParticipant?.id &&
+      mMeeting.participants.get(id)?.displayName?.toLowerCase() !== "recorder"
+  ).length;
+  const statusMessage =
+    meetingState === "CONNECTING" || meetingState === "DISCONNECTED"
+      ? "Reconnecting…"
+      : remoteParticipantCount === 0
+      ? "Waiting for Other Participant…"
+      : null;
 
   useEffect(() => {
     mMeetingRef.current = mMeeting;
@@ -423,7 +439,8 @@ export function MeetingContainer({ onMeetingLeave }) {
                 <>
                   <TopBar bottomBarHeight={bottomBarHeight} caseId={caseId} />
 
-                  <div className={`flex flex-1 ${isPresenting && isMobile ? "flex-col md:flex-row" : "flex-row"} bg-[#1b1b1e] overflow-hidden`}>
+                  <div className={`relative flex flex-1 ${isPresenting && isMobile ? "flex-col md:flex-row" : "flex-row"} bg-[#1b1b1e] overflow-hidden`}>
+                    <ConnectionStatusOverlay message={statusMessage} />
                     {isPresenting && isMobile ? (
                       <div className="flex flex-1 flex-col">
                         <div className="flex flex-1">

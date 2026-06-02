@@ -5,7 +5,11 @@ import useMediaStream from "../hooks/useMediaStream";
 
 const ResolutionListner = () => {
   const mMeeting = useMeeting();
-  const { selectedWebcam, setWebCamResolution, webCamResolution } = useMeetingAppContext();
+  const { selectedWebcam, setWebCamResolution, webCamResolution } = useMeetingAppContext((s) => ({
+    selectedWebcam: s.selectedWebcam,
+    setWebCamResolution: s.setWebCamResolution,
+    webCamResolution: s.webCamResolution,
+  }));
 
   const selectedWebcamRef = useRef();
   const webCamResolutionRef = useRef();

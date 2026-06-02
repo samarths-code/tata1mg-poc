@@ -125,7 +125,7 @@ def build_ai_token() -> str:
     return jwt.encode(payload, get_secret(), algorithm="HS256")
 
 
-def build_rtc_token(*, room_id: str, participant_id: str, role: str) -> str:
+def build_rtc_token(*, room_id: str, participant_id: Optional[str] = None, role: str) -> str:
     """
     RTC token scoped to a specific room and participant.
     Doctors get moderation permissions; patients get join-only.
@@ -140,10 +140,11 @@ def build_rtc_token(*, room_id: str, participant_id: str, role: str) -> str:
         "version": 2,
         "roomId": room_id,
         "roles": ["rtc"],
-        "participantId": participant_id,
         "iat": now,
         "exp": now + datetime.timedelta(minutes=120),
     }
+    if participant_id:
+        payload["participantId"] = participant_id
     return jwt.encode(payload, get_secret(), algorithm="HS256")
 
 
@@ -164,10 +165,12 @@ def vsdk_post(path: str, body: Optional[dict] = None):
 
 
 def vsdk_get(path: str):
+    hell = build_crawler_token()
+    print("HELL",hell)
     return requests.get(
         f"{VIDEOSDK_API}{path}",
         headers={
-            "Authorization": build_crawler_token(),
+            "Authorization": hell,
             "Content-Type": "application/json",
         },
         timeout=10,

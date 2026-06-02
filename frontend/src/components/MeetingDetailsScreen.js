@@ -22,10 +22,15 @@ export function MeetingDetailsScreen({
       {isJoinMeetingClicked ? (
         <>
           <input
-            defaultValue={meetingId}
+            value={meetingId}
             onChange={(e) => setMeetingId(e.target.value)}
+            readOnly={!!MeetingId}
             placeholder="Enter meeting ID"
-            className="px-4 py-3 bg-white border border-orange-200 rounded-xl text-gray-800 w-full text-center focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-450 transition-colors placeholder-gray-400"
+            className={`px-4 py-3 border border-orange-200 rounded-xl w-full text-center focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-450 transition-colors placeholder-gray-400 ${
+              MeetingId
+                ? "bg-gray-50 text-gray-500 cursor-not-allowed select-none"
+                : "bg-white text-gray-800"
+            }`}
           />
           {meetingIdError && (
             <p className="text-xs text-red-500 mt-1">Please enter a valid meeting ID</p>
