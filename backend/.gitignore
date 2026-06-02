@@ -10,3 +10,4 @@ dist/
 
 # Graphify knowledge graph output (generated, not committed)
 graphify-out/
+logs/
