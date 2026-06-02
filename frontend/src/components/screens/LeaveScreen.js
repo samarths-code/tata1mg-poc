@@ -16,7 +16,7 @@ export function LeaveScreen({ setIsMeetingLeft }) {
     <div className="fixed inset-0 z-50 bg-white flex flex-col">
       {/* Logo */}
       <div className="px-6 md:px-10 pt-6">
-        <Tata1mgLogo />
+        <Tata1mgLogo dark />
       </div>
 
       {/* Centered content */}
