@@ -312,192 +312,235 @@ export function JoiningScreen({
     }
   };
 
-  // Video height: fixed on desktop, proportional on mobile
-  const videoHeight = isMobile ? "56vw" : 375;
-  const videoWidth = isMobile ? "100%" : 647;
+  // ── Render helpers (plain functions, NOT components) ─────────────────────────
+  // Defined as functions called with {renderCameraCard(...)} not <CameraCard/>.
+  // Defining them as components inside a render body would give React a new type
+  // on every render → unmount+remount → NetworkStats fires getNetworkStats again.
+  const renderCameraCard = (height, width, rounded = "rounded-[24px]") => (
+    <div
+      className={`relative bg-[#303033] ${rounded} overflow-hidden shrink-0 w-full`}
+      style={{ height, width }}
+    >
+      <div className="absolute right-4 top-4 z-10"><NetworkStats /></div>
+      <audio autoPlay playsInline muted={!testSpeaker} ref={audioPlayerRef} controls={false} />
+      <video
+        autoPlay playsInline muted ref={videoPlayerRef} controls={false}
+        className="h-full w-full object-cover flip"
+        style={{ backgroundColor: "#303033" }}
+      />
+      {!webcamOn && (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <p className="text-white text-2xl font-normal">Camera is off</p>
+        </div>
+      )}
+      <div className="absolute bottom-[10px] left-1/2 -translate-x-1/2 flex items-center gap-2.5">
+        {isMicrophonePermissionAllowed ? (
+          <button onClick={_toggleMic}
+            className="bg-[rgba(0,0,0,0.5)] border border-white/80 rounded flex items-center gap-1 h-8 pl-1 pr-2 py-1">
+            <div className="flex items-center justify-center p-1.5 rounded-lg">
+              {micOn
+                ? <MicOnIcon fillcolor="white" style={{ width: 20, height: 20 }} />
+                : <MicOffIcon fillcolor="white" style={{ width: 20, height: 20 }} />}
+            </div>
+          </button>
+        ) : <MicPermissionDenied />}
+        {isCameraPermissionAllowed ? (
+          <button onClick={_toggleWebcam}
+            className="bg-[rgba(0,0,0,0.5)] border border-white/80 rounded flex items-center h-8 p-1">
+            <div className="flex items-center justify-center p-1.5 rounded-lg">
+              {webcamOn
+                ? <WebcamOnIcon fillcolor="white" style={{ width: 20, height: 20 }} />
+                : <WebcamOffIcon fillcolor="white" style={{ width: 20, height: 20 }} />}
+            </div>
+          </button>
+        ) : <CameraPermissionDenied />}
+        <button onClick={() => setTestSpeaker((s) => !s)}
+          className="bg-[rgba(0,0,0,0.5)] border border-white/80 rounded flex items-center h-8 p-1">
+          <div className="flex items-center justify-center p-1.5 rounded-lg">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+              <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+              <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+            </svg>
+          </div>
+        </button>
+      </div>
+    </div>
+  );
+
+  const renderDeviceSelectors = (stacked) => (
+    <div className={`flex gap-2 ${stacked ? "flex-col" : "flex-row"}`}>
+      <div className={stacked ? "w-full" : "flex-1 min-w-0"}>
+        <DropDownMic mics={mics} changeMic={changeMic} customAudioStream={customAudioStream}
+          micOn={micOn} volume={micVolume} didDeviceChange={didDeviceChange}
+          setDidDeviceChange={setDidDeviceChange} testSpeaker={testSpeaker} setTestSpeaker={setTestSpeaker} />
+      </div>
+      <div className={stacked ? "w-full" : "flex-1 min-w-0"}>
+        <DropDownSpeaker speakers={speakers} />
+      </div>
+      <div className={stacked ? "w-full" : "flex-1 min-w-0"}>
+        <DropDownCam changeWebcam={changeWebcam} webcams={webcams} />
+      </div>
+    </div>
+  );
 
   return (
     <>
-      {!permissionDone && (
-        <PermissionSetup onDone={() => setPermissionDone(true)} />
-      )}
+      {!permissionDone && <PermissionSetup onDone={() => setPermissionDone(true)} />}
 
       <div className="bg-white min-h-screen relative overflow-x-hidden">
 
         {/* Logo — top-left */}
-        <div className="absolute left-[30px] top-[30px] z-10">
+        <div className="absolute left-[16px] md:left-[30px] top-[18px] md:top-[30px] z-10">
           <Tata1mgLogo dark />
         </div>
 
-        {/* Main content — centered vertically and horizontally */}
-        <div className={`flex flex-col gap-4 w-full max-w-[1126px] mx-auto px-4 ${
-          isMobile ? "pt-24 pb-16" : "absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
-        }`}>
+        {isMobile ? (
+          /* ── MOBILE LAYOUT ─────────────────────────────────────────────────────
+             Order matches Figma 437-23578: header → camera → selectors → button  */
+          <div className="flex flex-col px-4 pt-[62px] pb-10 gap-3">
 
-          {/* Top row: video + right panel */}
-          <div className={`flex ${isMobile ? "flex-col gap-6" : "flex-row items-center justify-between"}`}>
-
-            {/* LEFT — video preview + device bar */}
-            <div className="flex flex-col gap-3">
-              {/* Video card */}
-              <div
-                className="relative bg-gray-900 rounded-3xl overflow-hidden shrink-0"
-                style={{ width: videoWidth, height: videoHeight, minHeight: 180 }}
-              >
-                {/* Network stats badge */}
-                <div className="absolute right-5 top-5 z-10">
-                  <NetworkStats />
-                </div>
-
-                {/* Audio (hidden) */}
-                <audio autoPlay playsInline muted={!testSpeaker} ref={audioPlayerRef} controls={false} />
-
-                {/* Camera feed */}
-                <video
-                  autoPlay playsInline muted ref={videoPlayerRef} controls={false}
-                  style={{ backgroundColor: "#111827" }}
-                  className="h-full w-full object-cover flip"
-                />
-
-                {/* Bottom media control pills */}
-                <div className="absolute bottom-[10px] left-1/2 -translate-x-1/2 flex items-center gap-2.5">
-                  {/* Mic */}
-                  {isMicrophonePermissionAllowed ? (
-                    <button
-                      onClick={_toggleMic}
-                      className="bg-[rgba(0,0,0,0.5)] border border-white/80 rounded flex items-center gap-1 h-8 pl-1 pr-2 py-1"
-                    >
-                      <div className="flex items-center justify-center p-1.5 rounded-lg">
-                        {micOn
-                          ? <MicOnIcon fillcolor="white" style={{ width: 20, height: 20 }} />
-                          : <MicOffIcon fillcolor="white" style={{ width: 20, height: 20 }} />
-                        }
-                      </div>
-                    </button>
-                  ) : (
-                    <MicPermissionDenied />
-                  )}
-
-                  {/* Webcam */}
-                  {isCameraPermissionAllowed ? (
-                    <button
-                      onClick={_toggleWebcam}
-                      className="bg-[rgba(0,0,0,0.5)] border border-white/80 rounded flex items-center h-8 p-1"
-                    >
-                      <div className="flex items-center justify-center p-1.5 rounded-lg">
-                        {webcamOn
-                          ? <WebcamOnIcon fillcolor="white" style={{ width: 20, height: 20 }} />
-                          : <WebcamOffIcon fillcolor="white" style={{ width: 20, height: 20 }} />
-                        }
-                      </div>
-                    </button>
-                  ) : (
-                    <CameraPermissionDenied />
-                  )}
-
-                  {/* Speaker (test toggle on mobile) */}
-                  <button
-                    onClick={() => setTestSpeaker((s) => !s)}
-                    className="bg-[rgba(0,0,0,0.5)] border border-white/80 rounded flex items-center h-8 p-1"
-                  >
-                    <div className="flex items-center justify-center p-1.5 rounded-lg">
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-                        <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
-                        <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-                      </svg>
-                    </div>
-                  </button>
-                </div>
-              </div>
-
-              {/* Device selector row */}
-              <div className={`flex gap-3 ${isMobile ? "flex-col" : "flex-row"}`} style={{ width: videoWidth }}>
-                <div className={isMobile ? "w-full" : "flex-1 min-w-0"}>
-                  <DropDownMic
-                    mics={mics}
-                    changeMic={changeMic}
-                    customAudioStream={customAudioStream}
-                    micOn={micOn}
-                    volume={micVolume}
-                    didDeviceChange={didDeviceChange}
-                    setDidDeviceChange={setDidDeviceChange}
-                    testSpeaker={testSpeaker}
-                    setTestSpeaker={setTestSpeaker}
-                  />
-                </div>
-                {!isMobile && (
-                  <div className="flex-1 min-w-0">
-                    <DropDownSpeaker speakers={speakers} />
-                  </div>
-                )}
-                <div className={isMobile ? "w-full" : "flex-1 min-w-0"}>
-                  <DropDownCam changeWebcam={changeWebcam} webcams={webcams} />
-                </div>
-              </div>
-            </div>
-
-            {/* RIGHT — meeting info / join form */}
-            <div className={`flex flex-col items-center justify-center gap-8 ${isMobile ? "w-full" : "flex-1 px-6 py-5 self-stretch"}`}>
+            {/* 1. Header info */}
+            <div className="flex flex-col gap-1 items-center text-center">
               {isAutoJoin ? (
-                <AutoJoinPanel
-                  participantName={participantName}
-                  setParticipantName={setParticipantName}
-                  participantMode={participantMode}
-                  tokenReady={tokenReady}
-                  credentialError={credentialError}
-                  onClickStartMeeting={onClickStartMeeting}
-                  meetingTitle={meetingTitle}
-                />
+                <>
+                  <p className="text-[#5e5e61] text-sm font-medium leading-5">
+                    Your Tata 1mg doctor is ready to meet you
+                  </p>
+                  <h1 className="text-black text-xl font-medium leading-7 px-2">
+                    {meetingTitle || "Monthly Health Consultation & Online Consultation"}
+                  </h1>
+                  <p className="text-[#5e5e61] text-sm font-medium leading-5">
+                    Please keep a valid photo ID ready for verification.
+                  </p>
+                </>
               ) : (
-                <div className="w-full max-w-sm">
-                  <div className="mb-5 text-center">
-                    <h2 className="text-xl font-semibold text-black">Ready to join?</h2>
-                    <p className="text-[#919093] text-sm mt-1">Enter your details to join the consultation</p>
-                  </div>
-                  <MeetingDetailsScreen
-                    participantName={participantName}
-                    setParticipantName={setParticipantName}
-                    onClickStartMeeting={onClickStartMeeting}
-                    onClickJoin={async (id) => {
-                      // Token already provided (e.g. via URL) — join directly, no backend call.
-                      if (tokenReady) {
-                        setMeetingId(id);
-                        onClickStartMeeting();
-                        return;
-                      }
-                      const valid = await validateMeeting({ roomId: id });
-                      if (valid) {
-                        const token = await getToken({ roomId: id });
-                        setToken(token);
-                        setMeetingId(id);
-                        onClickStartMeeting();
-                      } else {
-                        toast("Invalid Meeting ID", {
-                          position: "bottom-left",
-                          autoClose: 4000,
-                          hideProgressBar: true,
-                          closeButton: false,
-                          pauseOnHover: true,
-                          draggable: true,
-                          theme: "dark",
-                        });
-                      }
-                    }}
-                  />
-                </div>
+                <h2 className="text-black text-xl font-semibold">Ready to join?</h2>
               )}
             </div>
-          </div>
-        </div>
 
-        {/* Security footer */}
-        <div className={`flex items-center justify-center gap-2.5 text-[#5e5e61] text-sm font-medium ${
-          isMobile ? "py-6" : "absolute bottom-[22px] left-1/2 -translate-x-1/2 whitespace-nowrap"
-        }`}>
-          <ShieldCheckIcon className="w-4 h-4 shrink-0" />
-          <p>Your meeting is secure and encrypted. No one can join unless they are invited.</p>
-        </div>
+            {/* 2. Camera preview — 370×400 proportions from Figma */}
+            <div style={{ aspectRatio: "370 / 400" }}>
+              {renderCameraCard("100%", "100%")}
+            </div>
+
+            {/* 3. Device selectors — stacked full-width */}
+            {renderDeviceSelectors(true)}
+
+            {/* 4. Name input + join (auto-join flow) */}
+            {isAutoJoin ? (
+              <>
+                {credentialError ? (
+                  <p className="text-sm text-[#dc2626] bg-[#fee2e2] border border-[#fca5a5] rounded-xl px-4 py-3 text-center">
+                    {credentialError}
+                  </p>
+                ) : (
+                  <>
+                    {!tokenReady && (
+                      <p className="text-xs text-[#919093] text-center">Setting up your session…</p>
+                    )}
+                    <input
+                      value={participantName}
+                      onChange={(e) => setParticipantName(e.target.value)}
+                      placeholder="Enter your name"
+                      className="w-full px-4 py-3 bg-white border border-orange-200 rounded-xl text-black text-center text-sm focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-450 transition-colors placeholder-[#919093]"
+                    />
+                  </>
+                )}
+                <button
+                  disabled={!(participantName.length >= 3 && tokenReady && !credentialError)}
+                  onClick={onClickStartMeeting}
+                  className="flex items-center justify-center gap-1 w-full px-4 py-3 rounded bg-[#ff6f61] text-white text-base font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {tokenReady ? "Start Consultation" : "Setting up…"}
+                  <ChevronRightIcon className="w-5 h-5" />
+                </button>
+              </>
+            ) : (
+              <MeetingDetailsScreen
+                participantName={participantName}
+                setParticipantName={setParticipantName}
+                onClickStartMeeting={onClickStartMeeting}
+                onClickJoin={async (id) => {
+                  if (tokenReady) { setMeetingId(id); onClickStartMeeting(); return; }
+                  const valid = await validateMeeting({ roomId: id });
+                  if (valid) {
+                    const token = await getToken({ roomId: id });
+                    setToken(token); setMeetingId(id); onClickStartMeeting();
+                  } else {
+                    toast("Invalid Meeting ID", { position: "bottom-left", autoClose: 4000, hideProgressBar: true, closeButton: false, theme: "dark" });
+                  }
+                }}
+              />
+            )}
+
+            {/* 5. Security note */}
+            <p className="text-[#5e5e61] text-xs font-medium text-center px-2 leading-4">
+              Your meeting is secure and encrypted. No one can join unless they are invited.
+            </p>
+          </div>
+
+        ) : (
+          /* ── DESKTOP LAYOUT ─────────────────────────────────────────────────── */
+          <>
+            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2
+                            flex flex-row items-center justify-between gap-8
+                            w-full max-w-[1126px] px-4">
+
+              {/* LEFT — camera + device selectors */}
+              <div className="flex flex-col gap-3">
+                {renderCameraCard(375, 647, "rounded-3xl")}
+                <div style={{ width: 647 }}>
+                  {renderDeviceSelectors(false)}
+                </div>
+              </div>
+
+              {/* RIGHT — meeting info / join form */}
+              <div className="flex flex-col items-center justify-center gap-8 flex-1 px-6 py-5 self-stretch">
+                {isAutoJoin ? (
+                  <AutoJoinPanel
+                    participantName={participantName}
+                    setParticipantName={setParticipantName}
+                    participantMode={participantMode}
+                    tokenReady={tokenReady}
+                    credentialError={credentialError}
+                    onClickStartMeeting={onClickStartMeeting}
+                    meetingTitle={meetingTitle}
+                  />
+                ) : (
+                  <div className="w-full max-w-sm">
+                    <div className="mb-5 text-center">
+                      <h2 className="text-xl font-semibold text-black">Ready to join?</h2>
+                      <p className="text-[#919093] text-sm mt-1">Enter your details to join the consultation</p>
+                    </div>
+                    <MeetingDetailsScreen
+                      participantName={participantName}
+                      setParticipantName={setParticipantName}
+                      onClickStartMeeting={onClickStartMeeting}
+                      onClickJoin={async (id) => {
+                        if (tokenReady) { setMeetingId(id); onClickStartMeeting(); return; }
+                        const valid = await validateMeeting({ roomId: id });
+                        if (valid) {
+                          const token = await getToken({ roomId: id });
+                          setToken(token); setMeetingId(id); onClickStartMeeting();
+                        } else {
+                          toast("Invalid Meeting ID", { position: "bottom-left", autoClose: 4000, hideProgressBar: true, closeButton: false, theme: "dark" });
+                        }
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Desktop security footer */}
+            <div className="absolute bottom-[22px] left-1/2 -translate-x-1/2 whitespace-nowrap
+                            flex items-center gap-2.5 text-[#5e5e61] text-sm font-medium">
+              <ShieldCheckIcon className="w-4 h-4 shrink-0" />
+              <p>Your meeting is secure and encrypted. No one can join unless they are invited.</p>
+            </div>
+          </>
+        )}
       </div>
 
       <ConfirmBox

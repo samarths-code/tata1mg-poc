@@ -18,19 +18,17 @@ const WaitingToJoinScreen = () => {
   }, []);
 
   return (
-    // Fixed overlay so it sits above MeetingContainer's dark bg and fills the screen
-    <div
-      className="fixed inset-0 z-50 overflow-hidden"
-    >
+    <div className="fixed inset-0 z-50 overflow-hidden">
+      {/* Blurs the video/content behind — subtle dark tint so glass reads clearly */}
+      <div className="absolute inset-0 bg-black/30 backdrop-blur-xl" />
 
-      {/* Glass morphism layer */}
-      <div className="absolute inset-0 bg-white/10 backdrop-blur-2xl" />
-
-      {/* Joining text */}
+      {/* Centered glass pill */}
       <div className="relative z-10 flex h-full w-full items-center justify-center">
-        <p className="text-white text-[32px] font-medium leading-9 tracking-tight select-none">
-          {waitingMessages[msgIndex]}
-        </p>
+        <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl px-10 py-5 shadow-xl">
+          <p className="text-white text-[28px] font-medium leading-9 tracking-tight select-none">
+            {waitingMessages[msgIndex]}
+          </p>
+        </div>
       </div>
     </div>
   );

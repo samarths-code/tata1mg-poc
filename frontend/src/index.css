@@ -57,7 +57,15 @@ input:focus-visible{
 .video-cover video {
   position: absolute;
   object-fit: cover;
-  
+}
+
+/* Doctor view — patient joins from phone (portrait stream).
+   Container is portrait-shaped (550/704); cover fills it without bars. */
+.portrait-video-stage video {
+  position: absolute;
+  object-fit: cover;
+  width: 100%;
+  height: 100%;
 }
 
 .video-contain video {

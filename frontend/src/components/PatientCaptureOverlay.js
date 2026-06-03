@@ -15,8 +15,8 @@ export default function PatientCaptureOverlay({ variant = "document" }) {
     : "Hold the document steady inside the frame";
 
   const frameStyle = isFace
-    ? { width: "min(60%, 360px)", aspectRatio: "3 / 3.6" }
-    : { width: "min(74%, 560px)", aspectRatio: "16 / 10" };
+    ? { width: "min(72vw, 320px)", aspectRatio: "3 / 4" }
+    : { width: "min(90vw, 480px)", aspectRatio: "16 / 10" };
 
   return (
     <div className="fixed inset-0 z-40 flex flex-col items-center justify-center pointer-events-none">
