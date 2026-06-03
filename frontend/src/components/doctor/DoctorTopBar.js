@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { CheckCircleIcon } from "@heroicons/react/24/solid";
-import { LockClosedIcon, EllipsisVerticalIcon } from "@heroicons/react/24/outline";
+import { LockClosedIcon, EllipsisVerticalIcon, CheckCircleIcon as CheckCircleOutline } from "@heroicons/react/24/outline";
 
 const STEPS = [
   { id: 1, label: "Connection Verification" },
@@ -54,14 +54,20 @@ export default function DoctorTopBar({
       <div className="flex items-center gap-2 shrink-0" ref={menuRef}>
 
         {/* Current active step pill — clickable to open drawer or capture overlay */}
-        <button
-          onClick={() => onStepClick?.(activeStep.id)}
-          className="bg-white/[0.02] border border-white/5 flex items-center px-3 py-[6px] rounded-[4px] hover:bg-white/5 transition-colors cursor-pointer"
-        >
-          <span className="text-sm font-medium text-white whitespace-nowrap">
-            Step {activeStep.id}: {activeStep.label}
-          </span>
-        </button>
+        {(() => {
+          const isDone = completedSteps.includes(activeStep.id);
+          return (
+            <button
+              onClick={() => onStepClick?.(activeStep.id)}
+              className="bg-white/[0.02] border border-white/5 flex items-center gap-1.5 px-3 py-[6px] rounded-[4px] hover:bg-white/5 transition-colors cursor-pointer"
+            >
+              {isDone && <CheckCircleOutline className="w-4 h-4 text-[#22c55e] shrink-0" />}
+              <span className={`text-sm font-medium whitespace-nowrap ${isDone ? "text-[#22c55e]" : "text-white"}`}>
+                Step {activeStep.id}: {activeStep.label}
+              </span>
+            </button>
+          );
+        })()}
 
         {/* Hamburger — shows all steps, locks future ones */}
         <div className="relative">

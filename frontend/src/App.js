@@ -64,6 +64,7 @@ const App = () => {
   const [participantId, setParticipantId] = useState(urlParticipantId);
   const [meetingId, setMeetingId]       = useState(urlMeetingId);
   const [participantName, setParticipantName] = useState(defaultName);
+  const [leaveScreenName, setLeaveScreenName] = useState(defaultName);
   const [micOn, setMicOn]               = useState(true);
   const [webcamOn, setWebcamOn]         = useState(true);
   const [customAudioStream, setCustomAudioStream] = useState(null);
@@ -142,6 +143,7 @@ const App = () => {
                 // Replace the tokened meeting URL with /thank-you so the client
                 // can't Back/refresh into the ended session (removes it from history).
                 window.history.replaceState(null, "", "/thank-you");
+                setLeaveScreenName(participantName);
                 setToken("");
                 setParticipantId("");
                 setMeetingId("");
@@ -156,7 +158,7 @@ const App = () => {
           </MeetingProvider>
         </MeetingErrorBoundary>
       ) : isMeetingLeft ? (
-        <LeaveScreen participantName={participantName} />
+        <LeaveScreen participantName={leaveScreenName} />
       ) : (
         <JoiningScreen
           participantName={participantName}
