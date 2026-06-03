@@ -347,15 +347,11 @@ export default function DoctorView() {
       />
 
       <div className="flex-1 flex relative overflow-hidden">
-        {/* Video stage — flex-centered so the portrait patient video sits in
-            the middle of the stage with the dark bg showing on either side  */}
-        <div className="relative flex-1 px-4 pt-2 flex items-start justify-center" style={{ paddingBottom: bottomBarHeight }}>
+        {/* Video stage — fills remaining flex space */}
+        <div className="relative flex-1">
 
-          {/* Portrait-shaped container (Figma: 550×704) — matches phone camera ratio */}
-          <div
-            className="relative h-full rounded-[24px] overflow-hidden bg-[#1b1b1e] portrait-video-stage"
-            style={{ aspectRatio: "550 / 704", maxWidth: "100%" }}
-          >
+          {/* Patient video — edge-to-edge, responsive to viewport */}
+          <div className="absolute inset-0 rounded-[24px] overflow-hidden bg-[#1b1b1e]">
             {customerId ? (
               <MemoizedParticipant participantId={customerId} showImageCapture={false} showResolution={true} />
             ) : (
@@ -381,9 +377,11 @@ export default function DoctorView() {
             )}
           </div>
 
-          {/* Doctor PiP */}
-          <div className="absolute right-8 w-52 h-36 rounded-[24px] overflow-hidden border-2 border-[#ff6f61] shadow-2xl z-10 bg-[#303033]"
-            style={{ bottom: bottomBarHeight + 16 }}>
+          {/* Doctor PiP — 275×150, above the floating bottom bar */}
+          <div
+            className="absolute right-8 w-[275px] h-[150px] rounded-[24px] overflow-hidden border border-[#ff6f61] z-10 bg-[#303033]"
+            style={{ bottom: bottomBarHeight + 16 }}
+          >
             <MemoizedParticipant participantId={localParticipant.id} showImageCapture={false} showResolution={false} isPip={true} />
           </div>
         </div>
