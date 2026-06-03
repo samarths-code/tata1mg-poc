@@ -5,9 +5,9 @@ import { XMarkIcon, ExclamationCircleIcon, InformationCircleIcon } from "@heroic
 
 function DrawerShell({ title, subtitle, onClose, children, footer }) {
   return (
-    <div className="flex flex-col h-full w-[383px] max-w-full bg-[#1b1b1e] border-l border-[#303033]">
+    <div className="flex flex-col h-full w-[400px] max-w-full bg-[#101113] border-l border-[rgba(255,255,255,0.05)]">
       {/* Header */}
-      <div className="shrink-0 px-5 pt-5 pb-3 border-b border-[#252a34]">
+      <div className="shrink-0 px-5 pt-5 pb-3 border-b border-[rgba(255,255,255,0.03)]">
         <div className="flex items-start justify-between gap-3">
           <h2 className="text-white text-lg font-semibold">{title}</h2>
           <button onClick={onClose} className="shrink-0 text-[#919093] hover:text-white transition-colors">
@@ -21,14 +21,14 @@ function DrawerShell({ title, subtitle, onClose, children, footer }) {
       <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">{children}</div>
 
       {/* Sticky footer */}
-      {footer && <div className="shrink-0 px-5 py-4 border-t border-[#252a34] flex items-center gap-3">{footer}</div>}
+      {footer && <div className="shrink-0 px-5 py-4 border-t border-[rgba(255,255,255,0.03)] flex items-center gap-3">{footer}</div>}
     </div>
   );
 }
 
 function Card({ title, children }) {
   return (
-    <div className="rounded-xl bg-[#252a34] border border-[#303033] overflow-hidden">
+    <div className="rounded-[12px] border border-[rgba(255,255,255,0.05)] overflow-hidden">
       {title && <p className="px-4 pt-3.5 pb-2 text-white text-sm font-semibold">{title}</p>}
       <div className="px-4 pb-3.5">{children}</div>
     </div>
@@ -37,17 +37,27 @@ function Card({ title, children }) {
 
 function GreenBadge({ children }) {
   return (
-    <span className="px-2 py-0.5 rounded-md text-xs font-semibold text-[#86efac] bg-[rgba(134,239,172,0.12)]">
+    <span className="px-[6px] py-[2px] rounded-[12px] text-xs font-normal text-[#bbf7d0] bg-[rgba(22,101,52,0.1)] border border-[rgba(22,101,52,0.5)]">
       {children}
     </span>
   );
 }
 
-function MetricRow({ label, value, badge }) {
+function RedBadge({ children }) {
+  return (
+    <span className="px-[6px] py-[2px] rounded-[12px] text-xs font-normal text-[#fecaca] bg-[rgba(153,27,27,0.1)] border border-[rgba(153,27,27,0.5)]">
+      {children}
+    </span>
+  );
+}
+
+function MetricRow({ label, value, badge, error }) {
   return (
     <div className="flex items-center justify-between py-2 border-b border-[#303033] last:border-0">
       <span className="text-[#919093] text-sm">{label}</span>
-      {badge ? <GreenBadge>{value}</GreenBadge> : <span className="text-white text-sm">{value}</span>}
+      {badge ? <GreenBadge>{value}</GreenBadge>
+        : error ? <RedBadge>{value}</RedBadge>
+        : <span className="text-white text-sm">{value}</span>}
     </div>
   );
 }
@@ -102,7 +112,7 @@ export function ConnectionDetailsPanel({ onClose, deviceInfo, geoData, geoFailed
         onNextStep && (
           <button
             onClick={onNextStep}
-            className="ml-auto px-5 py-2.5 rounded-lg text-sm font-semibold text-white bg-orange-450 hover:bg-orange-500 transition-colors"
+            className="ml-auto px-5 py-2.5 rounded-lg text-sm font-semibold text-white bg-[#ff6f61] hover:bg-[#e85e51] transition-colors"
           >
             Next Step
           </button>
@@ -197,8 +207,8 @@ export function IdentityVerificationPanel({
           </button>
           <button
             onClick={onApprove}
-            disabled={!ocrOk}
-            className="ml-auto px-5 py-2.5 rounded-lg text-sm font-semibold text-white bg-orange-450 hover:bg-orange-500 disabled:opacity-40 transition-colors"
+            disabled={ocrResult?.loading}
+            className="ml-auto px-5 py-2.5 rounded-lg text-sm font-semibold text-white bg-[#ff6f61] hover:bg-[#e85e51] disabled:opacity-40 transition-colors"
           >
             Approve Document
           </button>
@@ -212,7 +222,17 @@ export function IdentityVerificationPanel({
           {!frontImage && !backImage && <p className="text-[#77777a] text-xs italic">No document captured yet</p>}
         </div>
         <div className="mt-3">
-          <MetricRow label="OCR Detection" value={ocrOk ? "Successful" : ocrResult?.loading ? "Running…" : "—"} badge={ocrOk} />
+          <MetricRow
+            label="OCR Detection"
+            value={
+              ocrResult?.loading ? "Running…"
+              : ocrOk ? "Successful"
+              : ocrResult?.error ? (ocrResult.message || "Failed")
+              : "—"
+            }
+            badge={ocrOk}
+            error={!ocrOk && !ocrResult?.loading && !!ocrResult?.error}
+          />
           {confPct != null && (
             <MetricRow label="Confidence" value={`${confPct}%`} badge={ocrOk} />
           )}
@@ -273,7 +293,7 @@ export function FaceVerificationPanel({
           <button
             onClick={onApprove}
             disabled={!matched}
-            className="ml-auto px-5 py-2.5 rounded-lg text-sm font-semibold text-white bg-orange-450 hover:bg-orange-500 disabled:opacity-40 transition-colors"
+            className="ml-auto px-5 py-2.5 rounded-lg text-sm font-semibold text-white bg-[#ff6f61] hover:bg-[#e85e51] disabled:opacity-40 transition-colors"
           >
             Approve Photo
           </button>

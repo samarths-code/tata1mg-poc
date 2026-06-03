@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { CheckCircleIcon } from "@heroicons/react/24/solid";
-import { LockClosedIcon, EllipsisVerticalIcon } from "@heroicons/react/24/outline";
+import { LockClosedIcon, EllipsisVerticalIcon, CheckCircleIcon as CheckCircleOutline } from "@heroicons/react/24/outline";
+import useIsRecording from "../../hooks/useIsRecording";
 
 const STEPS = [
   { id: 1, label: "Connection Verification" },
@@ -38,27 +39,44 @@ export default function DoctorTopBar({
     return () => document.removeEventListener("mousedown", onMouseDown);
   }, []);
 
+  const isRecording = useIsRecording();
   const title = meetingTitle || (caseId ? `Case: ${caseId}` : "Monthly Health Consultation & Wellness Checkup");
   const activeStep = STEPS.find((s) => s.id === currentStep) || STEPS[0];
 
   return (
     <div className="flex items-center justify-between px-5 shrink-0 z-20 h-14">
-      {/* Left: time · title */}
+      {/* Left: time · title · REC badge */}
       <div className="flex items-center gap-2 text-white min-w-0">
         <span className="text-base font-medium whitespace-nowrap">{time}</span>
         <div className="h-5 w-px bg-white/30 shrink-0" />
         <span className="text-base whitespace-nowrap overflow-hidden text-ellipsis">{title}</span>
+        {isRecording && (
+          <span className="flex items-center gap-1 px-[6px] py-[2px] rounded-[12px] shrink-0
+                           bg-[rgba(153,27,27,0.1)] border border-[rgba(153,27,27,0.5)]">
+            <span className="w-2 h-2 rounded-full bg-[#fca5a5] animate-pulse shrink-0" />
+            <span className="text-[#fecaca] text-xs font-normal leading-4">REC</span>
+          </span>
+        )}
       </div>
 
       {/* Right: active step pill + hamburger */}
       <div className="flex items-center gap-2 shrink-0" ref={menuRef}>
 
-        {/* Current active step pill */}
-        <div className="bg-white/[0.02] border border-white/5 flex items-center px-3 py-[6px] rounded-[4px]">
-          <span className="text-sm font-medium text-white whitespace-nowrap">
-            Step {activeStep.id}: {activeStep.label}
-          </span>
-        </div>
+        {/* Current active step pill — clickable to open drawer or capture overlay */}
+        {(() => {
+          const isDone = completedSteps.includes(activeStep.id);
+          return (
+            <button
+              onClick={() => onStepClick?.(activeStep.id)}
+              className="bg-white/[0.02] border border-white/5 flex items-center gap-1.5 px-3 py-[6px] rounded-[4px] hover:bg-white/5 transition-colors cursor-pointer"
+            >
+              {isDone && <CheckCircleOutline className="w-4 h-4 text-[#22c55e] shrink-0" />}
+              <span className={`text-sm font-medium whitespace-nowrap ${isDone ? "text-[#22c55e]" : "text-white"}`}>
+                Step {activeStep.id}: {activeStep.label}
+              </span>
+            </button>
+          );
+        })()}
 
         {/* Hamburger — shows all steps, locks future ones */}
         <div className="relative">

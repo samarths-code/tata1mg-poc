@@ -1,86 +1,62 @@
 import { useState } from "react";
 import { useMeetingAppContext } from "../context/MeetingAppContext";
-import useDragging from "../hooks/useDraggable";
 import { participantModes } from "../utils/common";
 import { MemoizedParticipant } from "./ParticipantView";
 import { PromoInfographic } from "./PromoInfographic";
+import useIsMobile from "../hooks/useIsMobile";
+import useIsTab from "../hooks/useIsTab";
 
 function PipLayout({ participantIds }) {
   const [switchParticipants, setSwitchParticipants] = useState(false);
   const { participantMode } = useMeetingAppContext();
-  const { ref, x, y, isDragging, wasDragged } = useDragging();
+  const isMobile = useIsMobile();
+  const isTab = useIsTab();
+  const isSmall = isMobile || isTab;
 
-  // if (
-  //   participantIds.length == 1 &&
-  //   participantMode === participantModes.CLIENT
-  // ) {
-  //   participantIds.push("NULL");
-  // }
+  const mainId = participantIds.length > 1
+    ? participantIds[switchParticipants ? 0 : 1]
+    : participantIds[0];
+
+  const pipId = participantIds.length > 1
+    ? participantIds[switchParticipants ? 1 : 0]
+    : null;
 
   return (
-    <div className="flex flex-grow w-full h-full relative px-4 pt-2 pb-4">
-      {participantIds.length > 1 && (
-        <div
-          // style={{
-          //   top: y,
-          //   left: x,
-          // }}
-          ref={ref}
-          className={`absolute w-36 h-48 md:w-64 md:h-48 z-10 bottom-0 right-0  m-3 border-2 rounded-lg ${
-            isDragging ? "cursor-move border-white" : "border-slate-700"
-          }`}
-          // onClick={(e) => {
-          //   if (!wasDragged) {
-          //     setSwitchParticipants(!switchParticipants);
-          //     e.preventDefault();
-          //   }
-          // }}
-        >
-          {participantIds[switchParticipants ? 1 : 0] == "NULL" ? (
-            <PromoInfographic />
-          ) : (
-            <MemoizedParticipant
-              participantId={
-                participantIds.length > 1
-                  ? participantIds[switchParticipants ? 1 : 0]
-                  : participantIds[1]
-              }
-              key={
-                participantIds.length > 1
-                  ? participantIds[switchParticipants ? 1 : 0]
-                  : participantIds[1]
-              }
-              isPip={true}
-              showImageCapture={participantMode == participantModes.DOCTOR}
-              showResolution={
-                true //participantMode == participantModes.DOCTOR
-              }
-            />
-          )}
-        </div>
-      )}
-      <div className="w-full h-full">
-        {participantIds[switchParticipants ? 0 : 1] == "NULL" ? (
+    <div className="relative flex-1 min-w-0 h-full">
+
+      {/* Main video — fills the entire container */}
+      <div className="absolute inset-0 rounded-[24px] overflow-hidden">
+        {mainId === "NULL" ? (
           <PromoInfographic />
         ) : (
           <MemoizedParticipant
-            participantId={
-              participantIds.length > 1
-                ? participantIds[switchParticipants ? 0 : 1]
-                : participantIds[0]
-            }
-            key={
-              participantIds.length > 1
-                ? participantIds[switchParticipants ? 0 : 1]
-                : participantIds[0]
-            }
-            showImageCapture={participantMode == participantModes.DOCTOR}
-            showResolution={
-              true //participantMode == participantModes.DOCTOR
-            }
+            participantId={mainId}
+            key={mainId}
+            showImageCapture={participantMode === participantModes.DOCTOR}
+            showResolution={true}
           />
         )}
       </div>
+
+      {/* PiP — local user, bottom-right, orange border */}
+      {pipId && pipId !== "NULL" && (
+        <div
+          className={`absolute z-10 border border-[#ff6f61] rounded-[24px] overflow-hidden cursor-pointer ${
+            isSmall
+              ? "w-[160px] h-[100px] bottom-3 right-3"
+              : "w-[275px] h-[150px] bottom-4 right-4"
+          }`}
+          onClick={() => setSwitchParticipants((s) => !s)}
+        >
+          <MemoizedParticipant
+            participantId={pipId}
+            key={pipId}
+            isPip={true}
+            showImageCapture={false}
+            showResolution={false}
+          />
+        </div>
+      )}
     </div>
   );
 }

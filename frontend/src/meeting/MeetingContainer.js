@@ -301,6 +301,7 @@ export function MeetingContainer({ onMeetingLeave }) {
     if (!localParticipantAllowedJoin || !isCustomer) return;
 
     const collectAndPublish = async () => {
+      // ── Phase 1: publish device/mic/camera info immediately (fast) ───────────
       let cameras = [], microphones = [], audioOutputs = [];
       let selectedCameraLabel = null, selectedMicLabel = null;
       try {
@@ -317,9 +318,24 @@ export function MeetingContainer({ onMeetingLeave }) {
         selectedMicLabel    = selMic?.label || microphones[0] || null;
       } catch (_) {}
 
+      try {
+        publishDeviceInfo("DEVICE_INFO", { persist: true }, {
+          userAgent: navigator.userAgent,
+          selectedCameraLabel,
+          selectedMicLabel,
+          connection: navigator.connection?.effectiveType ?? "unknown",
+          cameras,
+          microphones,
+          audioOutputs,
+        });
+      } catch (err) {
+        console.error("Error publishing device info (phase 1):", err);
+      }
+
+      // ── Phase 2: enrich with network stats + geo (slow, runs in background) ──
       let downloadSpeed, uploadSpeed;
       try {
-        const stats = await getNetworkStats({ timeoutDuration: 15000 });
+        const stats = await getNetworkStats({ timeoutDuration: 8000 });
         downloadSpeed = stats.downloadSpeed;
         uploadSpeed = stats.uploadSpeed;
       } catch (_) {}
@@ -345,7 +361,7 @@ export function MeetingContainer({ onMeetingLeave }) {
           timezone: ipGeo?.timezone,
         });
       } catch (err) {
-        console.error("Error publishing device info:", err);
+        console.error("Error publishing device info (phase 2):", err);
       }
     };
 
@@ -465,7 +481,7 @@ export function MeetingContainer({ onMeetingLeave }) {
 
   return (
     <div className="fixed inset-0">
-      <div ref={containerRef} className="h-full w-full flex flex-col bg-[#1b1b1e] relative">
+      <div ref={containerRef} className={`h-full w-full flex flex-col relative ${localParticipantAllowedJoin ? "bg-[#1b1b1e]" : "bg-transparent"}`}>
         {localParticipantAllowedJoin ? (
             <>
               <ImageUploadListner />
@@ -479,6 +495,7 @@ export function MeetingContainer({ onMeetingLeave }) {
                   <TopBar
                     bottomBarHeight={bottomBarHeight}
                     caseId={caseId}
+                    meetingTitle={new URLSearchParams(window.location.search).get("meetingTitle") || ""}
                     onToggleParticipantPanel={() => setShowParticipantPanel((s) => !s)}
                   />
 
@@ -506,9 +523,15 @@ export function MeetingContainer({ onMeetingLeave }) {
                       />
                     </div>
                     {showParticipantPanel && (
-                      <div className="shrink-0 h-full">
-                        <ParticipantDetailsPanel onClose={() => setShowParticipantPanel(false)} />
-                      </div>
+                      isMobile ? (
+                        <div className="fixed inset-0 z-50">
+                          <ParticipantDetailsPanel onClose={() => setShowParticipantPanel(false)} />
+                        </div>
+                      ) : (
+                        <div className="shrink-0 h-full">
+                          <ParticipantDetailsPanel onClose={() => setShowParticipantPanel(false)} />
+                        </div>
+                      )
                     )}
                     <CustomerVerificationOverlay />
                   </div>

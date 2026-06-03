@@ -18,10 +18,6 @@ const ImageUploadListner = () => {
   const webcamStreamRef = useRef();
   useEffect(() => { webcamStreamRef.current = webcamStream; }, [webcamStream]);
 
-  const [overlayVariant, setOverlayVariant] = useState(null);
-  const overlayTimerRef = useRef(null);
-  useEffect(() => () => clearTimeout(overlayTimerRef.current), []);
-
   const { publish: publishChunk } = usePubSub("IMAGE_TRANSFER", {});
 
   const splitIntoChunks = (str, size) => {
@@ -62,12 +58,6 @@ const ImageUploadListner = () => {
     onMessageReceived: ({ payload }) => {
       try {
         if (payload.senderId !== mMeeting?.localParticipant?.id) {
-          const variant = variantForTarget(payload.target);
-          if (variant) {
-            setOverlayVariant(variant);
-            clearTimeout(overlayTimerRef.current);
-            overlayTimerRef.current = setTimeout(() => setOverlayVariant(null), 1800);
-          }
           captureAndChunk();
         }
       } catch (err) {
@@ -76,7 +66,7 @@ const ImageUploadListner = () => {
     },
   });
 
-  return overlayVariant ? <PatientCaptureOverlay variant={overlayVariant} /> : null;
+  return null;
 };
 
 export default ImageUploadListner;

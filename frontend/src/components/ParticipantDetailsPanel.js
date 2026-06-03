@@ -33,7 +33,7 @@ export function ParticipantDetailsPanel({ onClose }) {
   );
 
   return (
-    <div className="flex flex-col h-full w-[400px] bg-[#101113] border-l border-[rgba(255,255,255,0.05)] rounded-tl-[24px] rounded-bl-[24px]">
+    <div className="flex flex-col h-full w-full md:w-[400px] bg-[#101113] border-l border-[rgba(255,255,255,0.05)] md:rounded-tl-[24px] md:rounded-bl-[24px]">
       {/* Header */}
       <div className="flex flex-col gap-2 p-5 shrink-0 w-full">
         <div className="flex gap-2.5 items-center w-full">

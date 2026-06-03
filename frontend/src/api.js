@@ -142,7 +142,11 @@ export const runOCR = async ({ imageBase64 }) => {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ frontPart: img, backPart: img }),
   });
-  if (!res.ok) throw new Error(`OCR failed: ${res.status}`);
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    const msg = body?.error?.message || body?.message || `OCR failed: ${res.status}`;
+    throw new Error(msg);
+  }
   return res.json();
 };
 

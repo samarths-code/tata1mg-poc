@@ -451,9 +451,8 @@ export function BottomBar({ bottomBarHeight, onShowConnectionDetails, completedS
     );
   };
 
+  // Screen share and participants removed from mobile hamburger per design.
   const mobileFeatures = [
-    "SCREEN_SHARE",
-    "PARTICIPANTS",
     ...(isDoctor ? ["DOCUMENT_PANEL"] : []),
     "MEETING_ID_COPY",
   ];
@@ -471,12 +470,14 @@ export function BottomBar({ bottomBarHeight, onShowConnectionDetails, completedS
           <WebCamBTN />
           {supportsOutputDevice && <OutputMicBTN />}
         </div>
-        <button
-          className="flex items-center justify-center p-2 rounded-lg bg-[rgba(255,255,255,0.05)]"
-          onClick={() => setOpen(true)}
-        >
-          <EllipsisHorizontalIcon className="h-5 w-5 text-white" />
-        </button>
+        {mobileFeatures.length > 0 && (
+          <button
+            className="flex items-center justify-center p-2 rounded-lg bg-[rgba(255,255,255,0.05)]"
+            onClick={() => setOpen(true)}
+          >
+            <EllipsisHorizontalIcon className="h-5 w-5 text-white" />
+          </button>
+        )}
         <Transition appear show={Boolean(open)} as={Fragment}>
           <Dialog as="div" className="relative" style={{ zIndex: 9999 }} onClose={() => setOpen(false)}>
             <Transition.Child as={Fragment} enter="ease-out duration-300" enterFrom="opacity-0" enterTo="opacity-100" leave="ease-in duration-200" leaveFrom="opacity-100" leaveTo="opacity-0">

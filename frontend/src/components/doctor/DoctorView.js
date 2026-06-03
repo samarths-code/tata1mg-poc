@@ -18,7 +18,10 @@ import { VideoCameraIcon } from "@heroicons/react/24/outline";
 const bottomBarHeight = 80;
 
 function nowTime() {
-  return new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const now = new Date();
+  const date = now.toLocaleDateString([], { day: "2-digit", month: "short", year: "numeric" });
+  const time = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return `${date}, ${time}`;
 }
 
 export default function DoctorView() {
@@ -163,10 +166,8 @@ export default function DoctorView() {
       if (!isAiReady()) throw new Error("AI not ready");
       const raw = await runOCR({ imageBase64 });
       setOcrResult({ fields: raw });
-    } catch {
-      // TODO(temporary): OCR is forced to "success" for now — the AI endpoint
-      // is unreliable in this environment. Restore `{ error: true }` once stable.
-      setOcrResult({ fields: {}, forced: true });
+    } catch (err) {
+      setOcrResult({ error: true, message: err.message });
     }
   }, []);
 
@@ -336,7 +337,7 @@ export default function DoctorView() {
   return (
     <div className="flex flex-col h-full bg-[#1b1b1e] relative overflow-hidden">
       <DoctorTopBar
-        meetingTitle="Monthly Health Consultation & Wellness Checkup"
+        meetingTitle={new URLSearchParams(window.location.search).get("meetingTitle") || ""}
         caseId={caseId}
         currentStep={currentStep}
         completedSteps={completedSteps}
@@ -346,9 +347,14 @@ export default function DoctorView() {
       />
 
       <div className="flex-1 flex relative overflow-hidden">
-        {/* Video stage */}
-        <div className="relative flex-1 px-4 pt-2" style={{ paddingBottom: bottomBarHeight }}>
-          <div className="relative w-full h-full rounded-2xl overflow-hidden bg-gray-800">
+        {/* Video stage — fills remaining flex space */}
+        <div className="relative flex-1">
+
+          {/* Patient video — stops before the floating bottom bar */}
+          <div
+            className="absolute inset-x-0 top-0 rounded-[24px] overflow-hidden bg-[#1b1b1e]"
+            style={{ bottom: bottomBarHeight }}
+          >
             {customerId ? (
               <MemoizedParticipant participantId={customerId} showImageCapture={false} showResolution={true} />
             ) : (
@@ -374,9 +380,11 @@ export default function DoctorView() {
             )}
           </div>
 
-          {/* Doctor PiP */}
-          <div className="absolute right-8 w-52 h-36 rounded-xl overflow-hidden border-2 border-orange-450 shadow-2xl z-10 bg-[#303033]"
-            style={{ bottom: bottomBarHeight + 16 }}>
+          {/* Doctor PiP — 275×150, above the floating bottom bar */}
+          <div
+            className="absolute right-8 w-[275px] h-[150px] rounded-[24px] overflow-hidden border border-[#ff6f61] z-10 bg-[#303033]"
+            style={{ bottom: bottomBarHeight + 16 }}
+          >
             <MemoizedParticipant participantId={localParticipant.id} showImageCapture={false} showResolution={false} isPip={true} />
           </div>
         </div>

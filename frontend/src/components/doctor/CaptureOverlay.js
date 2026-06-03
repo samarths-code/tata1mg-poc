@@ -39,11 +39,13 @@ export default function CaptureOverlay({
 
   const frameColor = ready ? "#86efac" : "#fca5a5"; // green-300 / red-300
 
-  // Width-based sizing for a large, prominent frame; maxHeight keeps it clear of
-  // the absolutely-anchored controls so it can't overlap or clip them.
+  // Frame is sized for a portrait mobile video stream (9:16 from the patient's phone).
+  // Face: portrait 3:4 to match a mobile selfie crop zone.
+  // Document: landscape 16:10 (Aadhaar card ratio) constrained in height so it fits
+  // within the portrait video without overflowing the control row below.
   const frameStyle = isFace
-    ? { width: "min(42%, 480px)", aspectRatio: "3 / 3.7", maxHeight: "66%", maxWidth: "82%" }
-    : { width: "min(66%, 820px)", aspectRatio: "16 / 10", maxHeight: "60%", maxWidth: "90%" };
+    ? { height: "min(62%, 520px)", aspectRatio: "3 / 4", maxWidth: "55%" }
+    : { width: "min(72%, 560px)", aspectRatio: "16 / 10", maxHeight: "42%", maxWidth: "88%" };
 
   return (
     <div className="absolute inset-0 z-10">
@@ -56,7 +58,13 @@ export default function CaptureOverlay({
           <p className="text-white text-lg font-medium mb-4 text-center drop-shadow-lg">{heading}</p>
         )}
 
-        <div className="rounded-2xl" style={{ ...frameStyle, border: `3px dashed ${frameColor}` }} />
+        <div
+          style={{
+            ...frameStyle,
+            border: `3px dashed ${frameColor}`,
+            borderRadius: isFace ? "24px" : "12px",
+          }}
+        />
 
         {isFace && (
           <p className="text-white text-lg font-medium mt-4 text-center drop-shadow-lg">{heading}</p>

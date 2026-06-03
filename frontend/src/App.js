@@ -64,6 +64,7 @@ const App = () => {
   const [participantId, setParticipantId] = useState(urlParticipantId);
   const [meetingId, setMeetingId]       = useState(urlMeetingId);
   const [participantName, setParticipantName] = useState(defaultName);
+  const [leaveScreenName, setLeaveScreenName] = useState(defaultName);
   const [micOn, setMicOn]               = useState(true);
   const [webcamOn, setWebcamOn]         = useState(true);
   const [customAudioStream, setCustomAudioStream] = useState(null);
@@ -120,68 +121,75 @@ const App = () => {
       participantMode={participantMode}
       caseId={caseId}
     >
-      {isMeetingStarted ? (
-        <MeetingErrorBoundary>
-          <MeetingProvider
-            config={{
-              meetingId,
-              micEnabled: micOn,
-              webcamEnabled: webcamOn,
-              name: participantName || "Guest",
-              participantId: participantId || (urlToken ? undefined : getSessionParticipantId()),
-              multiStream: true,
-              customCameraVideoTrack: customVideoStream,
-              customMicrophoneAudioTrack: customAudioStream,
-            }}
-            token={token}
-            reinitialiseMeetingOnConfigChange={true}
-            joinWithoutUserInteraction={true}
-          >
-            <MeetingContainer
-              onMeetingLeave={() => {
-                // Replace the tokened meeting URL with /thank-you so the client
-                // can't Back/refresh into the ended session (removes it from history).
-                window.history.replaceState(null, "", "/thank-you");
-                setToken("");
-                setParticipantId("");
-                setMeetingId("");
-                setParticipantName("");
-                setWebcamOn(false);
-                setMicOn(false);
-                setSpekerOn(false);
-                setMeetingStarted(false);
-                setIsMeetingLeft(true);
-              }}
-            />
-          </MeetingProvider>
-        </MeetingErrorBoundary>
-      ) : isMeetingLeft ? (
-        <LeaveScreen participantName={participantName} />
+      {isMeetingLeft ? (
+        <LeaveScreen participantName={leaveScreenName} />
       ) : (
-        <JoiningScreen
-          participantName={participantName}
-          setParticipantName={setParticipantName}
-          setMeetingId={setMeetingId}
-          setToken={setToken}
-          micEnabled={micOn}
-          webcamEnabled={webcamOn}
-          speakerEnabled={speakerOn}
-          onClickStartMeeting={handleStartMeeting}
-          participantMode={participantMode}
-          customAudioStream={customAudioStream}
-          setCustomAudioStream={setCustomAudioStream}
-          customVideoStream={customVideoStream}
-          setCustomVideoStream={setCustomVideoStream}
-          micOn={micOn}
-          setMicOn={setMicOn}
-          webcamOn={webcamOn}
-          setSpekerOn={setSpekerOn}
-          setWebcamOn={setWebcamOn}
-          isAutoJoin={isAutoJoin}
-          tokenReady={!!token}
-          credentialError={credentialError}
-          meetingTitle={urlMeetingTitle}
-        />
+        <>
+          {/* JoiningScreen stays mounted so WaitingToJoinScreen's backdrop-blur
+              has the full white page to blur — wrapped non-interactive when meeting starts */}
+          <div className={isMeetingStarted ? "fixed inset-0 pointer-events-none overflow-hidden" : ""}>
+            <JoiningScreen
+              participantName={participantName}
+              setParticipantName={setParticipantName}
+              setMeetingId={setMeetingId}
+              setToken={setToken}
+              micEnabled={micOn}
+              webcamEnabled={webcamOn}
+              speakerEnabled={speakerOn}
+              onClickStartMeeting={handleStartMeeting}
+              participantMode={participantMode}
+              customAudioStream={customAudioStream}
+              setCustomAudioStream={setCustomAudioStream}
+              customVideoStream={customVideoStream}
+              setCustomVideoStream={setCustomVideoStream}
+              micOn={micOn}
+              setMicOn={setMicOn}
+              webcamOn={webcamOn}
+              setSpekerOn={setSpekerOn}
+              setWebcamOn={setWebcamOn}
+              isAutoJoin={isAutoJoin}
+              tokenReady={!!token}
+              credentialError={credentialError}
+              meetingTitle={urlMeetingTitle}
+            />
+          </div>
+
+          {isMeetingStarted && (
+            <MeetingErrorBoundary>
+              <MeetingProvider
+                config={{
+                  meetingId,
+                  micEnabled: micOn,
+                  webcamEnabled: webcamOn,
+                  name: participantName || "Guest",
+                  participantId: participantId || (urlToken ? undefined : getSessionParticipantId()),
+                  multiStream: true,
+                  customCameraVideoTrack: customVideoStream,
+                  customMicrophoneAudioTrack: customAudioStream,
+                }}
+                token={token}
+                reinitialiseMeetingOnConfigChange={true}
+                joinWithoutUserInteraction={true}
+              >
+                <MeetingContainer
+                  onMeetingLeave={() => {
+                    window.history.replaceState(null, "", "/thank-you");
+                    setLeaveScreenName(participantName);
+                    setToken("");
+                    setParticipantId("");
+                    setMeetingId("");
+                    setParticipantName("");
+                    setWebcamOn(false);
+                    setMicOn(false);
+                    setSpekerOn(false);
+                    setMeetingStarted(false);
+                    setIsMeetingLeft(true);
+                  }}
+                />
+              </MeetingProvider>
+            </MeetingErrorBoundary>
+          )}
+        </>
       )}
     </MeetingAppProvider>
   );
@@ -190,10 +198,14 @@ const App = () => {
 const AppRouter = () => {
   const path = window.location.pathname;
   if (path === "/create-meeting") return <CreateMeetingPage />;
-  // Standalone Thank-You route — shown after a meeting ends and on refresh of
-  // /thank-you, instead of falling back into the join flow.
   if (path === "/thank-you")
     return <LeaveScreen setIsMeetingLeft={() => { window.location.href = "/"; }} />;
+
+  // Only show the joining flow when both meetingId and mode are present in the URL.
+  // Any other visit to "/" (direct, bookmark, no params) shows the create-meeting page.
+  const sp = new URLSearchParams(window.location.search);
+  if (!sp.get("meetingId") || !sp.get("mode")) return <CreateMeetingPage />;
+
   return <App />;
 };
 
