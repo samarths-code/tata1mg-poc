@@ -198,10 +198,14 @@ const App = () => {
 const AppRouter = () => {
   const path = window.location.pathname;
   if (path === "/create-meeting") return <CreateMeetingPage />;
-  // Standalone Thank-You route — shown after a meeting ends and on refresh of
-  // /thank-you, instead of falling back into the join flow.
   if (path === "/thank-you")
     return <LeaveScreen setIsMeetingLeft={() => { window.location.href = "/"; }} />;
+
+  // Only show the joining flow when both meetingId and mode are present in the URL.
+  // Any other visit to "/" (direct, bookmark, no params) shows the create-meeting page.
+  const sp = new URLSearchParams(window.location.search);
+  if (!sp.get("meetingId") || !sp.get("mode")) return <CreateMeetingPage />;
+
   return <App />;
 };
 

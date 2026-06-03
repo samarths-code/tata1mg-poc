@@ -479,6 +479,7 @@ export function MeetingContainer({ onMeetingLeave }) {
                   <TopBar
                     bottomBarHeight={bottomBarHeight}
                     caseId={caseId}
+                    meetingTitle={new URLSearchParams(window.location.search).get("meetingTitle") || ""}
                     onToggleParticipantPanel={() => setShowParticipantPanel((s) => !s)}
                   />
 
@@ -506,9 +507,15 @@ export function MeetingContainer({ onMeetingLeave }) {
                       />
                     </div>
                     {showParticipantPanel && (
-                      <div className="shrink-0 h-full">
-                        <ParticipantDetailsPanel onClose={() => setShowParticipantPanel(false)} />
-                      </div>
+                      isMobile ? (
+                        <div className="fixed inset-0 z-50">
+                          <ParticipantDetailsPanel onClose={() => setShowParticipantPanel(false)} />
+                        </div>
+                      ) : (
+                        <div className="shrink-0 h-full">
+                          <ParticipantDetailsPanel onClose={() => setShowParticipantPanel(false)} />
+                        </div>
+                      )
                     )}
                     <CustomerVerificationOverlay />
                   </div>

@@ -337,7 +337,7 @@ export default function DoctorView() {
   return (
     <div className="flex flex-col h-full bg-[#1b1b1e] relative overflow-hidden">
       <DoctorTopBar
-        meetingTitle="Monthly Health Consultation & Wellness Checkup"
+        meetingTitle={new URLSearchParams(window.location.search).get("meetingTitle") || ""}
         caseId={caseId}
         currentStep={currentStep}
         completedSteps={completedSteps}

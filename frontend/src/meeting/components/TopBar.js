@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { useMeetingAppContext } from "../../context/MeetingAppContext";
 import { participantModes } from "../../utils/common";
+import useIsRecording from "../../hooks/useIsRecording";
+import useIsMobile from "../../hooks/useIsMobile";
 
 function getCurrentTime() {
   return new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -11,6 +13,8 @@ export function TopBar({ bottomBarHeight, caseId, meetingTitle, onToggleParticip
   const isDoctor =
     participantMode === participantModes.DOCTOR ||
     participantMode === participantModes.AGENT;
+  const isRecording = useIsRecording();
+  const isMobile = useIsMobile();
 
   const [time, setTime] = useState(getCurrentTime());
   useEffect(() => {
@@ -18,33 +22,35 @@ export function TopBar({ bottomBarHeight, caseId, meetingTitle, onToggleParticip
     return () => clearInterval(id);
   }, []);
 
+  const title = meetingTitle || (caseId ? `Case: ${caseId}` : "");
+
   return (
     <div
       className="flex items-center justify-between px-5 shrink-0 z-10"
       style={{ height: bottomBarHeight }}
     >
-      {/* Left: time + meeting title */}
-      <div className="flex items-center gap-2 text-white">
-        <span
-          className="text-base font-medium whitespace-nowrap"
-          style={{ textShadow: "1px 1px 3px rgba(0,0,0,0.4)" }}
-        >
+      {/* Left: time · title · REC badge */}
+      <div className="flex items-center gap-2 text-white min-w-0">
+        <span className="text-base font-medium whitespace-nowrap" style={{ textShadow: "1px 1px 3px rgba(0,0,0,0.4)" }}>
           {time}
         </span>
-        {(meetingTitle || caseId) && (
+        {title && (
           <>
             <div className="h-5 w-px bg-white/30 shrink-0" />
-            <span
-              className="text-base whitespace-nowrap overflow-hidden text-ellipsis max-w-xs"
-              style={{ textShadow: "1px 1px 3px rgba(0,0,0,0.4)" }}
-            >
-              {meetingTitle || (caseId ? `Case: ${caseId}` : "")}
+            <span className="text-base overflow-hidden text-ellipsis max-w-xs" style={{ textShadow: "1px 1px 3px rgba(0,0,0,0.4)" }}>
+              {title}
             </span>
           </>
         )}
+        {isRecording && (
+          <span className="flex items-center gap-1 px-[6px] py-[2px] rounded-[12px] shrink-0 bg-[rgba(153,27,27,0.1)] border border-[rgba(153,27,27,0.5)]">
+            <span className="w-2 h-2 rounded-full bg-[#fca5a5] animate-pulse shrink-0" />
+            <span className="text-[#fecaca] text-xs font-normal leading-4">REC</span>
+          </span>
+        )}
       </div>
 
-      {/* Right */}
+      {/* Right — Participant Details hidden on mobile (panel opens full-screen from elsewhere) */}
       <div className="flex items-center gap-2 shrink-0">
         {isDoctor ? (
           caseId && (
@@ -53,12 +59,14 @@ export function TopBar({ bottomBarHeight, caseId, meetingTitle, onToggleParticip
             </span>
           )
         ) : (
-          <button
-            onClick={onToggleParticipantPanel}
-            className="bg-[rgba(255,255,255,0.02)] border border-[rgba(255,255,255,0.05)] text-white text-sm font-medium px-3 py-1.5 rounded hover:bg-[rgba(255,255,255,0.06)] transition-colors"
-          >
-            Participant Details
-          </button>
+          !isMobile && (
+            <button
+              onClick={onToggleParticipantPanel}
+              className="bg-[rgba(255,255,255,0.02)] border border-[rgba(255,255,255,0.05)] text-white text-sm font-medium px-3 py-1.5 rounded hover:bg-[rgba(255,255,255,0.06)] transition-colors"
+            >
+              Participant Details
+            </button>
+          )
         )}
       </div>
     </div>
