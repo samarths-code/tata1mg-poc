@@ -465,7 +465,7 @@ export function MeetingContainer({ onMeetingLeave }) {
 
   return (
     <div className="fixed inset-0">
-      <div ref={containerRef} className="h-full w-full flex flex-col bg-[#1b1b1e] relative">
+      <div ref={containerRef} className={`h-full w-full flex flex-col relative ${localParticipantAllowedJoin ? "bg-[#1b1b1e]" : "bg-transparent"}`}>
         {localParticipantAllowedJoin ? (
             <>
               <ImageUploadListner />

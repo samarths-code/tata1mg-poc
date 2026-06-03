@@ -121,69 +121,75 @@ const App = () => {
       participantMode={participantMode}
       caseId={caseId}
     >
-      {isMeetingStarted ? (
-        <MeetingErrorBoundary>
-          <MeetingProvider
-            config={{
-              meetingId,
-              micEnabled: micOn,
-              webcamEnabled: webcamOn,
-              name: participantName || "Guest",
-              participantId: participantId || (urlToken ? undefined : getSessionParticipantId()),
-              multiStream: true,
-              customCameraVideoTrack: customVideoStream,
-              customMicrophoneAudioTrack: customAudioStream,
-            }}
-            token={token}
-            reinitialiseMeetingOnConfigChange={true}
-            joinWithoutUserInteraction={true}
-          >
-            <MeetingContainer
-              onMeetingLeave={() => {
-                // Replace the tokened meeting URL with /thank-you so the client
-                // can't Back/refresh into the ended session (removes it from history).
-                window.history.replaceState(null, "", "/thank-you");
-                setLeaveScreenName(participantName);
-                setToken("");
-                setParticipantId("");
-                setMeetingId("");
-                setParticipantName("");
-                setWebcamOn(false);
-                setMicOn(false);
-                setSpekerOn(false);
-                setMeetingStarted(false);
-                setIsMeetingLeft(true);
-              }}
-            />
-          </MeetingProvider>
-        </MeetingErrorBoundary>
-      ) : isMeetingLeft ? (
+      {isMeetingLeft ? (
         <LeaveScreen participantName={leaveScreenName} />
       ) : (
-        <JoiningScreen
-          participantName={participantName}
-          setParticipantName={setParticipantName}
-          setMeetingId={setMeetingId}
-          setToken={setToken}
-          micEnabled={micOn}
-          webcamEnabled={webcamOn}
-          speakerEnabled={speakerOn}
-          onClickStartMeeting={handleStartMeeting}
-          participantMode={participantMode}
-          customAudioStream={customAudioStream}
-          setCustomAudioStream={setCustomAudioStream}
-          customVideoStream={customVideoStream}
-          setCustomVideoStream={setCustomVideoStream}
-          micOn={micOn}
-          setMicOn={setMicOn}
-          webcamOn={webcamOn}
-          setSpekerOn={setSpekerOn}
-          setWebcamOn={setWebcamOn}
-          isAutoJoin={isAutoJoin}
-          tokenReady={!!token}
-          credentialError={credentialError}
-          meetingTitle={urlMeetingTitle}
-        />
+        <>
+          {/* JoiningScreen stays mounted so WaitingToJoinScreen's backdrop-blur
+              has the full white page to blur — wrapped non-interactive when meeting starts */}
+          <div className={isMeetingStarted ? "fixed inset-0 pointer-events-none overflow-hidden" : ""}>
+            <JoiningScreen
+              participantName={participantName}
+              setParticipantName={setParticipantName}
+              setMeetingId={setMeetingId}
+              setToken={setToken}
+              micEnabled={micOn}
+              webcamEnabled={webcamOn}
+              speakerEnabled={speakerOn}
+              onClickStartMeeting={handleStartMeeting}
+              participantMode={participantMode}
+              customAudioStream={customAudioStream}
+              setCustomAudioStream={setCustomAudioStream}
+              customVideoStream={customVideoStream}
+              setCustomVideoStream={setCustomVideoStream}
+              micOn={micOn}
+              setMicOn={setMicOn}
+              webcamOn={webcamOn}
+              setSpekerOn={setSpekerOn}
+              setWebcamOn={setWebcamOn}
+              isAutoJoin={isAutoJoin}
+              tokenReady={!!token}
+              credentialError={credentialError}
+              meetingTitle={urlMeetingTitle}
+            />
+          </div>
+
+          {isMeetingStarted && (
+            <MeetingErrorBoundary>
+              <MeetingProvider
+                config={{
+                  meetingId,
+                  micEnabled: micOn,
+                  webcamEnabled: webcamOn,
+                  name: participantName || "Guest",
+                  participantId: participantId || (urlToken ? undefined : getSessionParticipantId()),
+                  multiStream: true,
+                  customCameraVideoTrack: customVideoStream,
+                  customMicrophoneAudioTrack: customAudioStream,
+                }}
+                token={token}
+                reinitialiseMeetingOnConfigChange={true}
+                joinWithoutUserInteraction={true}
+              >
+                <MeetingContainer
+                  onMeetingLeave={() => {
+                    window.history.replaceState(null, "", "/thank-you");
+                    setLeaveScreenName(participantName);
+                    setToken("");
+                    setParticipantId("");
+                    setMeetingId("");
+                    setParticipantName("");
+                    setWebcamOn(false);
+                    setMicOn(false);
+                    setSpekerOn(false);
+                    setMeetingStarted(false);
+                    setIsMeetingLeft(true);
+                  }}
+                />
+              </MeetingProvider>
+            </MeetingErrorBoundary>
+          )}
+        </>
       )}
     </MeetingAppProvider>
   );
