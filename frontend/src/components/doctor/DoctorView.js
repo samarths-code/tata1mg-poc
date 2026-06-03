@@ -350,8 +350,11 @@ export default function DoctorView() {
         {/* Video stage — fills remaining flex space */}
         <div className="relative flex-1">
 
-          {/* Patient video — edge-to-edge, responsive to viewport */}
-          <div className="absolute inset-0 rounded-[24px] overflow-hidden bg-[#1b1b1e]">
+          {/* Patient video — stops before the floating bottom bar */}
+          <div
+            className="absolute inset-x-0 top-0 rounded-[24px] overflow-hidden bg-[#1b1b1e]"
+            style={{ bottom: bottomBarHeight }}
+          >
             {customerId ? (
               <MemoizedParticipant participantId={customerId} showImageCapture={false} showResolution={true} />
             ) : (

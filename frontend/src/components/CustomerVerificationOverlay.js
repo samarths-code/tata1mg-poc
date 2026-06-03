@@ -50,7 +50,7 @@ export function CustomerVerificationOverlay() {
     setPhase("loading");
     timerRef.current = setTimeout(() => {
       setPhase(step === 2 ? "document" : "face");
-    }, 2500);
+    }, 800);
 
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
@@ -127,7 +127,10 @@ export function CustomerVerificationOverlay() {
 
       {/* Document frame — landscape Aadhaar-card shape, responsive */}
       {phase === "document" && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-4 pointer-events-none">
+        <div
+          key="document-guide"
+          className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-5 pb-16 pointer-events-none"
+        >
           <p
             className="text-white text-base font-medium text-center leading-snug"
             style={{ textShadow: "1px 1px 3px rgba(0,0,0,0.4)" }}
@@ -143,7 +146,10 @@ export function CustomerVerificationOverlay() {
 
       {/* Face frame — portrait crop, responsive */}
       {phase === "face" && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-8 pointer-events-none">
+        <div
+          key="face-guide"
+          className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-8 pb-16 pointer-events-none"
+        >
           <div
             className="border-[3px] border-dashed border-[#4bd559] rounded-[24px] shrink-0 w-full"
             style={{ maxWidth: 320, aspectRatio: "3 / 4" }}
