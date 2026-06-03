@@ -170,11 +170,42 @@ export function ConnectionDetailsPanel({ onClose, deviceInfo, geoData, geoFailed
   );
 }
 
+/* ───────────────────────── Hoverable photo with Retake/Crop actions ──────── */
+
+function HoverableImage({ src, alt, className, onRetake, onCrop }) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <div
+      className={`relative overflow-hidden rounded-lg border border-[#303033] cursor-pointer ${className}`}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <img src={src} alt={alt} className="w-full object-cover" />
+      {hovered && (
+        <div className="absolute inset-0 bg-black/80 flex items-center justify-center gap-2">
+          <button
+            onClick={onRetake}
+            className="bg-[rgba(255,255,255,0.02)] border border-[rgba(255,255,255,0.05)] px-2 py-1 rounded-[6px] text-xs font-medium text-white hover:bg-[rgba(255,255,255,0.1)] transition-colors"
+          >
+            Retake
+          </button>
+          <button
+            onClick={onCrop}
+            className="bg-[rgba(255,255,255,0.02)] border border-[rgba(255,255,255,0.05)] px-2 py-1 rounded-[6px] text-xs font-medium text-white hover:bg-[rgba(255,255,255,0.1)] transition-colors"
+          >
+            Crop
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ───────────────────────── Identity Verification ───────────────────────── */
 
 export function IdentityVerificationPanel({
   onClose, frontImage, backImage, ocrResult, captureDevice, verifiedAt,
-  onRetake, onApprove,
+  onRetake, onApprove, onCropFront, onCropBack,
 }) {
   const ocrOk = ocrResult && !ocrResult.error && !ocrResult.loading;
   const f = ocrResult?.fields || {};
@@ -217,8 +248,20 @@ export function IdentityVerificationPanel({
     >
       <Card title="Verification Summary">
         <div className="space-y-2">
-          {frontImage && <img src={frontImage} alt="Document front" className="w-full rounded-lg object-cover max-h-32 border border-[#303033]" />}
-          {backImage && <img src={backImage} alt="Document back" className="w-full rounded-lg object-cover max-h-32 border border-[#303033]" />}
+          {frontImage && (
+            <HoverableImage
+              src={frontImage} alt="Document front" className="max-h-32"
+              onRetake={onRetake}
+              onCrop={() => onCropFront?.(frontImage)}
+            />
+          )}
+          {backImage && (
+            <HoverableImage
+              src={backImage} alt="Document back" className="max-h-32"
+              onRetake={onRetake}
+              onCrop={() => onCropBack?.(backImage)}
+            />
+          )}
           {!frontImage && !backImage && <p className="text-[#77777a] text-xs italic">No document captured yet</p>}
         </div>
         <div className="mt-3">
@@ -260,7 +303,7 @@ export function IdentityVerificationPanel({
 
 export function FaceVerificationPanel({
   onClose, photo, faceMatchResult, spoofResult, captureDevice, verifiedAt,
-  patientName, consultationId, onRetake, onApprove,
+  patientName, consultationId, onRetake, onApprove, onCropPhoto,
 }) {
   const matched = faceMatchResult && !faceMatchResult.loading && !faceMatchResult.error &&
     (faceMatchResult.matched ?? faceMatchResult.match);
@@ -302,7 +345,11 @@ export function FaceVerificationPanel({
     >
       <Card title="Verification Summary">
         {photo ? (
-          <img src={photo} alt="Captured" className="w-full rounded-lg object-cover max-h-40 border border-[#303033]" />
+          <HoverableImage
+            src={photo} alt="Captured" className="max-h-40"
+            onRetake={onRetake}
+            onCrop={() => onCropPhoto?.(photo)}
+          />
         ) : (
           <p className="text-[#77777a] text-xs italic">No photo captured yet</p>
         )}

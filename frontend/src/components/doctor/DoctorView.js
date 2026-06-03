@@ -51,6 +51,7 @@ export default function DoctorView() {
   const [capture, setCapture] = useState({ active: false, variant: "document-front" });
   const [captureReady, setCaptureReady] = useState(false);
   const captureTargetRef = useRef(null); // 'aadhaarFront' | 'aadhaarBack' | 'customerPhoto' | 'reference'
+  const cropFromGalleryRef = useRef(false); // true when re-cropping an already-captured image
   const imageChunksRef = useRef({});
 
   // ── Captured images + AI results ───────────────────────────────────────────
@@ -234,6 +235,13 @@ export default function DoctorView() {
     if (target === "aadhaarBack") setDrawer({ open: true, type: "identity" });
   }
 
+  function openCropFromGallery(imageSrc, target) {
+    cropFromGalleryRef.current = true;
+    cropTargetRef.current = target;
+    setCropImage(imageSrc);
+    setDrawer({ open: false, type: null });
+  }
+
   async function applyAadhaarMask(dataUrl) {
     try {
       const result = await maskAadhaarImage({ imageBase64: dataUrl });
@@ -255,8 +263,13 @@ export default function DoctorView() {
       setDocFront(masked);
       runOCRCheck(masked);
       setIdentityTime(t);
-      // Chain into back-side capture (Cancel skips straight to the drawer).
-      startCapture("document-back", "aadhaarBack");
+      if (cropFromGalleryRef.current) {
+        cropFromGalleryRef.current = false;
+        setDrawer({ open: true, type: "identity" });
+      } else {
+        // Chain into back-side capture (Cancel skips straight to the drawer).
+        startCapture("document-back", "aadhaarBack");
+      }
     } else if (target === "aadhaarBack") {
       const masked = await applyAadhaarMask(cropped);
       setDocBack(masked);
@@ -410,8 +423,10 @@ export default function DoctorView() {
                 captureDevice={captureDeviceLabel}
                 verifiedAt={identityTime}
                 onClose={() => setDrawer({ open: false, type: null })}
-                onRetake={() => startCapture("document-front", "aadhaarFront")}
+                onRetake={() => { cropFromGalleryRef.current = true; startCapture("document-front", "aadhaarFront"); }}
                 onApprove={() => approveStep(2)}
+                onCropFront={(img) => openCropFromGallery(img, "aadhaarFront")}
+                onCropBack={(img) => openCropFromGallery(img, "aadhaarBack")}
               />
             )}
             {drawer.type === "face" && (
@@ -426,6 +441,7 @@ export default function DoctorView() {
                 onClose={() => setDrawer({ open: false, type: null })}
                 onRetake={() => startCapture("face", "customerPhoto")}
                 onApprove={() => approveStep(3)}
+                onCropPhoto={(img) => openCropFromGallery(img, "customerPhoto")}
               />
             )}
           </div>
@@ -447,12 +463,25 @@ export default function DoctorView() {
         imageSrc={cropImage}
         title={cropTargetRef.current === "customerPhoto" ? "Crop Patient Photo" : "Crop Document"}
         onClose={() => {
-          // Discard the capture; if it was the back side, drop into the drawer.
           const target = cropTargetRef.current;
+          const fromGallery = cropFromGalleryRef.current;
+          cropFromGalleryRef.current = false;
           setCropImage(null);
-          if (target === "aadhaarBack") setDrawer({ open: true, type: "identity" });
+          // Re-open the appropriate drawer when closing without saving
+          if (target === "aadhaarBack" || fromGallery) {
+            const type = target === "customerPhoto" ? "face" : "identity";
+            setDrawer({ open: true, type });
+          }
         }}
         onSave={handleCropSave}
+        onRetake={() => {
+          cropFromGalleryRef.current = false;
+          const target = cropTargetRef.current;
+          setCropImage(null);
+          if (target === "aadhaarFront") startCapture("document-front", "aadhaarFront");
+          else if (target === "aadhaarBack") startCapture("document-back", "aadhaarBack");
+          else if (target === "customerPhoto") startCapture("face", "customerPhoto");
+        }}
       />
     </div>
   );

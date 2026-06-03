@@ -23,7 +23,7 @@ function RotateRightIcon() {
   );
 }
 
-export default function PhotoEditModal({ open, onClose, imageSrc, onSave, title = "Edit Photo" }) {
+export default function PhotoEditModal({ open, onClose, imageSrc, onSave, onRetake, title = "Edit Photo" }) {
   const [cropper, setCropper] = useState(null);
 
   const rotate = (deg) => {
@@ -104,6 +104,17 @@ export default function PhotoEditModal({ open, onClose, imageSrc, onSave, title 
               <div className="flex items-center justify-between px-4 py-3 shrink-0 border-t gap-3"
                 style={{ background: "#232830", borderColor: "#232830" }}>
                 <div className="flex gap-2">
+                  {onRetake && (
+                    <button
+                      onClick={() => { onClose(); onRetake(); }}
+                      className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg text-white transition-colors"
+                      style={{ background: "#1A1C22" }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = "#404B53")}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = "#1A1C22")}
+                    >
+                      Retake
+                    </button>
+                  )}
                   <button
                     onClick={() => rotate(-90)}
                     title="Rotate left 90°"
