@@ -301,6 +301,7 @@ export function MeetingContainer({ onMeetingLeave }) {
     if (!localParticipantAllowedJoin || !isCustomer) return;
 
     const collectAndPublish = async () => {
+      // ── Phase 1: publish device/mic/camera info immediately (fast) ───────────
       let cameras = [], microphones = [], audioOutputs = [];
       let selectedCameraLabel = null, selectedMicLabel = null;
       try {
@@ -317,9 +318,24 @@ export function MeetingContainer({ onMeetingLeave }) {
         selectedMicLabel    = selMic?.label || microphones[0] || null;
       } catch (_) {}
 
+      try {
+        publishDeviceInfo("DEVICE_INFO", { persist: true }, {
+          userAgent: navigator.userAgent,
+          selectedCameraLabel,
+          selectedMicLabel,
+          connection: navigator.connection?.effectiveType ?? "unknown",
+          cameras,
+          microphones,
+          audioOutputs,
+        });
+      } catch (err) {
+        console.error("Error publishing device info (phase 1):", err);
+      }
+
+      // ── Phase 2: enrich with network stats + geo (slow, runs in background) ──
       let downloadSpeed, uploadSpeed;
       try {
-        const stats = await getNetworkStats({ timeoutDuration: 15000 });
+        const stats = await getNetworkStats({ timeoutDuration: 8000 });
         downloadSpeed = stats.downloadSpeed;
         uploadSpeed = stats.uploadSpeed;
       } catch (_) {}
@@ -345,7 +361,7 @@ export function MeetingContainer({ onMeetingLeave }) {
           timezone: ipGeo?.timezone,
         });
       } catch (err) {
-        console.error("Error publishing device info:", err);
+        console.error("Error publishing device info (phase 2):", err);
       }
     };
 
