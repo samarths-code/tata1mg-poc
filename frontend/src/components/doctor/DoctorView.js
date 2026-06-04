@@ -321,7 +321,6 @@ export default function DoctorView() {
 
   function approveStep(step) {
     setCompletedSteps((s) => (s.includes(step) ? s : [...s, step]));
-    toast.success(`Step ${step} verified.`, { autoClose: 1500 });
     const next = step + 1;
     if (next <= 3) {
       // Navigate directly — avoids stale-state: setCompletedSteps is async so
@@ -379,7 +378,7 @@ export default function DoctorView() {
               <MemoizedParticipant
                 participantId={customerId}
                 showImageCapture={false}
-                showResolution={!capture.active}
+                showResolution={!isMobile || !capture.active}
               />
             ) : (
               <div className="w-full h-full flex flex-col items-center justify-center gap-4">
@@ -404,8 +403,8 @@ export default function DoctorView() {
             )}
           </div>
 
-          {/* Doctor self-view PiP — hidden during capture overlay (Figma: patient view fills full card) */}
-          {!capture.active && <div
+          {/* Doctor self-view PiP — hidden during capture on MOBILE only; always visible on desktop */}
+          {(!capture.active || !isMobile) && <div
             className="absolute overflow-hidden border border-[#ff6f61] z-10 bg-[#303033]
               w-[130px] h-[170px] right-3 rounded-[16px]
               md:w-[275px] md:h-[150px] md:right-8 md:rounded-[24px]"

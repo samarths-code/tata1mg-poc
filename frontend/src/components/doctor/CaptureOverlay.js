@@ -72,38 +72,39 @@ export default function CaptureOverlay({
         )}
       </div>
 
-      {/* Control row — Figma: Cancel + Capture on row 1, camera picker on row 2 */}
-      <div className="absolute bottom-5 left-1/2 -translate-x-1/2 w-full px-4 flex flex-col items-center gap-2 pointer-events-auto">
-        {/* Row 1: Cancel + Capture */}
-        <div className="flex items-center gap-3">
-          <button
-            onClick={onCancel}
-            className="px-5 py-2.5 rounded-lg text-sm font-medium text-white bg-[rgba(255,255,255,0.15)] hover:bg-[rgba(255,255,255,0.2)] transition-colors"
-          >
-            Cancel
-          </button>
+      {/* Control row:
+            Mobile (Figma 395-11184): row1 = Cancel + Capture, row2 = Camera (178px)
+            Desktop: all three in one row (buttons larger) */}
+      <div className="absolute bottom-5 left-1/2 -translate-x-1/2 flex flex-wrap items-center justify-center gap-[10px] pointer-events-auto px-4">
+        {/* Cancel */}
+        <button
+          onClick={onCancel}
+          className="px-3 py-[6px] md:px-5 md:py-2.5 rounded text-sm font-medium text-white transition-colors"
+          style={{ background: "rgba(255,255,255,0.15)" }}
+        >
+          Cancel
+        </button>
 
-          <button
-            onClick={onCapture}
-            disabled={!ready || capturing}
-            className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold text-white transition-colors ${
-              ready && !capturing
-                ? "bg-[#ff6f61] hover:bg-[#e85e51]"
-                : "bg-[#ff6f61]/50 cursor-not-allowed"
-            }`}
-          >
-            <CameraIcon className="w-4 h-4" />
-            {capturing ? "Capturing…" : captureLabel}
-          </button>
-        </div>
+        {/* Capture */}
+        <button
+          onClick={onCapture}
+          disabled={!ready || capturing}
+          className={`flex items-center gap-2 px-3 py-[6px] md:px-5 md:py-2.5 rounded text-sm font-semibold text-white transition-colors ${
+            ready && !capturing ? "bg-[#ff6f61]" : "bg-[#ff6f61]/50 cursor-not-allowed"
+          }`}
+        >
+          <CameraIcon className="w-4 h-4" />
+          {capturing ? "Capturing…" : captureLabel}
+        </button>
 
-        {/* Row 2: Camera selector (full-width) */}
+        {/* Camera selector — 178px on mobile (Figma), auto on desktop */}
         {cameras.length > 0 && (
-          <div className="relative w-[178px]">
+          <div className="relative w-[178px] md:w-auto">
             <select
               value={selectedCameraId || ""}
               onChange={(e) => onSelectCamera?.(e.target.value)}
-              className="appearance-none w-full px-4 py-2.5 pr-9 rounded-lg text-sm font-medium text-white bg-[rgba(255,255,255,0.15)] border border-[rgba(0,0,0,0.05)] focus:outline-none cursor-pointer truncate"
+              className="appearance-none w-full px-3 py-[6px] pr-8 md:px-4 md:py-2.5 md:pr-9 rounded text-sm font-medium text-white focus:outline-none cursor-pointer truncate"
+              style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(0,0,0,0.05)" }}
             >
               {cameras.map((cam, i) => (
                 <option key={cam.deviceId || i} value={cam.deviceId}>
@@ -112,7 +113,7 @@ export default function CaptureOverlay({
               ))}
             </select>
             <svg
-              className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white pointer-events-none"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-white pointer-events-none"
               viewBox="0 0 20 20" fill="currentColor"
             >
               <path d="M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" />

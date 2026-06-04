@@ -20,6 +20,7 @@ import useIsMobile from "../../hooks/useIsMobile";
 import PermissionSetup from "../PermissionSetup";
 import { participantModes } from "../../utils/common";
 import Tata1mgLogo from "../Tata1mgLogo";
+import DeviceEnableModal from "../DeviceEnableModal";
 import { ShieldCheckIcon, ChevronRightIcon } from "@heroicons/react/24/outline";
 
 export function JoiningScreen({
@@ -74,6 +75,7 @@ export function JoiningScreen({
   const [audioTrack, setAudioTrack] = useState(null);
   const [videoTrack, setVideoTrack] = useState(null);
   const [dlgDevices, setDlgDevices] = useState(false);
+  const [showDeviceModal, setShowDeviceModal] = useState(null); // null | 'mic' | 'camera' | 'speaker'
   const [didDeviceChange, setDidDeviceChange] = useState(false);
   const [testSpeaker, setTestSpeaker] = useState(false);
   const [micVolume, setMicVolume] = useState(0);
@@ -334,36 +336,64 @@ export function JoiningScreen({
         </div>
       )}
       <div className="absolute bottom-[10px] left-1/2 -translate-x-1/2 flex items-center gap-2.5">
-        {isMicrophonePermissionAllowed ? (
-          <button onClick={_toggleMic}
-            className="bg-[rgba(0,0,0,0.5)] border border-white/80 rounded flex items-center gap-1 h-8 pl-1 pr-2 py-1">
+        {/* Mic button — shows info badge when permission denied */}
+        <div className="relative">
+          <button
+            onClick={() => isMicrophonePermissionAllowed ? _toggleMic() : setShowDeviceModal('mic')}
+            className="bg-[rgba(0,0,0,0.5)] border border-white/80 rounded flex items-center gap-1 h-8 pl-1 pr-2 py-1"
+          >
             <div className="flex items-center justify-center p-1.5 rounded-lg">
-              {micOn
+              {micOn && isMicrophonePermissionAllowed
                 ? <MicOnIcon fillcolor="white" style={{ width: 20, height: 20 }} />
                 : <MicOffIcon fillcolor="white" style={{ width: 20, height: 20 }} />}
             </div>
           </button>
-        ) : <MicPermissionDenied />}
-        {isCameraPermissionAllowed ? (
-          <button onClick={_toggleWebcam}
-            className="bg-[rgba(0,0,0,0.5)] border border-white/80 rounded flex items-center h-8 p-1">
+          {!isMicrophonePermissionAllowed && (
+            <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-[#dc2626] flex items-center justify-center text-white text-[7px] font-bold leading-none">!</span>
+          )}
+        </div>
+
+        {/* Camera button — shows info badge when permission denied */}
+        <div className="relative">
+          <button
+            onClick={() => isCameraPermissionAllowed ? _toggleWebcam() : setShowDeviceModal('camera')}
+            className="bg-[rgba(0,0,0,0.5)] border border-white/80 rounded flex items-center h-8 p-1"
+          >
             <div className="flex items-center justify-center p-1.5 rounded-lg">
-              {webcamOn
+              {webcamOn && isCameraPermissionAllowed
                 ? <WebcamOnIcon fillcolor="white" style={{ width: 20, height: 20 }} />
                 : <WebcamOffIcon fillcolor="white" style={{ width: 20, height: 20 }} />}
             </div>
           </button>
-        ) : <CameraPermissionDenied />}
-        <button onClick={() => setTestSpeaker((s) => !s)}
-          className="bg-[rgba(0,0,0,0.5)] border border-white/80 rounded flex items-center h-8 p-1">
-          <div className="flex items-center justify-center p-1.5 rounded-lg">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-              <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
-              <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-            </svg>
-          </div>
-        </button>
+          {!isCameraPermissionAllowed && (
+            <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-[#dc2626] flex items-center justify-center text-white text-[7px] font-bold leading-none">!</span>
+          )}
+        </div>
+
+        {/* Speaker button — shows info badge when speaker off; opens enable modal */}
+        <div className="relative">
+          <button
+            onClick={() => testSpeaker ? setTestSpeaker(false) : setShowDeviceModal('speaker')}
+            className="bg-[rgba(0,0,0,0.5)] border border-white/80 rounded flex items-center h-8 p-1"
+          >
+            <div className="flex items-center justify-center p-1.5 rounded-lg">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                {testSpeaker ? (
+                  <>
+                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+                    <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+                  </>
+                ) : (
+                  <line x1="23" y1="9" x2="17" y2="15" />
+                )}
+              </svg>
+            </div>
+          </button>
+          {!testSpeaker && (
+            <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-[#dc2626] flex items-center justify-center text-white text-[7px] font-bold leading-none">!</span>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -549,6 +579,22 @@ export function JoiningScreen({
         onSuccess={() => setDlgDevices(false)}
         title="Mic or webcam not available"
         subTitle="Please connect a mic and webcam to speak and share your video in the meeting. You can also join without them."
+      />
+
+      {/* Device enable modal — shown when clicking a blocked device button */}
+      <DeviceEnableModal
+        device={showDeviceModal}
+        onClose={() => setShowDeviceModal(null)}
+        onEnable={() => {
+          if (showDeviceModal === 'mic') {
+            requestAudioVideoPermission(Constants.permission.AUDIO);
+          } else if (showDeviceModal === 'camera') {
+            requestAudioVideoPermission(Constants.permission.VIDEO);
+          } else if (showDeviceModal === 'speaker') {
+            setTestSpeaker(true);
+            setSpekerOn(true);
+          }
+        }}
       />
     </>
   );
