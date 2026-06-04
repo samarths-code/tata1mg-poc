@@ -13,6 +13,13 @@ function PipLayout({ participantIds }) {
   const isTab = useIsTab();
   const isSmall = isMobile || isTab;
 
+  const isDoctor =
+    participantMode === participantModes.DOCTOR ||
+    participantMode === participantModes.AGENT;
+
+  // Hide SD/HD controls for patient on mobile — Figma has no resolution picker in patient view
+  const showMainResolution = isDoctor || !isMobile;
+
   const mainId = participantIds.length > 1
     ? participantIds[switchParticipants ? 0 : 1]
     : participantIds[0];
@@ -32,8 +39,8 @@ function PipLayout({ participantIds }) {
           <MemoizedParticipant
             participantId={mainId}
             key={mainId}
-            showImageCapture={participantMode === participantModes.DOCTOR}
-            showResolution={true}
+            showImageCapture={isDoctor}
+            showResolution={showMainResolution}
           />
         )}
       </div>
@@ -41,10 +48,10 @@ function PipLayout({ participantIds }) {
       {/* PiP — local user, bottom-right, orange border */}
       {pipId && pipId !== "NULL" && (
         <div
-          className={`absolute z-10 border border-[#ff6f61] rounded-[24px] overflow-hidden cursor-pointer ${
+          className={`absolute z-10 border border-[#ff6f61] overflow-hidden cursor-pointer ${
             isSmall
-              ? "w-[160px] h-[100px] bottom-3 right-3"
-              : "w-[275px] h-[150px] bottom-4 right-4"
+              ? "w-[130px] h-[170px] bottom-3 right-3 rounded-[16px]"
+              : "w-[275px] h-[150px] bottom-4 right-4 rounded-[24px]"
           }`}
           onClick={() => setSwitchParticipants((s) => !s)}
         >

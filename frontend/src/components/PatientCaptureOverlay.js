@@ -15,7 +15,7 @@ export default function PatientCaptureOverlay({ variant = "document" }) {
     : "Hold the document steady inside the frame";
 
   const frameStyle = isFace
-    ? { width: "min(72vw, 320px)", aspectRatio: "3 / 4" }
+    ? { width: "min(72vw, 300px)", aspectRatio: "3 / 4" }
     : { width: "min(90vw, 480px)", aspectRatio: "16 / 10" };
 
   return (
@@ -30,7 +30,7 @@ export default function PatientCaptureOverlay({ variant = "document" }) {
 
       <div
         className="relative rounded-2xl"
-        style={{ ...frameStyle, border: "3px dashed #86efac" }}
+        style={{ ...frameStyle, border: "3px dashed #4bd559" }}
       />
 
       {isFace && (

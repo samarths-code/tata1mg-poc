@@ -11,6 +11,7 @@ import {
   CheckIcon,
   ChevronUpIcon,
   EllipsisHorizontalIcon,
+  EllipsisVerticalIcon,
   ClipboardDocumentListIcon,
   ComputerDesktopIcon,
 } from "@heroicons/react/24/outline";
@@ -86,7 +87,7 @@ function DevicePanel({ devices, selectedId, label, onSelect }) {
   );
 }
 
-const MicBTN = () => {
+export const MicBTN = () => {
   const mMeeting = useMeeting();
   const { selectedMicrophone, setSelectedMicroPhone, isMicrophonePermissionAllowed } = useMeetingAppContext();
   const { getMicrophones } = useMediaDevice();
@@ -149,7 +150,7 @@ const MicBTN = () => {
   );
 };
 
-const OutputMicBTN = () => {
+export const OutputMicBTN = () => {
   const { muteSpeaker, setMuteSpeaker, setSelectedSpeaker, selectedSpeaker, isMicrophonePermissionAllowed } = useMeetingAppContext();
   const { getPlaybackDevices } = useMediaDevice();
   const [outputmics, setOutputMics] = useState([]);
@@ -212,7 +213,7 @@ const OutputMicBTN = () => {
   );
 };
 
-const WebCamBTN = () => {
+export const WebCamBTN = () => {
   const mMeeting = useMeeting();
   const { getCameras } = useMediaDevice();
   const { selectedWebcam, setSelectedWebcam, isCameraPermissionAllowed } = useMeetingAppContext();
@@ -295,7 +296,7 @@ const WebCamBTN = () => {
 };
 
 // Call duration timer
-function useCallTimer() {
+export function useCallTimer() {
   const [seconds, setSeconds] = useState(0);
   useEffect(() => {
     const id = setInterval(() => setSeconds((s) => s + 1), 1000);
@@ -305,6 +306,12 @@ function useCallTimer() {
   const ss = String(seconds % 60).padStart(2, "0");
   return `${mm}:${ss}`;
 }
+
+const STEP_LABELS = {
+  1: "Step 1: Request Location Access",
+  2: "Step 2: Identity Verification",
+  3: "Step 3: Document Capture",
+};
 
 export function BottomBar({ bottomBarHeight, onShowConnectionDetails, completedSteps = [] }) {
   const { sideBarMode, setSideBarMode, participantMode } = useMeetingAppContext();
@@ -318,6 +325,17 @@ export function BottomBar({ bottomBarHeight, onShowConnectionDetails, completedS
   const [open, setOpen] = useState(false);
   const [showLeaveModal, setShowLeaveModal] = useState(false);
   const timer = useCallTimer();
+
+  const [currentStep, setCurrentStep] = useState(null);
+  usePubSub("VERIFICATION_STEP", {
+    onMessageReceived: ({ payload }) => {
+      if (payload?.step != null) setCurrentStep(payload.step);
+    },
+    onOldMessagesReceived: (messages) => {
+      const last = messages[messages.length - 1];
+      if (last?.payload?.step != null) setCurrentStep(last.payload.step);
+    },
+  });
 
   // Ref so LeaveBTN always reads the latest completedSteps regardless of closure staleness
   const completedStepsRef = useRef(completedSteps);
@@ -457,27 +475,26 @@ export function BottomBar({ bottomBarHeight, onShowConnectionDetails, completedS
     "MEETING_ID_COPY",
   ];
 
-  // Mobile / tablet layout — keep existing pattern
+  // Mobile / tablet layout — Figma floating pill: black bg, rounded-t-[24px]
   if (isMobile || isTab) {
     return (
       <div
-        className="flex items-center justify-center bg-[#1b1b1e] border-t border-[rgba(255,255,255,0.08)]"
-        style={{ height: bottomBarHeight }}
+        style={{
+          backgroundColor: "#000000",
+          borderTop: "1px solid rgba(255,255,255,0.2)",
+          borderLeft: "1px solid rgba(255,255,255,0.2)",
+          borderRight: "1px solid rgba(255,255,255,0.2)",
+          borderRadius: "24px 24px 0 0",
+        }}
       >
-        <LeaveBTN />
-        <div className="flex items-center gap-2 mx-4">
+        {/* Controls row: all items centered as one group */}
+        <div className="flex items-center justify-center gap-2 px-4 py-5">
+          <span className="text-[#919093] text-sm font-normal w-[46px] text-center tabular-nums shrink-0">{timer}</span>
           <MicBTN />
+          <OutputMicBTN />
           <WebCamBTN />
-          {supportsOutputDevice && <OutputMicBTN />}
+          <LeaveBTN />
         </div>
-        {mobileFeatures.length > 0 && (
-          <button
-            className="flex items-center justify-center p-2 rounded-lg bg-[rgba(255,255,255,0.05)]"
-            onClick={() => setOpen(true)}
-          >
-            <EllipsisHorizontalIcon className="h-5 w-5 text-white" />
-          </button>
-        )}
         <Transition appear show={Boolean(open)} as={Fragment}>
           <Dialog as="div" className="relative" style={{ zIndex: 9999 }} onClose={() => setOpen(false)}>
             <Transition.Child as={Fragment} enter="ease-out duration-300" enterFrom="opacity-0" enterTo="opacity-100" leave="ease-in duration-200" leaveFrom="opacity-100" leaveTo="opacity-0">

@@ -57,14 +57,17 @@ export default function PhotoEditModal({ open, onClose, imageSrc, onSave, onReta
           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm" />
         </Transition.Child>
 
-        <div className="fixed inset-0 flex items-center justify-center p-4">
+        {/* p-3 on mobile so panel stays edge-friendly but centered; p-4 on sm+ */}
+        <div className="fixed inset-0 flex items-center justify-center p-3 sm:p-4">
           <Transition.Child
             as={Fragment}
             enter="ease-out duration-300" enterFrom="opacity-0 scale-95" enterTo="opacity-100 scale-100"
             leave="ease-in duration-200" leaveFrom="opacity-100 scale-100" leaveTo="opacity-0 scale-95"
           >
-            <Dialog.Panel className="w-full max-w-2xl flex flex-col rounded-2xl overflow-hidden shadow-2xl"
-              style={{ maxHeight: "calc(100vh - 48px)", background: "#1A1C22" }}>
+            <Dialog.Panel
+              className="w-full sm:max-w-2xl flex flex-col overflow-hidden shadow-2xl rounded-2xl"
+              style={{ maxHeight: "calc(100dvh - 24px)", background: "#1A1C22" }}
+            >
 
               {/* Header */}
               <div className="flex items-center justify-between px-5 py-3.5 border-b shrink-0"
@@ -72,14 +75,14 @@ export default function PhotoEditModal({ open, onClose, imageSrc, onSave, onReta
                 <Dialog.Title className="text-sm font-semibold text-white">{title}</Dialog.Title>
                 <button
                   onClick={handleClose}
-                  className="rounded-lg p-1.5 transition-colors text-gray-900 hover:text-white hover:bg-gray-700"
+                  className="rounded-lg p-1.5 transition-colors text-[#919093] hover:text-white hover:bg-[#303033]"
                 >
                   <XMarkIcon className="w-4 h-4" />
                 </button>
               </div>
 
-              {/* Cropper */}
-              <div className="flex-1 min-h-0 overflow-hidden p-3" style={{ background: "#050A0E" }}>
+              {/* Cropper — fills remaining height */}
+              <div className="flex-1 min-h-0 overflow-hidden p-3" style={{ background: "#050A0E", minHeight: 280 }}>
                 {imageSrc ? (
                   <Cropper
                     src={imageSrc}
@@ -94,68 +97,55 @@ export default function PhotoEditModal({ open, onClose, imageSrc, onSave, onReta
                     dragMode="move"
                   />
                 ) : (
-                  <div className="h-64 flex items-center justify-center text-gray-900 text-sm">
+                  <div className="h-64 flex items-center justify-center text-[#919093] text-sm">
                     No image loaded
                   </div>
                 )}
               </div>
 
-              {/* Toolbar */}
-              <div className="flex items-center justify-between px-4 py-3 shrink-0 border-t gap-3"
-                style={{ background: "#232830", borderColor: "#232830" }}>
-                <div className="flex gap-2">
+              {/* Toolbar — two rows on mobile so nothing overflows */}
+              <div className="shrink-0 px-4 py-3 border-t" style={{ background: "#232830", borderColor: "#2e3540" }}>
+                {/* Row 1: secondary actions */}
+                <div className="flex items-center gap-2 mb-2">
                   {onRetake && (
                     <button
                       onClick={() => { onClose(); onRetake(); }}
                       className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg text-white transition-colors"
                       style={{ background: "#1A1C22" }}
-                      onMouseEnter={(e) => (e.currentTarget.style.background = "#404B53")}
-                      onMouseLeave={(e) => (e.currentTarget.style.background = "#1A1C22")}
                     >
                       Retake
                     </button>
                   )}
                   <button
                     onClick={() => rotate(-90)}
-                    title="Rotate left 90°"
                     className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg text-white transition-colors"
                     style={{ background: "#1A1C22" }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = "#404B53")}
-                    onMouseLeave={(e) => (e.currentTarget.style.background = "#1A1C22")}
                   >
-                    <RotateLeftIcon />
-                    <span>Left</span>
+                    <RotateLeftIcon /><span>Left</span>
                   </button>
                   <button
                     onClick={() => rotate(90)}
-                    title="Rotate right 90°"
                     className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg text-white transition-colors"
                     style={{ background: "#1A1C22" }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = "#404B53")}
-                    onMouseLeave={(e) => (e.currentTarget.style.background = "#1A1C22")}
                   >
-                    <RotateRightIcon />
-                    <span>Right</span>
+                    <RotateRightIcon /><span>Right</span>
                   </button>
-                </div>
-                <div className="flex gap-2">
                   <button
                     onClick={handleClose}
-                    className="px-4 py-2 text-sm rounded-lg transition-colors text-gray-900 hover:text-white"
+                    className="px-4 py-2 text-sm rounded-lg text-[#919093] hover:text-white transition-colors ml-auto"
                   >
                     Cancel
                   </button>
-                  <button
-                    onClick={handleSave}
-                    disabled={!imageSrc}
-                    className="px-5 py-2 text-sm font-semibold rounded-lg text-white transition-colors disabled:opacity-40"
-                    style={{ background: "#FF6F61" }}
-                    onMouseEnter={(e) => !e.currentTarget.disabled && (e.currentTarget.style.background = "#E85A4F")}
-                    onMouseLeave={(e) => (e.currentTarget.style.background = "#FF6F61")}
-                  >
-                    Save & Use
-                  </button>
                 </div>
+                {/* Row 2: primary action — full width on mobile */}
+                <button
+                  onClick={handleSave}
+                  disabled={!imageSrc}
+                  className="w-full py-2.5 text-sm font-semibold rounded-lg text-white transition-colors disabled:opacity-40"
+                  style={{ background: "#FF6F61" }}
+                >
+                  Save & Use
+                </button>
               </div>
             </Dialog.Panel>
           </Transition.Child>

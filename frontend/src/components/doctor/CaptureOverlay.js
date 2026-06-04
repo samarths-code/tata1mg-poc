@@ -37,7 +37,8 @@ export default function CaptureOverlay({
     face: "Capture Photo",
   }[variant];
 
-  const frameColor = ready ? "#86efac" : "#fca5a5"; // green-300 / red-300
+  // Figma: red (#dc2626) when not aligned, green (#4bd559) when ready
+  const frameColor = ready ? "#4bd559" : "#dc2626";
 
   // Frame is sized for a portrait mobile video stream (9:16 from the patient's phone).
   // Face: portrait 3:4 to match a mobile selfie crop zone.
@@ -71,34 +72,38 @@ export default function CaptureOverlay({
         )}
       </div>
 
-      {/* Control row — anchored to the bottom so it's never clipped */}
-      <div className="absolute bottom-5 left-1/2 -translate-x-1/2 flex items-center gap-3 pointer-events-auto">
-        <button
-          onClick={onCancel}
-          className="px-5 py-2.5 rounded-lg text-sm font-medium text-white bg-[#303033] hover:bg-[#3a3a3d] transition-colors"
-        >
-          Cancel
-        </button>
+      {/* Control row — Figma: Cancel + Capture on row 1, camera picker on row 2 */}
+      <div className="absolute bottom-5 left-1/2 -translate-x-1/2 w-full px-4 flex flex-col items-center gap-2 pointer-events-auto">
+        {/* Row 1: Cancel + Capture */}
+        <div className="flex items-center gap-3">
+          <button
+            onClick={onCancel}
+            className="px-5 py-2.5 rounded-lg text-sm font-medium text-white bg-[rgba(255,255,255,0.15)] hover:bg-[rgba(255,255,255,0.2)] transition-colors"
+          >
+            Cancel
+          </button>
 
-        <button
-          onClick={onCapture}
-          disabled={!ready || capturing}
-          className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold text-white transition-colors ${
-            ready && !capturing
-              ? "bg-orange-450 hover:bg-orange-500"
-              : "bg-orange-450/40 cursor-not-allowed"
-          }`}
-        >
-          <CameraIcon className="w-4 h-4" />
-          {capturing ? "Capturing…" : captureLabel}
-        </button>
+          <button
+            onClick={onCapture}
+            disabled={!ready || capturing}
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold text-white transition-colors ${
+              ready && !capturing
+                ? "bg-[#ff6f61] hover:bg-[#e85e51]"
+                : "bg-[#ff6f61]/50 cursor-not-allowed"
+            }`}
+          >
+            <CameraIcon className="w-4 h-4" />
+            {capturing ? "Capturing…" : captureLabel}
+          </button>
+        </div>
 
+        {/* Row 2: Camera selector (full-width) */}
         {cameras.length > 0 && (
-          <div className="relative">
+          <div className="relative w-[178px]">
             <select
               value={selectedCameraId || ""}
               onChange={(e) => onSelectCamera?.(e.target.value)}
-              className="appearance-none px-4 py-2.5 pr-9 rounded-lg text-sm font-medium text-white bg-[#303033] border border-[#404043] focus:outline-none cursor-pointer max-w-[200px] truncate"
+              className="appearance-none w-full px-4 py-2.5 pr-9 rounded-lg text-sm font-medium text-white bg-[rgba(255,255,255,0.15)] border border-[rgba(0,0,0,0.05)] focus:outline-none cursor-pointer truncate"
             >
               {cameras.map((cam, i) => (
                 <option key={cam.deviceId || i} value={cam.deviceId}>

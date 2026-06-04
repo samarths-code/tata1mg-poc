@@ -28,6 +28,7 @@ import ImageUploadListner from "../components/ImageUploadListner";
 import { TopBar } from "./components/TopBar";
 import { ParticipantDetailsPanel } from "../components/ParticipantDetailsPanel";
 import { CustomerVerificationOverlay } from "../components/CustomerVerificationOverlay";
+import MobileCustomerCallView from "../components/MobileCustomerCallView";
 import useGeolocation from "../hooks/useGeolocation";
 import { getIPGeoInfo } from "../api";
 
@@ -490,7 +491,14 @@ export function MeetingContainer({ onMeetingLeave }) {
 
               {isDoctor ? (
                 <DoctorView />
+              ) : isMobile ? (
+                /* ── Mobile customer: full Figma layout ───────────────────── */
+                <MobileCustomerCallView
+                  meetingTitle={new URLSearchParams(window.location.search).get("meetingTitle") || ""}
+                  statusMessage={statusMessage}
+                />
               ) : (
+                /* ── Desktop customer: existing layout ────────────────────── */
                 <>
                   <TopBar
                     bottomBarHeight={bottomBarHeight}
@@ -499,23 +507,10 @@ export function MeetingContainer({ onMeetingLeave }) {
                     onToggleParticipantPanel={() => setShowParticipantPanel((s) => !s)}
                   />
 
-                  <div className={`relative flex flex-1 ${isPresenting && isMobile ? "flex-col md:flex-row" : "flex-row"} bg-[#1b1b1e] overflow-hidden`}>
+                  <div className={`relative flex flex-1 ${isPresenting ? "flex-row" : "flex-row"} bg-[#1b1b1e] overflow-hidden`}>
                     <ConnectionStatusOverlay message={statusMessage} />
-                    {isPresenting && isMobile ? (
-                      <div className="flex flex-1 flex-col">
-                        <div className="flex flex-1">
-                          <PresenterView height={containerHeight - bottomBarHeight * 2} />
-                        </div>
-                        <div className="flex h-1/3 md:flex-1">
-                          <MemorizedParticipantView isPresenting={isPresenting} sideBarMode={sideBarMode} />
-                        </div>
-                      </div>
-                    ) : (
-                      <>
-                        {isPresenting ? <PresenterView height={containerHeight - bottomBarHeight * 2} /> : null}
-                        <MemorizedParticipantView isPresenting={isPresenting} sideBarMode={sideBarMode} />
-                      </>
-                    )}
+                    {isPresenting ? <PresenterView height={containerHeight - bottomBarHeight * 2} /> : null}
+                    <MemorizedParticipantView isPresenting={isPresenting} sideBarMode={sideBarMode} />
                     <div>
                       <SidebarConatiner
                         height={containerHeight - bottomBarHeight * 2}
@@ -523,15 +518,9 @@ export function MeetingContainer({ onMeetingLeave }) {
                       />
                     </div>
                     {showParticipantPanel && (
-                      isMobile ? (
-                        <div className="fixed inset-0 z-50">
-                          <ParticipantDetailsPanel onClose={() => setShowParticipantPanel(false)} />
-                        </div>
-                      ) : (
-                        <div className="shrink-0 h-full">
-                          <ParticipantDetailsPanel onClose={() => setShowParticipantPanel(false)} />
-                        </div>
-                      )
+                      <div className="shrink-0 h-full">
+                        <ParticipantDetailsPanel onClose={() => setShowParticipantPanel(false)} />
+                      </div>
                     )}
                     <CustomerVerificationOverlay />
                   </div>

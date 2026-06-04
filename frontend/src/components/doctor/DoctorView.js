@@ -5,7 +5,8 @@ import { useMeetingStore } from "../../store/meetingStore";
 import { MemoizedParticipant } from "../ParticipantView";
 import { BottomBar } from "../../meeting/components/BottomBar";
 import { runOCR, runFaceMatch, runAntiSpoof, isAiReady, maskAadhaarImage } from "../../api";
-import DoctorTopBar from "./DoctorTopBar";
+import DoctorTopBar, { DoctorStepBar } from "./DoctorTopBar";
+import useIsMobile from "../../hooks/useIsMobile";
 import CaptureOverlay from "./CaptureOverlay";
 import PhotoEditModal from "../PhotoEditModal";
 import {
@@ -15,6 +16,7 @@ import {
 } from "./VerificationDrawer";
 import { VideoCameraIcon } from "@heroicons/react/24/outline";
 
+// Figma pill drawer: py-5 (20×2) + 32px buttons = ~72px; 80 gives a small gap above pill
 const bottomBarHeight = 80;
 
 function nowTime() {
@@ -347,6 +349,11 @@ export default function DoctorView() {
   }
 
   // ── Render ─────────────────────────────────────────────────────────────────
+  const isMobile = useIsMobile();
+  // On mobile, step bar sits above the bottom pill; reserve space below video
+  const stepBarHeight = isMobile ? 52 : 0; // step pill (~32px) + gap (~20px)
+  const videoBottom = bottomBarHeight + stepBarHeight;
+
   return (
     <div className="flex flex-col h-full bg-[#1b1b1e] relative overflow-hidden">
       <DoctorTopBar
@@ -363,13 +370,17 @@ export default function DoctorView() {
         {/* Video stage — fills remaining flex space */}
         <div className="relative flex-1">
 
-          {/* Patient video — stops before the floating bottom bar */}
+          {/* Patient video — stops above step bar (mobile) or bottom bar (desktop) */}
           <div
             className="absolute inset-x-0 top-0 rounded-[24px] overflow-hidden bg-[#1b1b1e]"
-            style={{ bottom: bottomBarHeight }}
+            style={{ bottom: videoBottom }}
           >
             {customerId ? (
-              <MemoizedParticipant participantId={customerId} showImageCapture={false} showResolution={true} />
+              <MemoizedParticipant
+                participantId={customerId}
+                showImageCapture={false}
+                showResolution={!capture.active}
+              />
             ) : (
               <div className="w-full h-full flex flex-col items-center justify-center gap-4">
                 <div className="w-16 h-16 rounded-full bg-[#303033] flex items-center justify-center">
@@ -393,60 +404,117 @@ export default function DoctorView() {
             )}
           </div>
 
-          {/* Doctor PiP — 275×150, above the floating bottom bar */}
-          <div
-            className="absolute right-8 w-[275px] h-[150px] rounded-[24px] overflow-hidden border border-[#ff6f61] z-10 bg-[#303033]"
-            style={{ bottom: bottomBarHeight + 16 }}
+          {/* Doctor self-view PiP — hidden during capture overlay (Figma: patient view fills full card) */}
+          {!capture.active && <div
+            className="absolute overflow-hidden border border-[#ff6f61] z-10 bg-[#303033]
+              w-[130px] h-[170px] right-3 rounded-[16px]
+              md:w-[275px] md:h-[150px] md:right-8 md:rounded-[24px]"
+            style={{ bottom: videoBottom + 12 }}
           >
             <MemoizedParticipant participantId={localParticipant.id} showImageCapture={false} showResolution={false} isPip={true} />
-          </div>
+          </div>}
         </div>
 
-        {/* Verification drawer */}
+        {/* Verification drawer — full-screen on mobile, side panel on desktop */}
         {drawer.open && (
-          <div className="shrink-0 h-full" style={{ paddingBottom: bottomBarHeight }}>
-            {drawer.type === "connection" && (
-              <ConnectionDetailsPanel
-                deviceInfo={deviceInfo}
-                geoData={geoData}
-                geoFailed={geoFailed}
-                onRequestLocation={() => publishGeoRetry("GEO_RETRY", { persist: false }, {})}
-                onClose={() => setDrawer({ open: false, type: null })}
-                onNextStep={() => approveStep(1)}
-              />
-            )}
-            {drawer.type === "identity" && (
-              <IdentityVerificationPanel
-                frontImage={docFront}
-                backImage={docBack}
-                ocrResult={ocrResult}
-                captureDevice={captureDeviceLabel}
-                verifiedAt={identityTime}
-                onClose={() => setDrawer({ open: false, type: null })}
-                onRetake={() => { cropFromGalleryRef.current = true; startCapture("document-front", "aadhaarFront"); }}
-                onApprove={() => approveStep(2)}
-                onCropFront={(img) => openCropFromGallery(img, "aadhaarFront")}
-                onCropBack={(img) => openCropFromGallery(img, "aadhaarBack")}
-              />
-            )}
-            {drawer.type === "face" && (
-              <FaceVerificationPanel
-                photo={customerPhoto}
-                faceMatchResult={faceMatchResult}
-                spoofResult={spoofResult}
-                captureDevice={captureDeviceLabel}
-                verifiedAt={faceTime}
-                patientName={participants.get(customerId)?.displayName}
-                consultationId={caseId}
-                onClose={() => setDrawer({ open: false, type: null })}
-                onRetake={() => startCapture("face", "customerPhoto")}
-                onApprove={() => approveStep(3)}
-                onCropPhoto={(img) => openCropFromGallery(img, "customerPhoto")}
-              />
-            )}
-          </div>
+          isMobile ? (
+            <div className="fixed inset-0 z-50">
+              {drawer.type === "connection" && (
+                <ConnectionDetailsPanel
+                  deviceInfo={deviceInfo}
+                  geoData={geoData}
+                  geoFailed={geoFailed}
+                  onRequestLocation={() => publishGeoRetry("GEO_RETRY", { persist: false }, {})}
+                  onClose={() => setDrawer({ open: false, type: null })}
+                  onNextStep={() => approveStep(1)}
+                />
+              )}
+              {drawer.type === "identity" && (
+                <IdentityVerificationPanel
+                  frontImage={docFront}
+                  backImage={docBack}
+                  ocrResult={ocrResult}
+                  captureDevice={captureDeviceLabel}
+                  verifiedAt={identityTime}
+                  onClose={() => setDrawer({ open: false, type: null })}
+                  onRetake={() => { cropFromGalleryRef.current = true; startCapture("document-front", "aadhaarFront"); }}
+                  onApprove={() => approveStep(2)}
+                  onCropFront={(img) => openCropFromGallery(img, "aadhaarFront")}
+                  onCropBack={(img) => openCropFromGallery(img, "aadhaarBack")}
+                />
+              )}
+              {drawer.type === "face" && (
+                <FaceVerificationPanel
+                  photo={customerPhoto}
+                  faceMatchResult={faceMatchResult}
+                  spoofResult={spoofResult}
+                  captureDevice={captureDeviceLabel}
+                  verifiedAt={faceTime}
+                  patientName={participants.get(customerId)?.displayName}
+                  consultationId={caseId}
+                  onClose={() => setDrawer({ open: false, type: null })}
+                  onRetake={() => startCapture("face", "customerPhoto")}
+                  onApprove={() => approveStep(3)}
+                  onCropPhoto={(img) => openCropFromGallery(img, "customerPhoto")}
+                />
+              )}
+            </div>
+          ) : (
+            <div className="shrink-0 h-full" style={{ paddingBottom: bottomBarHeight }}>
+              {drawer.type === "connection" && (
+                <ConnectionDetailsPanel
+                  deviceInfo={deviceInfo}
+                  geoData={geoData}
+                  geoFailed={geoFailed}
+                  onRequestLocation={() => publishGeoRetry("GEO_RETRY", { persist: false }, {})}
+                  onClose={() => setDrawer({ open: false, type: null })}
+                  onNextStep={() => approveStep(1)}
+                />
+              )}
+              {drawer.type === "identity" && (
+                <IdentityVerificationPanel
+                  frontImage={docFront}
+                  backImage={docBack}
+                  ocrResult={ocrResult}
+                  captureDevice={captureDeviceLabel}
+                  verifiedAt={identityTime}
+                  onClose={() => setDrawer({ open: false, type: null })}
+                  onRetake={() => { cropFromGalleryRef.current = true; startCapture("document-front", "aadhaarFront"); }}
+                  onApprove={() => approveStep(2)}
+                  onCropFront={(img) => openCropFromGallery(img, "aadhaarFront")}
+                  onCropBack={(img) => openCropFromGallery(img, "aadhaarBack")}
+                />
+              )}
+              {drawer.type === "face" && (
+                <FaceVerificationPanel
+                  photo={customerPhoto}
+                  faceMatchResult={faceMatchResult}
+                  spoofResult={spoofResult}
+                  captureDevice={captureDeviceLabel}
+                  verifiedAt={faceTime}
+                  patientName={participants.get(customerId)?.displayName}
+                  consultationId={caseId}
+                  onClose={() => setDrawer({ open: false, type: null })}
+                  onRetake={() => startCapture("face", "customerPhoto")}
+                  onApprove={() => approveStep(3)}
+                  onCropPhoto={(img) => openCropFromGallery(img, "customerPhoto")}
+                />
+              )}
+            </div>
+          )
         )}
       </div>
+
+      {/* Step pill + hamburger — above the bottom bar on mobile only */}
+      {isMobile && (
+        <div className="absolute left-4 right-4 z-20" style={{ bottom: bottomBarHeight + 8 }}>
+          <DoctorStepBar
+            currentStep={currentStep}
+            completedSteps={completedSteps}
+            onStepClick={handleStepClick}
+          />
+        </div>
+      )}
 
       {/* Floating control bar */}
       <div className="absolute bottom-0 left-0 right-0 z-20">

@@ -26,23 +26,33 @@ function Spinner() {
 export function CustomerVerificationOverlay() {
   const { localParticipant } = useMeeting();
   const [step, setStep] = useState(null);
+  const [completed, setCompleted] = useState([]);
   const [phase, setPhase] = useState(null); // null | 'loading' | 'document' | 'face'
   const timerRef = useRef(null);
 
   usePubSub("VERIFICATION_STEP", {
     onMessageReceived: ({ payload }) => {
       if (payload?.step != null) setStep(payload.step);
+      if (Array.isArray(payload?.completed)) setCompleted(payload.completed);
     },
     onOldMessagesReceived: (messages) => {
       const last = messages[messages.length - 1];
       if (last?.payload?.step != null) setStep(last.payload.step);
+      if (Array.isArray(last?.payload?.completed)) setCompleted(last.payload.completed);
     },
   });
 
   useEffect(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
 
+    // No step or step 1 → no overlay
     if (!step || step === 1) {
+      setPhase(null);
+      return;
+    }
+
+    // Step has been approved by doctor → clear overlay
+    if (completed.includes(step)) {
       setPhase(null);
       return;
     }
@@ -55,7 +65,7 @@ export function CustomerVerificationOverlay() {
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [step]);
+  }, [step, completed]);
 
   if (!phase) return null;
 

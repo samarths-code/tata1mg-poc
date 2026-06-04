@@ -5,7 +5,7 @@ import { XMarkIcon, ExclamationCircleIcon, InformationCircleIcon } from "@heroic
 
 function DrawerShell({ title, subtitle, onClose, children, footer }) {
   return (
-    <div className="flex flex-col h-full w-[400px] max-w-full bg-[#101113] border-l border-[rgba(255,255,255,0.05)]">
+    <div className="flex flex-col h-full w-full md:w-[400px] bg-[#101113] border-l border-[rgba(255,255,255,0.05)]">
       {/* Header */}
       <div className="shrink-0 px-5 pt-5 pb-3 border-b border-[rgba(255,255,255,0.03)]">
         <div className="flex items-start justify-between gap-3">
@@ -20,8 +20,8 @@ function DrawerShell({ title, subtitle, onClose, children, footer }) {
       {/* Scrollable body */}
       <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">{children}</div>
 
-      {/* Sticky footer */}
-      {footer && <div className="shrink-0 px-5 py-4 border-t border-[rgba(255,255,255,0.03)] flex items-center gap-3">{footer}</div>}
+      {/* Sticky footer — full-width button on mobile (Figma), right-aligned on desktop */}
+      {footer && <div className="shrink-0 px-5 py-4 border-t border-[rgba(255,255,255,0.03)] flex items-center gap-3 [&>button]:w-full [&>button]:md:w-auto">{footer}</div>}
     </div>
   );
 }

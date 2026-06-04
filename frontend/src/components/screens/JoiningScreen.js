@@ -419,8 +419,8 @@ export function JoiningScreen({
               )}
             </div>
 
-            {/* 2. Camera preview — 370×400 proportions from Figma */}
-            <div style={{ aspectRatio: "370 / 400" }}>
+            {/* 2. Camera preview — 370×430 proportions from Figma */}
+            <div style={{ aspectRatio: "370 / 430" }}>
               {renderCameraCard("100%", "100%")}
             </div>
 
