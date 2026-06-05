@@ -24,7 +24,7 @@ export default function VerificationPendingModal({ completedSteps = [], onLeaveA
         <div className="flex flex-col gap-2 p-5">
           <div className="flex items-center gap-2.5">
             <h2 className="flex-1 text-[18px] font-semibold text-white leading-[26px]">
-              Verification Pending
+              Participants Details
             </h2>
             <button
               onClick={onClose}

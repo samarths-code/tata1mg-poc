@@ -80,8 +80,8 @@ export default function MobileCustomerCallView({ meetingTitle, statusMessage }) 
           </div>
         )}
 
-        {/* Reconnecting / network overlay — sits above both states */}
-        <ConnectionStatusOverlay message={statusMessage} />
+        {/* Reconnecting overlay — only for transient errors, not the normal waiting state */}
+        {!isWaiting && <ConnectionStatusOverlay message={statusMessage} />}
         {/* Doctor-triggered verification overlays */}
         <CustomerVerificationOverlay />
       </div>
@@ -92,13 +92,7 @@ export default function MobileCustomerCallView({ meetingTitle, statusMessage }) 
           onClick={() => setShowPanel(true)}
           className="flex-1 flex items-center justify-center px-3 py-[6px] bg-[rgba(255,255,255,0.02)] border border-[rgba(255,255,255,0.05)] rounded-[4px] text-white text-sm font-medium"
         >
-          Verification is Pending
-        </button>
-        <button
-          onClick={() => setShowPanel(true)}
-          className="flex items-center justify-center p-[6px] bg-[rgba(255,255,255,0.02)] border border-[rgba(255,255,255,0.05)] rounded-[4px]"
-        >
-          <EllipsisVerticalIcon className="w-5 h-5 text-white" />
+          Participant Details
         </button>
       </div>
 

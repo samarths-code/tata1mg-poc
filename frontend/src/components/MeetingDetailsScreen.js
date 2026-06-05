@@ -35,12 +35,6 @@ export function MeetingDetailsScreen({
           {meetingIdError && (
             <p className="text-xs text-red-500 mt-1">Please enter a valid meeting ID</p>
           )}
-          <input
-            value={participantName}
-            onChange={(e) => setParticipantName(e.target.value)}
-            placeholder="Enter your name"
-            className="px-4 py-3 mt-4 bg-white border border-orange-200 rounded-xl text-gray-800 w-full text-center focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-450 transition-colors placeholder-gray-400"
-          />
           <button
             disabled={participantName.length < 3}
             className={`w-full text-white px-2 py-3 rounded-xl mt-4 font-semibold transition-colors ${
