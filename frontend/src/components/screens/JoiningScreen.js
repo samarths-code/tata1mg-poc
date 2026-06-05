@@ -123,6 +123,9 @@ export function JoiningScreen({
       analyser.fftSize = 512;
       analyser.smoothingTimeConstant = 0.4;
       src.connect(analyser);
+      // Explicitly terminate the audio graph at a silent sink.
+      // Without this, Chrome implicitly routes MediaStreamSource audio to speakers.
+      analyser.connect(ctx.createMediaStreamDestination());
       const buf = new Uint8Array(analyser.frequencyBinCount);
       audioAnalyserIntervalRef.current = setInterval(() => {
         analyser.getByteFrequencyData(buf);
@@ -155,17 +158,23 @@ export function JoiningScreen({
         audioTrackRef.current.stop();
       }
       audioTrackRef.current = audioTrack;
-      if (audioTrack) {
-        const audioSrcObject = new MediaStream([audioTrack]);
-        if (audioPlayerRef.current) {
-          audioPlayerRef.current.srcObject = audioSrcObject;
-          audioPlayerRef.current.play().catch((e) => console.log("audio play error", e));
-        }
-      } else {
-        if (audioPlayerRef.current) audioPlayerRef.current.srcObject = null;
-      }
     }
   }, [micOn, audioTrack]);
+
+  // Only route the mic to the speaker element when testSpeaker is explicitly on.
+  // Never set srcObject otherwise — muted is unreliable and the echo is unavoidable.
+  useEffect(() => {
+    const player = audioPlayerRef.current;
+    if (!player) return;
+    if (testSpeaker && micOn && audioTrack) {
+      player.muted = false;
+      player.srcObject = new MediaStream([audioTrack]);
+      player.play().catch((e) => console.log("audio play error", e));
+    } else {
+      player.pause();
+      player.srcObject = null;
+    }
+  }, [testSpeaker, micOn, audioTrack]);
 
   useEffect(() => {
     if (webcamOn) {
@@ -336,7 +345,7 @@ export function JoiningScreen({
       style={{ height, width }}
     >
       <div className="absolute right-4 top-4 z-10"><NetworkStats /></div>
-      <audio autoPlay playsInline muted={!testSpeaker} ref={audioPlayerRef} controls={false} />
+      <audio playsInline muted ref={audioPlayerRef} controls={false} />
       <video
         autoPlay playsInline muted ref={videoPlayerRef} controls={false}
         className="h-full w-full object-cover flip"
@@ -397,7 +406,10 @@ export function JoiningScreen({
                     <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
                   </>
                 ) : (
-                  <line x1="23" y1="9" x2="17" y2="15" />
+                  <>
+                    <line x1="17" y1="9" x2="23" y2="15" />
+                    <line x1="23" y1="9" x2="17" y2="15" />
+                  </>
                 )}
               </svg>
             </div>
@@ -411,18 +423,12 @@ export function JoiningScreen({
   );
 
   const renderDeviceSelectors = (stacked) => (
-    <div className={`flex gap-2 ${stacked ? "flex-col" : "flex-row"}`}>
-      <div className={stacked ? "w-full" : "flex-1 min-w-0"}>
-        <DropDownMic mics={mics} changeMic={changeMic} customAudioStream={customAudioStream}
-          micOn={micOn} volume={micVolume} didDeviceChange={didDeviceChange}
-          setDidDeviceChange={setDidDeviceChange} testSpeaker={testSpeaker} setTestSpeaker={setTestSpeaker} />
-      </div>
-      <div className={stacked ? "w-full" : "flex-1 min-w-0"}>
-        <DropDownSpeaker speakers={speakers} />
-      </div>
-      <div className={stacked ? "w-full" : "flex-1 min-w-0"}>
-        <DropDownCam changeWebcam={changeWebcam} webcams={webcams} />
-      </div>
+    <div className={stacked ? "flex flex-col gap-2" : "grid grid-cols-3 gap-2"}>
+      <DropDownMic mics={mics} changeMic={changeMic} customAudioStream={customAudioStream}
+        micOn={micOn} volume={micVolume} didDeviceChange={didDeviceChange}
+        setDidDeviceChange={setDidDeviceChange} testSpeaker={testSpeaker} setTestSpeaker={setTestSpeaker} />
+      <DropDownSpeaker speakers={speakers} />
+      <DropDownCam changeWebcam={changeWebcam} webcams={webcams} />
     </div>
   );
 
@@ -495,8 +501,8 @@ export function JoiningScreen({
               )}
             </div>
 
-            {/* 2. Camera preview — 370×430 proportions from Figma */}
-            <div style={{ aspectRatio: "370 / 430" }}>
+            {/* 2. Camera preview */}
+            <div style={{ aspectRatio: "370 / 300" }}>
               {renderCameraCard("100%", "100%")}
             </div>
 
@@ -676,12 +682,6 @@ function AutoJoinPanel({
           {!tokenReady && (
             <p className="text-xs text-[#919093]">Setting up your session…</p>
           )}
-          <input
-            value={participantName}
-            onChange={(e) => setParticipantName(e.target.value)}
-            placeholder="Enter your name"
-            className="w-full px-4 py-3 bg-white border border-orange-200 rounded-xl text-black text-center text-sm focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-450 transition-colors placeholder-[#919093]"
-          />
           <button
             disabled={!canJoin}
             onClick={onClickStartMeeting}

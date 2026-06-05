@@ -3,7 +3,7 @@ import { useMeeting } from "@videosdk.live/react-sdk";
 import { MemoizedParticipantGrid } from "../../components/ParticipantGrid";
 import PipLayout from "../../components/PipLayout";
 
-function ParticipantsViewer({ isPresenting, sideBarMode }) {
+function ParticipantsViewer({ isPresenting, sideBarMode, statusMessage }) {
   const {
     participants,
     pinnedParticipants,
@@ -65,7 +65,7 @@ function ParticipantsViewer({ isPresenting, sideBarMode }) {
       />
     );
   }
-  return <PipLayout participantIds={participantIds} />;
+  return <PipLayout participantIds={participantIds} statusMessage={statusMessage} />;
 }
 
 const MemorizedParticipantView = React.memo(
@@ -73,7 +73,8 @@ const MemorizedParticipantView = React.memo(
   (prevProps, nextProps) => {
     return (
       prevProps.sideBarMode === nextProps.sideBarMode &&
-      prevProps.isPresenting === nextProps.isPresenting
+      prevProps.isPresenting === nextProps.isPresenting &&
+      prevProps.statusMessage === nextProps.statusMessage
     );
   }
 );

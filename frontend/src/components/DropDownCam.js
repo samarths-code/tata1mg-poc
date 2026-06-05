@@ -52,9 +52,7 @@ export default function DropDownCam({ webcams, changeWebcam }) {
                         className="flex items-center justify-between gap-6 px-4 py-2.5 text-sm text-gray-900 text-left hover:bg-black/5 transition-colors w-full whitespace-nowrap"
                       >
                         <span className="font-normal text-black">{item.label || `Camera ${i + 1}`}</span>
-                        {selectedWebcam?.label === item.label && (
-                          <CheckCircleIcon className="w-5 h-5 text-black shrink-0" />
-                        )}
+                        <CheckCircleIcon className={`w-5 h-5 shrink-0 ${selectedWebcam?.label === item.label ? "text-black" : "invisible"}`} />
                       </button>
                     ) : null
                   )}

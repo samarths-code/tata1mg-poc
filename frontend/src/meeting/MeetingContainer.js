@@ -12,7 +12,6 @@ import MemorizedParticipantView from "./components/ParticipantView";
 import { PresenterView } from "../components/PresenterView";
 import DoctorView from "../components/doctor/DoctorView";
 import WaitingToJoinScreen from "../components/screens/WaitingToJoinScreen";
-import ConnectionStatusOverlay from "../components/screens/ConnectionStatusOverlay";
 import ConfirmBox from "../components/ConfirmBox";
 import useIsMobile from "../hooks/useIsMobile";
 import useIsTab from "../hooks/useIsTab";
@@ -474,9 +473,8 @@ export function MeetingContainer({ onMeetingLeave }) {
                   />
 
                   <div className={`relative flex flex-1 ${isPresenting ? "flex-row" : "flex-row"} bg-[#1b1b1e] overflow-hidden`}>
-                    <ConnectionStatusOverlay message={statusMessage} />
                     {isPresenting ? <PresenterView height={containerHeight - bottomBarHeight * 2} /> : null}
-                    <MemorizedParticipantView isPresenting={isPresenting} sideBarMode={sideBarMode} />
+                    <MemorizedParticipantView isPresenting={isPresenting} sideBarMode={sideBarMode} statusMessage={statusMessage} />
                     <div>
                       <SidebarConatiner
                         height={containerHeight - bottomBarHeight * 2}

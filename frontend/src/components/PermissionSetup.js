@@ -44,9 +44,10 @@ const GlobeIcon = () => (
   </svg>
 );
 
-function PermissionRow({ icon: Icon, label, detail, status }) {
+function PermissionRow({ icon: Icon, label, detail, status, onRetry }) {
   const isGranted = status === STATUS.GRANTED;
   const isChecking = status === STATUS.CHECKING;
+  const isDenied = status === STATUS.DENIED;
 
   return (
     <div className="flex items-center gap-2 p-2 rounded-xl border border-[rgba(0,0,0,0.05)]">
@@ -59,6 +60,13 @@ function PermissionRow({ icon: Icon, label, detail, status }) {
       </div>
       {isChecking ? (
         <span className="w-4 h-4 rounded-full border-2 border-orange-450 border-t-transparent animate-spin shrink-0" />
+      ) : isDenied && onRetry ? (
+        <button
+          onClick={onRetry}
+          className="bg-[#ff6f61] border border-[#ff6f61] text-white text-[12px] font-medium leading-4 px-2 py-1 rounded shrink-0 whitespace-nowrap hover:bg-[#ff5a4a] transition-colors"
+        >
+          Retry Permission
+        </button>
       ) : (
         <span className={`text-[10px] font-normal px-1.5 py-0.5 rounded-full shrink-0 whitespace-nowrap leading-4 ${
           isGranted
@@ -217,12 +225,14 @@ export default function PermissionSetup({ onDone }) {
             label="Camera"
             detail="Required for video consultation with the doctor."
             status={camera}
+            onRetry={runChecks}
           />
           <PermissionRow
             icon={MicIcon}
             label="Microphone"
             detail="Required for clear voice communication during the call."
             status={mic}
+            onRetry={runChecks}
           />
           <PermissionRow
             icon={VolumeIcon}
@@ -264,19 +274,7 @@ export default function PermissionSetup({ onDone }) {
 
         {/* Footer */}
         <div className="p-5">
-          <div className="flex items-center justify-between">
-            {/* Retry link shown only when something is denied */}
-            {hasDenied ? (
-              <button
-                onClick={runChecks}
-                className="text-sm font-medium text-orange-450 hover:underline transition-colors"
-              >
-                ↺ Retry
-              </button>
-            ) : (
-              <span />
-            )}
-
+          <div className="flex items-center justify-end">
             <button
               disabled={!criticalDone}
               onClick={onDone}

@@ -71,7 +71,7 @@ export default function DropDownSpeaker({ speakers }) {
                       className="flex items-center justify-between gap-6 px-4 py-2.5 text-sm text-gray-900 text-left hover:bg-black/5 transition-colors w-full whitespace-nowrap"
                     >
                       <span className="font-normal text-black">System Default</span>
-                      <CheckCircleIcon className="w-5 h-5 text-black shrink-0" />
+                      <CheckCircleIcon className="w-5 h-5 shrink-0 text-black" />
                     </button>
                   ) : (
                     speakers.map((item, i) =>
@@ -84,9 +84,7 @@ export default function DropDownSpeaker({ speakers }) {
                           className="flex items-center justify-between gap-6 px-4 py-2.5 text-sm text-gray-900 text-left hover:bg-black/5 transition-colors w-full whitespace-nowrap"
                         >
                           <span className="font-normal text-black">{item.label || `Speaker ${i + 1}`}</span>
-                          {selectedSpeaker?.label === item.label && (
-                            <CheckCircleIcon className="w-5 h-5 text-black shrink-0" />
-                          )}
+                          <CheckCircleIcon className={`w-5 h-5 shrink-0 ${selectedSpeaker?.label === item.label ? "text-black" : "invisible"}`} />
                         </button>
                       ) : null
                     )
