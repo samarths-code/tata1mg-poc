@@ -3,9 +3,9 @@ import { XMarkIcon } from "@heroicons/react/24/outline";
 
 function InfoRow({ label, value }) {
   return (
-    <div className="flex items-start justify-between text-sm leading-5 whitespace-nowrap">
-      <span className="text-[#919093]">{label}</span>
-      <span className="text-white ml-4 truncate max-w-[180px] text-right">{value || "—"}</span>
+    <div className="flex items-start justify-between gap-6 text-sm leading-5">
+      <span className="text-[#919093] shrink-0">{label}</span>
+      <span className="text-white text-right break-words min-w-0 max-w-[60%]">{value || "—"}</span>
     </div>
   );
 }
@@ -17,7 +17,7 @@ function SectionCard({ title, rows, children }) {
       <div className="h-px bg-[rgba(255,255,255,0.05)] mb-2" />
       {rows
         ? rows.map(({ label, value }) => (
-            <div key={label} className="mt-1 first:mt-0">
+            <div key={label} className="py-1.5 border-b border-[rgba(255,255,255,0.04)] last:border-b-0">
               <InfoRow label={label} value={value} />
             </div>
           ))
@@ -35,7 +35,7 @@ function DeviceList({ items, activeId }) {
             <div className="bg-[rgba(255,255,255,0.05)] w-6 h-6 rounded-full flex items-center justify-center shrink-0">
               <span className="text-white text-xs font-medium">{i + 1}</span>
             </div>
-            <span className="text-white text-sm font-medium truncate">{item.label}</span>
+            <span className="text-white text-sm font-medium break-words min-w-0">{item.label}</span>
           </div>
           {item.active && (
             <span className="text-[10px] text-[#bbf7d0] bg-[rgba(22,101,52,0.1)] border border-[rgba(22,101,52,0.5)] px-1.5 py-0.5 rounded-full shrink-0">

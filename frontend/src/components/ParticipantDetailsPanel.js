@@ -3,25 +3,13 @@ import { useMeeting, useParticipant } from "@videosdk.live/react-sdk";
 import { XMarkIcon } from "@heroicons/react/24/outline";
 
 function ParticipantRow({ index, participantId }) {
-  const { displayName, micOn } = useParticipant(participantId);
+  const { displayName } = useParticipant(participantId);
   return (
     <div className="flex gap-2 items-center w-full">
       <div className="bg-[rgba(255,255,255,0.05)] flex items-center justify-center rounded-full w-6 h-6 shrink-0">
         <span className="text-white text-xs font-medium">{index}</span>
       </div>
       <span className="flex-1 text-white text-sm font-medium truncate min-w-0">{displayName}</span>
-      {micOn && (
-        <div
-          className="border border-[#303033] flex gap-0.5 items-center p-1 rounded-lg shrink-0 relative bg-[#1b1b1e]"
-          style={{
-            boxShadow: "inset -1px -1px 1px 0px rgba(0,0,0,0.25), 0px 4px 2px rgba(0,0,0,0.25)",
-          }}
-        >
-          <div className="bg-white h-[3px] w-0.5 rounded" />
-          <div className="bg-white h-[3px] w-0.5 rounded" />
-          <div className="bg-white h-[3px] w-0.5 rounded" />
-        </div>
-      )}
     </div>
   );
 }

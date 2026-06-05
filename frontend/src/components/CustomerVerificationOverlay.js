@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useMeeting, usePubSub, VideoPlayer } from "@videosdk.live/react-sdk";
+import useIsMobile from "../hooks/useIsMobile";
 
 function Spinner() {
   return (
@@ -25,10 +26,20 @@ function Spinner() {
 
 export function CustomerVerificationOverlay() {
   const { localParticipant } = useMeeting();
+  const isMobile = useIsMobile();
   const [step, setStep] = useState(null);
   const [completed, setCompleted] = useState([]);
   const [phase, setPhase] = useState(null); // null | 'loading' | 'document' | 'face'
+  const [captureActive, setCaptureActive] = useState(false);
+  const [captureVariant, setCaptureVariant] = useState("document");
   const timerRef = useRef(null);
+
+  usePubSub("CAPTURE_STATE", {
+    onMessageReceived: ({ payload }) => {
+      setCaptureActive(payload?.active === true);
+      if (payload?.variant) setCaptureVariant(payload.variant);
+    },
+  });
 
   usePubSub("VERIFICATION_STEP", {
     onMessageReceived: ({ payload }) => {
@@ -100,9 +111,21 @@ export function CustomerVerificationOverlay() {
   }
 
   // ── Document / Face ────────────────────────────────────────────────────────
-  // Local camera fills the screen; alignment guide overlaid on top.
-  // For document phase the video is un-mirrored (scaleX -1 on the wrapper)
-  // so the patient can read and align the card without the mirror confusion.
+  // Only mount the camera overlay while the doctor has capture active.
+  // This prevents the dark screen persisting after the doctor cancels.
+  if (!captureActive) return null;
+
+  const isFace = captureVariant === "face";
+
+  // Mirror exact frameStyle from CaptureOverlay so both sides are identical.
+  const frameStyle = isFace
+    ? { width: "min(55%, 380px)", aspectRatio: "3 / 4" }
+    : { width: "min(72%, 560px)", aspectRatio: "16 / 10", maxHeight: "42%", maxWidth: "88%" };
+
+  const heading = isFace
+    ? "Please position yourself clearly in front of the camera."
+    : "Hold the document steady inside the frame";
+
   return (
     <div className="absolute inset-0 z-10 bg-[#1b1b1e] overflow-hidden">
       {/* Local camera feed.
@@ -112,20 +135,20 @@ export function CustomerVerificationOverlay() {
       {localId && (
         <div
           className="absolute inset-0"
-          style={phase === "document" ? { transform: "scaleX(-1)" } : undefined}
+          style={!isFace ? { transform: "scaleX(-1)" } : undefined}
         >
           <VideoPlayer
             participantId={localId}
             type="video"
             containerStyle={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
             className="h-full w-full"
-            videoStyle={{ height: "100%", width: "100%", objectFit: "cover" }}
+            videoStyle={{ height: "100%", width: "100%", objectFit: isMobile ? "cover" : "contain" }}
           />
         </div>
       )}
 
       {/* Dark scrim */}
-      <div className="absolute inset-0 bg-black/50" />
+      <div className="absolute inset-0 bg-black/30" />
 
       {/* Patient name */}
       <p
@@ -135,43 +158,24 @@ export function CustomerVerificationOverlay() {
         {localParticipant?.displayName}
       </p>
 
-      {/* Document frame — landscape Aadhaar-card shape, responsive */}
-      {phase === "document" && (
+      {/* Guide frame — same dimensions as doctor's CaptureOverlay */}
+      <div
+        className="absolute inset-0 flex flex-col items-center justify-center px-4 pb-16 pointer-events-none"
+      >
+        {!isFace && (
+          <p className="text-white text-lg font-medium mb-4 text-center drop-shadow-lg">{heading}</p>
+        )}
         <div
-          key="document-guide"
-          className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-5 pb-16 pointer-events-none"
-        >
-          <p
-            className="text-white text-base font-medium text-center leading-snug"
-            style={{ textShadow: "1px 1px 3px rgba(0,0,0,0.4)" }}
-          >
-            Hold the document steady inside the frame
-          </p>
-          <div
-            className="border-[3px] border-dashed border-[#4bd559] rounded-[6px] shrink-0 w-full"
-            style={{ maxWidth: 480, aspectRatio: "16 / 10" }}
-          />
-        </div>
-      )}
-
-      {/* Face frame — portrait crop, responsive */}
-      {phase === "face" && (
-        <div
-          key="face-guide"
-          className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-8 pb-16 pointer-events-none"
-        >
-          <div
-            className="border-[3px] border-dashed border-[#4bd559] rounded-[24px] shrink-0 w-full"
-            style={{ maxWidth: 320, aspectRatio: "3 / 4" }}
-          />
-          <p
-            className="text-white text-base font-medium text-center leading-snug"
-            style={{ textShadow: "1px 1px 3px rgba(0,0,0,0.4)" }}
-          >
-            Please position yourself clearly in front of the camera.
-          </p>
-        </div>
-      )}
+          style={{
+            ...frameStyle,
+            border: "3px dashed #4bd559",
+            borderRadius: isFace ? "24px" : "12px",
+          }}
+        />
+        {isFace && (
+          <p className="text-white text-lg font-medium mt-4 text-center drop-shadow-lg">{heading}</p>
+        )}
+      </div>
     </div>
   );
 }

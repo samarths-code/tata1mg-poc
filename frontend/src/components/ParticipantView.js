@@ -432,6 +432,7 @@ function ParticipantView({
   showImageCapture,
   showResolution,
   isPip,
+  forceContain = false,
 }) {
   const {
     displayName,
@@ -556,7 +557,7 @@ function ParticipantView({
       onMouseLeave={() => {
         setMouseOver(false);
       }}
-      className={`h-full w-full bg-gray-750 relative overflow-hidden rounded-lg ${!isMobile && maintainLandscapeVideoAspectRatio ? "video-contain" : "video-cover"
+      className={`h-full w-full bg-gray-750 relative overflow-hidden rounded-lg ${(forceContain || (!isMobile && maintainLandscapeVideoAspectRatio)) ? "video-contain" : "video-cover"
         }`}
     >
       <audio id="audio" ref={micRef} autoPlay muted={isLocal || !muteSpeaker} />

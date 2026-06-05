@@ -79,6 +79,18 @@ export function JoiningScreen({
   const [didDeviceChange, setDidDeviceChange] = useState(false);
   const [testSpeaker, setTestSpeaker] = useState(false);
   const [micVolume, setMicVolume] = useState(0);
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+
+  useEffect(() => {
+    const handleOffline = () => setIsOffline(true);
+    const handleOnline = () => setIsOffline(false);
+    window.addEventListener("offline", handleOffline);
+    window.addEventListener("online", handleOnline);
+    return () => {
+      window.removeEventListener("offline", handleOffline);
+      window.removeEventListener("online", handleOnline);
+    };
+  }, []);
 
   const videoPlayerRef = useRef();
   const audioPlayerRef = useRef();
@@ -417,6 +429,40 @@ export function JoiningScreen({
   return (
     <>
       {!permissionDone && <PermissionSetup onDone={() => setPermissionDone(true)} />}
+
+      {/* ── Internet disconnect popup ───────────────────────────────────────── */}
+      {isOffline && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center px-6 bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-[320px] flex flex-col items-center gap-4 px-6 py-8">
+            {/* Icon */}
+            <div className="w-14 h-14 rounded-full bg-[#fff1f0] flex items-center justify-center">
+              <svg className="w-7 h-7 text-[#dc2626]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="1" y1="1" x2="23" y2="23" />
+                <path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55" />
+                <path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39" />
+                <path d="M10.71 5.05A16 16 0 0 1 22.56 9" />
+                <path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88" />
+                <path d="M8.53 16.11a6 6 0 0 1 6.95 0" />
+                <line x1="12" y1="20" x2="12.01" y2="20" />
+              </svg>
+            </div>
+            {/* Text */}
+            <div className="flex flex-col gap-1 items-center text-center">
+              <h3 className="text-black text-base font-semibold leading-6">No Internet Connection</h3>
+              <p className="text-[#5e5e61] text-sm leading-5">
+                Please check your connection to continue.
+              </p>
+            </div>
+            {/* Retry button */}
+            <button
+              onClick={() => setIsOffline(!navigator.onLine)}
+              className="w-full bg-[#ff6f61] text-white text-sm font-semibold py-2.5 rounded-xl"
+            >
+              Try Again
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="bg-white min-h-screen relative overflow-x-hidden">
 

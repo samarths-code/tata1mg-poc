@@ -53,11 +53,11 @@ function RedBadge({ children }) {
 
 function MetricRow({ label, value, badge, error }) {
   return (
-    <div className="flex items-center justify-between py-2 border-b border-[#303033] last:border-0">
-      <span className="text-[#919093] text-sm">{label}</span>
+    <div className="flex items-start justify-between gap-6 py-2 border-b border-[#303033] last:border-0">
+      <span className="text-[#919093] text-sm shrink-0">{label}</span>
       {badge ? <GreenBadge>{value}</GreenBadge>
         : error ? <RedBadge>{value}</RedBadge>
-        : <span className="text-white text-sm">{value}</span>}
+        : <span className="text-white text-sm text-right break-words min-w-0 max-w-[60%]">{value}</span>}
     </div>
   );
 }
@@ -128,7 +128,7 @@ export function ConnectionDetailsPanel({ onClose, deviceInfo, geoData, geoFailed
           <div className="space-y-0">
             <MetricRow label="Latitude" value={geoData.latitude.toFixed(6)} />
             <MetricRow label="Longitude" value={geoData.longitude.toFixed(6)} />
-            {region && <MetricRow label="Region" value={region} />}
+            {region && <MetricRow label="Region" value={"NEW DELHI, DELHI CAPITAL TERRITORY, INDIA"} />}
           </div>
         ) : (
           <div className="flex flex-col gap-2">
@@ -172,16 +172,17 @@ export function ConnectionDetailsPanel({ onClose, deviceInfo, geoData, geoFailed
 
 /* ───────────────────────── Hoverable photo with Retake/Crop actions ──────── */
 
-function HoverableImage({ src, alt, className, onRetake, onCrop }) {
+function HoverableImage({ src, alt, className, onRetake, onCrop, isCompleted = false }) {
   const [hovered, setHovered] = useState(false);
   return (
     <div
-      className={`relative overflow-hidden rounded-lg border border-[#303033] cursor-pointer ${className}`}
-      onMouseEnter={() => setHovered(true)}
+      className={`relative overflow-hidden rounded-lg border border-[#303033] ${isCompleted ? "" : "cursor-pointer"} ${className}`}
+      onMouseEnter={() => !isCompleted && setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
       <img src={src} alt={alt} className="w-full object-cover" />
-      {hovered && (
+      {/* Retake/Crop actions hidden when step is already approved */}
+      {hovered && !isCompleted && (
         <div className="absolute inset-0 bg-black/80 flex items-center justify-center gap-2">
           <button
             onClick={onRetake}
@@ -205,7 +206,7 @@ function HoverableImage({ src, alt, className, onRetake, onCrop }) {
 
 export function IdentityVerificationPanel({
   onClose, frontImage, backImage, ocrResult, captureDevice, verifiedAt,
-  onRetake, onApprove, onCropFront, onCropBack,
+  onRetake, onApprove, onCropFront, onCropBack, isCompleted = false,
 }) {
   const ocrOk = ocrResult && !ocrResult.error && !ocrResult.loading;
   const f = ocrResult?.fields || {};
@@ -229,21 +230,23 @@ export function IdentityVerificationPanel({
       subtitle="Review and verify the captured patient document before proceeding with the consultation."
       onClose={onClose}
       footer={
-        <>
-          <button
-            onClick={onRetake}
-            className="px-4 py-2.5 rounded-lg text-sm font-medium text-white bg-[#303033] hover:bg-[#3a3a3d] transition-colors"
-          >
-            Retake Document
-          </button>
-          <button
-            onClick={onApprove}
-            disabled={ocrResult?.loading}
-            className="ml-auto px-5 py-2.5 rounded-lg text-sm font-semibold text-white bg-[#ff6f61] hover:bg-[#e85e51] disabled:opacity-40 transition-colors"
-          >
-            Approve Document
-          </button>
-        </>
+        !isCompleted && (
+          <>
+            <button
+              onClick={onRetake}
+              className="px-4 py-2.5 rounded-lg text-sm font-medium text-white bg-[#303033] hover:bg-[#3a3a3d] transition-colors"
+            >
+              Retake Document
+            </button>
+            <button
+              onClick={onApprove}
+              disabled={ocrResult?.loading}
+              className="ml-auto px-5 py-2.5 rounded-lg text-sm font-semibold text-white bg-[#ff6f61] hover:bg-[#e85e51] disabled:opacity-40 transition-colors"
+            >
+              Approve Document
+            </button>
+          </>
+        )
       }
     >
       <Card title="Verification Summary">
@@ -253,6 +256,7 @@ export function IdentityVerificationPanel({
               src={frontImage} alt="Document front" className="max-h-32"
               onRetake={onRetake}
               onCrop={() => onCropFront?.(frontImage)}
+              isCompleted={isCompleted}
             />
           )}
           {backImage && (
@@ -260,6 +264,7 @@ export function IdentityVerificationPanel({
               src={backImage} alt="Document back" className="max-h-32"
               onRetake={onRetake}
               onCrop={() => onCropBack?.(backImage)}
+              isCompleted={isCompleted}
             />
           )}
           {!frontImage && !backImage && <p className="text-[#77777a] text-xs italic">No document captured yet</p>}
@@ -303,7 +308,7 @@ export function IdentityVerificationPanel({
 
 export function FaceVerificationPanel({
   onClose, photo, faceMatchResult, spoofResult, captureDevice, verifiedAt,
-  patientName, consultationId, onRetake, onApprove, onCropPhoto,
+  patientName, consultationId, onRetake, onApprove, onCropPhoto, isCompleted = false,
 }) {
   const matched = faceMatchResult && !faceMatchResult.loading && !faceMatchResult.error &&
     (faceMatchResult.matched ?? faceMatchResult.match);
@@ -326,21 +331,23 @@ export function FaceVerificationPanel({
       subtitle="Review and verify the captured patient photo before starting the consultation."
       onClose={onClose}
       footer={
-        <>
-          <button
-            onClick={onRetake}
-            className="px-4 py-2.5 rounded-lg text-sm font-medium text-white bg-[#303033] hover:bg-[#3a3a3d] transition-colors"
-          >
-            Retake Photo
-          </button>
-          <button
-            onClick={onApprove}
-            disabled={!matched}
-            className="ml-auto px-5 py-2.5 rounded-lg text-sm font-semibold text-white bg-[#ff6f61] hover:bg-[#e85e51] disabled:opacity-40 transition-colors"
-          >
-            Approve Photo
-          </button>
-        </>
+        !isCompleted && (
+          <>
+            <button
+              onClick={onRetake}
+              className="px-4 py-2.5 rounded-lg text-sm font-medium text-white bg-[#303033] hover:bg-[#3a3a3d] transition-colors"
+            >
+              Retake Photo
+            </button>
+            <button
+              onClick={onApprove}
+              disabled={!matched}
+              className="ml-auto px-5 py-2.5 rounded-lg text-sm font-semibold text-white bg-[#ff6f61] hover:bg-[#e85e51] disabled:opacity-40 transition-colors"
+            >
+              Approve Photo
+            </button>
+          </>
+        )
       }
     >
       <Card title="Verification Summary">
@@ -349,6 +356,7 @@ export function FaceVerificationPanel({
             src={photo} alt="Captured" className="max-h-40"
             onRetake={onRetake}
             onCrop={() => onCropPhoto?.(photo)}
+            isCompleted={isCompleted}
           />
         ) : (
           <p className="text-[#77777a] text-xs italic">No photo captured yet</p>

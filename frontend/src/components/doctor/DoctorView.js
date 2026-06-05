@@ -87,6 +87,7 @@ export default function DoctorView() {
   const { publish: triggerCapture } = usePubSub(`IMAGE_CAPTURE_${pid}`, {});
   const { publish: switchCam } = usePubSub(`SWITCH_PARTICIPANT_CAMERA_${pid}`, {});
   const { publish: publishGeoRetry } = usePubSub("GEO_RETRY", {});
+  const { publish: publishCaptureState } = usePubSub("CAPTURE_STATE", {});
 
   usePubSub("GEO_FAILED", {
     onMessageReceived: () => setGeoFailed(true),
@@ -146,6 +147,7 @@ export default function DoctorView() {
 
           setCapture((c) => ({ ...c, active: false }));
           setCaptureReady(false);
+          publishCaptureState("state", { persist: false }, { active: false });
 
           if (target === "reference") {
             setReferencePhoto(dataUrl); // silent — no crop for the hidden reference
@@ -158,6 +160,7 @@ export default function DoctorView() {
       } catch (err) {
         console.error("Image reassembly error:", err);
         setCapture((c) => ({ ...c, active: false }));
+        publishCaptureState("state", { persist: false }, { active: false });
       }
     },
   });
@@ -211,6 +214,7 @@ export default function DoctorView() {
     setCapture({ active: true, variant });
     setCaptureReady(false);
     setDrawer({ open: false, type: null });
+    publishCaptureState("state", { persist: false }, { active: true, variant: variant === "face" ? "face" : "document" });
   }
 
   // Simulate alignment: the dashed frame turns green shortly after capture opens.
@@ -234,6 +238,7 @@ export default function DoctorView() {
     const target = captureTargetRef.current;
     setCapture({ active: false, variant: capture.variant });
     setCaptureReady(false);
+    publishCaptureState("state", { persist: false }, { active: false });
     if (target === "aadhaarBack") setDrawer({ open: true, type: "identity" });
   }
 
@@ -300,43 +305,31 @@ export default function DoctorView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentStep, customerId]);
 
-  // ── Step pill clicks ───────────────────────────────────────────────────────
-  function handleStepClick(step) {
-    // Enforce sequential order — all prior steps must be completed
-    const allPriorDone = Array.from({ length: step - 1 }, (_, i) => i + 1)
-      .every((s) => completedSteps.includes(s));
-    if (!allPriorDone) return;
-
+  // Advance to a new step: update currentStep + open drawer or start capture
+  function openStep(step) {
+    if (step > 3) { setDrawer({ open: false, type: null }); return; }
     setCurrentStep(step);
-    if (step === 1) {
-      setDrawer({ open: true, type: "connection" });
-    } else if (step === 2) {
-      if (docFront) setDrawer({ open: true, type: "identity" });
-      else startCapture("document-front", "aadhaarFront");
-    } else if (step === 3) {
-      if (customerPhoto) setDrawer({ open: true, type: "face" });
-      else startCapture("face", "customerPhoto");
-    }
+    if (step === 1) setDrawer({ open: true, type: "connection" });
+    else if (step === 2) docFront ? setDrawer({ open: true, type: "identity" }) : startCapture("document-front", "aadhaarFront");
+    else if (step === 3) customerPhoto ? setDrawer({ open: true, type: "face" }) : startCapture("face", "customerPhoto");
+  }
+
+  // Review a completed step: open its drawer WITHOUT moving currentStep backward
+  const STEP_DRAWER = { 1: "connection", 2: "identity", 3: "face" };
+  function reviewStep(step) {
+    setDrawer({ open: true, type: STEP_DRAWER[step] });
+  }
+
+  function handleStepClick(step) {
+    const priorDone = Array.from({ length: step - 1 }, (_, i) => i + 1).every(s => completedSteps.includes(s));
+    if (!priorDone) return;
+    // Completed step → review only; active/next step → advance
+    completedSteps.includes(step) ? reviewStep(step) : openStep(step);
   }
 
   function approveStep(step) {
-    setCompletedSteps((s) => (s.includes(step) ? s : [...s, step]));
-    const next = step + 1;
-    if (next <= 3) {
-      // Navigate directly — avoids stale-state: setCompletedSteps is async so
-      // calling handleStepClick(next) here would read the old completedSteps
-      // and the sequential guard would silently block navigation.
-      setCurrentStep(next);
-      if (next === 2) {
-        if (docFront) setDrawer({ open: true, type: "identity" });
-        else startCapture("document-front", "aadhaarFront");
-      } else if (next === 3) {
-        if (customerPhoto) setDrawer({ open: true, type: "face" });
-        else startCapture("face", "customerPhoto");
-      }
-    } else {
-      setDrawer({ open: false, type: null });
-    }
+    setCompletedSteps(s => s.includes(step) ? s : [...s, step]);
+    openStep(step + 1);
   }
 
   function handleCameraSelect(deviceId) {
@@ -379,6 +372,7 @@ export default function DoctorView() {
                 participantId={customerId}
                 showImageCapture={false}
                 showResolution={!isMobile || !capture.active}
+                forceContain={!isMobile && capture.active}
               />
             ) : (
               <div className="w-full h-full flex flex-col items-center justify-center gap-4">
@@ -425,7 +419,7 @@ export default function DoctorView() {
                   geoFailed={geoFailed}
                   onRequestLocation={() => publishGeoRetry("GEO_RETRY", { persist: false }, {})}
                   onClose={() => setDrawer({ open: false, type: null })}
-                  onNextStep={() => approveStep(1)}
+                  onNextStep={completedSteps.includes(1) ? null : () => approveStep(1)}
                 />
               )}
               {drawer.type === "identity" && (
@@ -440,6 +434,7 @@ export default function DoctorView() {
                   onApprove={() => approveStep(2)}
                   onCropFront={(img) => openCropFromGallery(img, "aadhaarFront")}
                   onCropBack={(img) => openCropFromGallery(img, "aadhaarBack")}
+                  isCompleted={completedSteps.includes(2)}
                 />
               )}
               {drawer.type === "face" && (
@@ -455,6 +450,7 @@ export default function DoctorView() {
                   onRetake={() => startCapture("face", "customerPhoto")}
                   onApprove={() => approveStep(3)}
                   onCropPhoto={(img) => openCropFromGallery(img, "customerPhoto")}
+                  isCompleted={completedSteps.includes(3)}
                 />
               )}
             </div>
@@ -467,7 +463,7 @@ export default function DoctorView() {
                   geoFailed={geoFailed}
                   onRequestLocation={() => publishGeoRetry("GEO_RETRY", { persist: false }, {})}
                   onClose={() => setDrawer({ open: false, type: null })}
-                  onNextStep={() => approveStep(1)}
+                  onNextStep={completedSteps.includes(1) ? null : () => approveStep(1)}
                 />
               )}
               {drawer.type === "identity" && (
@@ -482,6 +478,7 @@ export default function DoctorView() {
                   onApprove={() => approveStep(2)}
                   onCropFront={(img) => openCropFromGallery(img, "aadhaarFront")}
                   onCropBack={(img) => openCropFromGallery(img, "aadhaarBack")}
+                  isCompleted={completedSteps.includes(2)}
                 />
               )}
               {drawer.type === "face" && (
@@ -497,6 +494,7 @@ export default function DoctorView() {
                   onRetake={() => startCapture("face", "customerPhoto")}
                   onApprove={() => approveStep(3)}
                   onCropPhoto={(img) => openCropFromGallery(img, "customerPhoto")}
+                  isCompleted={completedSteps.includes(3)}
                 />
               )}
             </div>

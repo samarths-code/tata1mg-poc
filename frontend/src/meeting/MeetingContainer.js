@@ -11,7 +11,6 @@ import { SidebarConatiner } from "../components/sidebar/SidebarContainer";
 import MemorizedParticipantView from "./components/ParticipantView";
 import { PresenterView } from "../components/PresenterView";
 import DoctorView from "../components/doctor/DoctorView";
-import { nameTructed, trimSnackBarText } from "../utils/helper";
 import WaitingToJoinScreen from "../components/screens/WaitingToJoinScreen";
 import ConnectionStatusOverlay from "../components/screens/ConnectionStatusOverlay";
 import ConfirmBox from "../components/ConfirmBox";
@@ -101,25 +100,17 @@ export function MeetingContainer({ onMeetingLeave }) {
   }, []);
 
   const _handleOnRecordingStateChanged = ({ status }) => {
-    if (
-      status === Constants.recordingEvents.RECORDING_STARTED ||
-      status === Constants.recordingEvents.RECORDING_STOPPED
-    ) {
-      toast(
-        status === Constants.recordingEvents.RECORDING_STARTED
-          ? "Recording started"
-          : "Recording stopped.",
-        {
-          position: "bottom-left",
-          autoClose: 4000,
-          hideProgressBar: true,
-          closeButton: false,
-          pauseOnHover: true,
-          draggable: true,
-          progress: undefined,
-          theme: "dark",
-        }
-      );
+    if (status === Constants.recordingEvents.RECORDING_STOPPED) {
+      toast("Recording stopped.", {
+        position: "bottom-left",
+        autoClose: 4000,
+        hideProgressBar: true,
+        closeButton: false,
+        pauseOnHover: true,
+        draggable: true,
+        progress: undefined,
+        theme: "dark",
+      });
     }
   };
 
@@ -192,43 +183,18 @@ export function MeetingContainer({ onMeetingLeave }) {
     setMeetingError({ code, message: isJoiningError ? "Unable to join meeting!" : message });
   };
 
-  function onParticipantLeft(participant) {
-    toast(
-      `${trimSnackBarText(nameTructed(participant.displayName, 15))} ${
-        participantLeftReason === meetingLeftReasons.TAB_BROWSER_CLOSED
-          ? "left because of tab closed."
-          : "left the meeting."
-      }`,
-      {
-        position: "bottom-left",
-        autoClose: 4000,
-        hideProgressBar: true,
-        closeButton: false,
-        pauseOnHover: true,
-        draggable: true,
-        progress: undefined,
-        theme: "dark",
-      }
-    );
-  }
+  function onParticipantLeft(participant) {}
 
   function _handleOnMeetingStateChanged(data) {
     const { state } = data;
     setMeetingState(state);
-    const msg =
-      state === "CONNECTED" ? "Meeting is connected"
-      : state === "CONNECTING" ? "Meeting is connecting"
-      : state === "FAILED" ? "Meeting connection failed"
-      : state === "DISCONNECTED" ? "Meeting connection closed"
-      : state === "CLOSING" ? "Meeting is closing"
-      : state === "CLOSED" ? "Meeting connection closed"
-      : "";
-    if (msg) toast(msg, {
-      position: "bottom-left", autoClose: 5000,
-      type: (state === "FAILED" || state === "DISCONNECTED") ? "warning" : undefined,
-      hideProgressBar: true, closeButton: false, pauseOnHover: true,
-      draggable: true, progress: undefined, theme: "dark",
-    });
+    if (state === "FAILED") {
+      toast("Meeting connection failed", {
+        position: "bottom-left", autoClose: 5000, type: "warning",
+        hideProgressBar: true, closeButton: false, pauseOnHover: true,
+        draggable: true, progress: undefined, theme: "dark",
+      });
+    }
   }
 
   const isCustomer =

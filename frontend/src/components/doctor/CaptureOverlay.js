@@ -45,7 +45,7 @@ export default function CaptureOverlay({
   // Document: landscape 16:10 (Aadhaar card ratio) constrained in height so it fits
   // within the portrait video without overflowing the control row below.
   const frameStyle = isFace
-    ? { height: "min(62%, 520px)", aspectRatio: "3 / 4", maxWidth: "55%" }
+    ? { width: "min(55%, 380px)", aspectRatio: "3 / 4" }
     : { width: "min(72%, 560px)", aspectRatio: "16 / 10", maxHeight: "42%", maxWidth: "88%" };
 
   return (

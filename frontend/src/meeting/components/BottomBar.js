@@ -34,7 +34,7 @@ import SpeakerIcon from "../../icons/Bottombar/SpeakerIcon";
 import SpeakerOffIcon from "../../icons/Bottombar/SpeakerOffIcon";
 
 // Dark pill-style device button matching Figma design
-function PillBtn({ onToggle, icon: Icon, iconOn, showVoiceBars, micActive = true, children, disabled }) {
+function PillBtn({ onToggle, icon: Icon, iconOn, micActive = true, children, disabled }) {
   return (
     <div
       className="flex items-center h-8 bg-[#1b1b1e] border border-[#303033] rounded-lg pl-1 pr-2 py-1 relative"
@@ -53,13 +53,6 @@ function PillBtn({ onToggle, icon: Icon, iconOn, showVoiceBars, micActive = true
           : <Icon style={{ color: "white", height: 16, width: 16 }} fillcolor="white" />
         }
       </button>
-      {showVoiceBars && (
-        <div className="flex gap-0.5 items-center h-2.5 mr-1 shrink-0">
-          <div className={`w-0.5 h-[3px] rounded-sm ${micActive ? "bg-white" : "bg-[#95959E]"}`} />
-          <div className={`w-0.5 h-[3px] rounded-sm ${micActive ? "bg-white" : "bg-[#95959E]"}`} />
-          <div className={`w-0.5 h-[3px] rounded-sm ${micActive ? "bg-white" : "bg-[#95959E]"}`} />
-        </div>
-      )}
       {children}
     </div>
   );
@@ -119,7 +112,6 @@ export const MicBTN = () => {
       onToggle={() => mMeeting.toggleMic()}
       icon={MicIcon}
       iconOn={localMicOn}
-      showVoiceBars
       micActive={localMicOn}
       disabled={!isMicrophonePermissionAllowed}
     >
