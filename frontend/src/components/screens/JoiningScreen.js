@@ -515,12 +515,6 @@ export function JoiningScreen({
                     {!tokenReady && (
                       <p className="text-xs text-[#919093] text-center">Setting up your session…</p>
                     )}
-                    <input
-                      value={participantName}
-                      onChange={(e) => setParticipantName(e.target.value)}
-                      placeholder="Enter your name"
-                      className="w-full px-4 py-3 bg-white border border-orange-200 rounded-xl text-black text-center text-sm focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-450 transition-colors placeholder-[#919093]"
-                    />
                   </>
                 )}
                 <button
