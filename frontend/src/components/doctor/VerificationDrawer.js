@@ -128,7 +128,7 @@ export function ConnectionDetailsPanel({ onClose, deviceInfo, geoData, geoFailed
           <div className="space-y-0">
             <MetricRow label="Latitude" value={geoData.latitude.toFixed(6)} />
             <MetricRow label="Longitude" value={geoData.longitude.toFixed(6)} />
-            {region && <MetricRow label="Region" value={"NEW DELHI, DELHI CAPITAL TERRITORY, INDIA"} />}
+            {region && <MetricRow label="Region" value={region} />}
           </div>
         ) : (
           <div className="flex flex-col gap-2">
