@@ -27,6 +27,7 @@ import { TopBar } from "./components/TopBar";
 import { ParticipantDetailsPanel } from "../components/ParticipantDetailsPanel";
 import { CustomerVerificationOverlay } from "../components/CustomerVerificationOverlay";
 import MobileCustomerCallView from "../components/MobileCustomerCallView";
+import NetworkQualityPopup from "../components/NetworkQualityPopup";
 import useGeolocation from "../hooks/useGeolocation";
 import { getIPGeoInfo } from "../api";
 
@@ -66,6 +67,7 @@ export function MeetingContainer({ onMeetingLeave }) {
   const [meetingError, setMeetingError] = useState(false);
   const [localParticipantAllowedJoin, setLocalParticipantAllowedJoin] = useState(null);
   const [meetingState, setMeetingState] = useState("CONNECTED");
+  const [qualityLimitation, setQualityLimitation] = useState(null);
 
   const mMeetingRef = useRef();
   const containerRef = createRef();
@@ -231,6 +233,10 @@ export function MeetingContainer({ onMeetingLeave }) {
     }
   }, [isCustomer, publishMicSilence]);
 
+  const _handleOnQualityLimitation = useCallback(({ type, state }) => {
+    setQualityLimitation({ type, state });
+  }, []);
+
   const mMeeting = useMeeting({
     onParticipantJoined,
     onParticipantLeft,
@@ -240,6 +246,7 @@ export function MeetingContainer({ onMeetingLeave }) {
     onError: _handleOnError,
     onRecordingStateChanged: _handleOnRecordingStateChanged,
     onAudioInputSilence,
+    onQualityLimitation: _handleOnQualityLimitation,
   });
 
   const isPresenting = mMeeting.presenterId ? true : false;
@@ -450,6 +457,7 @@ export function MeetingContainer({ onMeetingLeave }) {
       <div ref={containerRef} className={`h-full w-full flex flex-col relative ${localParticipantAllowedJoin ? "bg-[#1b1b1e]" : "bg-transparent"}`}>
         {localParticipantAllowedJoin ? (
             <>
+              <NetworkQualityPopup limitation={qualityLimitation} />
               <ImageUploadListner />
               <ResolutionListner />
               <SwitchCameraListner />
