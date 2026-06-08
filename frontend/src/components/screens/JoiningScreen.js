@@ -21,7 +21,7 @@ import PermissionSetup from "../PermissionSetup";
 import { participantModes } from "../../utils/common";
 import Tata1mgLogo from "../Tata1mgLogo";
 import DeviceEnableModal from "../DeviceEnableModal";
-import { ShieldCheckIcon, ChevronRightIcon } from "@heroicons/react/24/outline";
+import { ShieldCheckIcon, ChevronRightIcon, MicrophoneIcon, VideoCameraIcon, VideoCameraSlashIcon, SpeakerWaveIcon, SpeakerXMarkIcon } from "@heroicons/react/24/outline";
 
 export function JoiningScreen({
   setSpekerOn,
@@ -357,66 +357,44 @@ export function JoiningScreen({
         </div>
       )}
       <div className="absolute bottom-[10px] left-1/2 -translate-x-1/2 flex items-center gap-2.5">
-        {/* Mic button — shows info badge when permission denied */}
+        {/* Mic button */}
         <div className="relative">
           <button
             onClick={() => isMicrophonePermissionAllowed ? _toggleMic() : setShowDeviceModal('mic')}
-            className="bg-[rgba(0,0,0,0.5)] border border-white/80 rounded flex items-center gap-1 h-8 pl-1 pr-2 py-1"
+            className="bg-[rgba(0,0,0,0.5)] border border-white/80 rounded flex items-center justify-center h-8 w-8"
           >
-            <div className="flex items-center justify-center p-1.5 rounded-lg">
-              {micOn && isMicrophonePermissionAllowed
-                ? <MicOnIcon fillcolor="white" style={{ width: 20, height: 20 }} />
-                : <MicOffIcon fillcolor="white" style={{ width: 20, height: 20 }} />}
-            </div>
+            <MicrophoneIcon className={`w-5 h-5 ${micOn && isMicrophonePermissionAllowed ? "text-white" : "text-white"}`} />
           </button>
           {!isMicrophonePermissionAllowed && (
             <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-[#dc2626] flex items-center justify-center text-white text-[7px] font-bold leading-none">!</span>
           )}
         </div>
 
-        {/* Camera button — shows info badge when permission denied */}
+        {/* Camera button */}
         <div className="relative">
           <button
             onClick={() => isCameraPermissionAllowed ? _toggleWebcam() : setShowDeviceModal('camera')}
-            className="bg-[rgba(0,0,0,0.5)] border border-white/80 rounded flex items-center h-8 p-1"
+            className="bg-[rgba(0,0,0,0.5)] border border-white/80 rounded flex items-center justify-center h-8 w-8"
           >
-            <div className="flex items-center justify-center p-1.5 rounded-lg">
-              {webcamOn && isCameraPermissionAllowed
-                ? <WebcamOnIcon fillcolor="white" style={{ width: 20, height: 20 }} />
-                : <WebcamOffIcon fillcolor="white" style={{ width: 20, height: 20 }} />}
-            </div>
+            {webcamOn && isCameraPermissionAllowed
+              ? <VideoCameraIcon className="w-5 h-5 text-white" />
+              : <VideoCameraSlashIcon className="w-5 h-5 text-white" />}
           </button>
           {!isCameraPermissionAllowed && (
             <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-[#dc2626] flex items-center justify-center text-white text-[7px] font-bold leading-none">!</span>
           )}
         </div>
 
-        {/* Speaker button — shows info badge when speaker off; opens enable modal */}
+        {/* Speaker button */}
         <div className="relative">
           <button
             onClick={() => testSpeaker ? setTestSpeaker(false) : setShowDeviceModal('speaker')}
-            className="bg-[rgba(0,0,0,0.5)] border border-white/80 rounded flex items-center h-8 p-1"
+            className="bg-[rgba(0,0,0,0.5)] border border-white/80 rounded flex items-center justify-center h-8 w-8"
           >
-            <div className="flex items-center justify-center p-1.5 rounded-lg">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-                {testSpeaker ? (
-                  <>
-                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
-                    <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-                  </>
-                ) : (
-                  <>
-                    <line x1="17" y1="9" x2="23" y2="15" />
-                    <line x1="23" y1="9" x2="17" y2="15" />
-                  </>
-                )}
-              </svg>
-            </div>
+            {testSpeaker
+              ? <SpeakerWaveIcon className="w-5 h-5 text-white" />
+              : <SpeakerXMarkIcon className="w-5 h-5 text-white" />}
           </button>
-`          {/* {!testSpeaker && (
-            <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-[#dc2626] flex items-center justify-center text-white text-[7px] font-bold leading-none">!</span>
-          )}` */}
         </div>
       </div>
     </div>
