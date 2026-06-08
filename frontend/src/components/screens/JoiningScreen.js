@@ -414,9 +414,9 @@ export function JoiningScreen({
               </svg>
             </div>
           </button>
-          {!testSpeaker && (
+`          {/* {!testSpeaker && (
             <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-[#dc2626] flex items-center justify-center text-white text-[7px] font-bold leading-none">!</span>
-          )}
+          )}` */}
         </div>
       </div>
     </div>

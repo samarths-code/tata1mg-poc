@@ -1,5 +1,4 @@
 import React, { useState } from "react";
-import { ShieldCheckIcon } from "@heroicons/react/24/outline";
 import { CheckCircleIcon } from "@heroicons/react/24/solid";
 import { StarIcon as StarSolid } from "@heroicons/react/24/solid";
 import { StarIcon as StarOutline } from "@heroicons/react/24/outline";
@@ -59,53 +58,46 @@ export function LeaveScreen({ participantName }) {
   const displayName = participantName || (isDoctor ? "Doctor" : "Guest");
 
   return (
-    <div className="fixed inset-0 z-50 bg-white overflow-hidden">
+    <div className="fixed inset-0 z-50 bg-white overflow-y-auto">
 
-      {/* Logo — top-left, matches Figma top:30 left:30 */}
-      <div className="absolute top-[30px] left-[30px]">
+      {/* Logo — top-left */}
+      <div className="absolute top-[18px] left-[16px] md:top-[30px] md:left-[30px]">
         <Tata1mgLogo dark />
       </div>
 
-      {/* Text block — centered at exactly 50% of viewport height (Figma: top:50%) */}
-      <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2
-                      flex flex-col items-center text-center gap-2 px-6 w-full">
-        <div className="flex items-center gap-2">
-          <CheckCircleIcon className="w-5 h-5 text-[#22c55e]" />
-          <span className="text-[#5e5e61] text-sm font-medium">Consultation Completed</span>
+      {/* Centred content — stacks naturally so nothing clips on small screens */}
+      <div className="min-h-full flex flex-col items-center justify-center gap-8 px-6 pt-[80px] pb-10">
+
+        {/* Icon + title + subtitle + button */}
+        <div className="flex flex-col items-center text-center gap-2">
+          <div className="flex items-center gap-2">
+            <CheckCircleIcon className="w-5 h-5 text-[#22c55e]" />
+            <span className="text-[#5e5e61] text-sm font-medium">Consultation Completed</span>
+          </div>
+
+          <h1 className="text-black text-[24px] font-medium leading-[32px]">
+            Thank You, {displayName}!
+          </h1>
+
+          <p className="text-[#5e5e61] text-[14px] font-medium leading-[20px]">
+            You have completed the consultation successfully.<br />
+            Thank you for your time and care.
+          </p>
+
+          {isDoctor && (
+            <button
+              onClick={() => window.location.reload()}
+              className="mt-4 bg-orange-450 hover:bg-orange-500 text-white px-6 py-2.5 rounded-xl text-sm font-semibold transition-colors"
+            >
+              Return to Dashboard
+            </button>
+          )}
         </div>
 
-        <h1 className="text-black text-[24px] font-medium leading-[32px]">
-          Thank You, {displayName}!
-        </h1>
-
-        <p className="text-[#5e5e61] text-[14px] font-medium leading-[20px]">
-          You have completed the consultation successfully.<br />
-          Thank you for your time and care.
-        </p>
-
-        {isDoctor && (
-          <button
-            onClick={() => window.location.reload()}
-            className="mt-4 bg-orange-450 hover:bg-orange-500 text-white px-6 py-2.5 rounded-xl text-sm font-semibold transition-colors"
-          >
-            Return to Dashboard
-          </button>
-        )}
-      </div>
-
-      {/* Rating card — center is 246px below viewport midpoint (Figma: top:calc(50%+246px)) */}
-      <div className="absolute left-1/2 -translate-x-1/2 -translate-y-1/2"
-           style={{ top: "calc(50% + 246px)" }}>
+        {/* Rating card */}
         <StarRating />
-      </div>
 
-      {/* Security footer — pinned to bottom (Figma: top:846px on 900px frame) */}
-      <div className="absolute bottom-[30px] left-1/2 -translate-x-1/2
-                      flex items-center gap-[10px] text-[#5e5e61] text-sm font-medium whitespace-nowrap">
-        <ShieldCheckIcon className="w-4 h-4 shrink-0" />
-        <p>Your meeting is secure and encrypted. No one can join unless they are invited.</p>
       </div>
-
     </div>
   );
 }

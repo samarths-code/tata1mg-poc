@@ -166,11 +166,11 @@ export default function DoctorView() {
   });
 
   // ── AI helpers ─────────────────────────────────────────────────────────────
-  const runOCRCheck = useCallback(async (imageBase64) => {
+  const runOCRCheck = useCallback(async (frontBase64, backBase64) => {
     setOcrResult({ loading: true });
     try {
       if (!isAiReady()) throw new Error("AI not ready");
-      const raw = await runOCR({ imageBase64 });
+      const raw = await runOCR({ frontBase64, backBase64 });
       setOcrResult({ fields: raw });
     } catch (err) {
       setOcrResult({ error: true, message: err.message });
@@ -218,11 +218,13 @@ export default function DoctorView() {
   }
 
   // Simulate alignment: the dashed frame turns green shortly after capture opens.
+  // Also auto-cancels if the patient disconnects while capture is in progress.
   useEffect(() => {
     if (!capture.active) return;
+    if (!customerId) { cancelCapture(); return; }
     const t = setTimeout(() => setCaptureReady(true), 1200);
     return () => clearTimeout(t);
-  }, [capture.active, capture.variant]);
+  }, [capture.active, capture.variant, customerId]);
 
   function fireCapture() {
     const target = captureTargetRef.current;
@@ -266,21 +268,31 @@ export default function DoctorView() {
     const t = nowTime();
 
     if (target === "aadhaarFront") {
-      const masked = await applyAadhaarMask(cropped);
-      setDocFront(masked);
-      runOCRCheck(masked);
+      setDocFront(cropped); // show real image until back is captured
       setIdentityTime(t);
       if (cropFromGalleryRef.current) {
         cropFromGalleryRef.current = false;
+        // Back already exists — re-run OCR with new front + existing back, then re-mask front
+        if (docBack) {
+          runOCRCheck(cropped, docBack);
+          applyAadhaarMask(cropped).then(setDocFront);
+        }
         setDrawer({ open: true, type: "identity" });
       } else {
-        // Chain into back-side capture (Cancel skips straight to the drawer).
         startCapture("document-back", "aadhaarBack");
       }
     } else if (target === "aadhaarBack") {
-      const masked = await applyAadhaarMask(cropped);
-      setDocBack(masked);
-      setAadhaarPhoto(masked);
+      const realFront = docFront; // capture before async masking updates it
+      setDocBack(cropped); // show real back briefly
+      // Fire OCR with real images, then mask both and swap display
+      runOCRCheck(realFront, cropped);
+      const [maskedFront, maskedBack] = await Promise.all([
+        applyAadhaarMask(realFront),
+        applyAadhaarMask(cropped),
+      ]);
+      setDocFront(maskedFront);
+      setDocBack(maskedBack);
+      setAadhaarPhoto(maskedBack);
       setDrawer({ open: true, type: "identity" });
     } else if (target === "customerPhoto") {
       setCustomerPhoto(cropped);
@@ -383,7 +395,7 @@ export default function DoctorView() {
               </div>
             )}
 
-            {capture.active && (
+            {capture.active && customerId && (
               <CaptureOverlay
                 variant={capture.variant}
                 ready={captureReady}
@@ -431,6 +443,7 @@ export default function DoctorView() {
                   verifiedAt={identityTime}
                   onClose={() => setDrawer({ open: false, type: null })}
                   onRetake={() => { cropFromGalleryRef.current = true; startCapture("document-front", "aadhaarFront"); }}
+                  onRetakeBack={() => startCapture("document-back", "aadhaarBack")}
                   onApprove={() => approveStep(2)}
                   onCropFront={(img) => openCropFromGallery(img, "aadhaarFront")}
                   onCropBack={(img) => openCropFromGallery(img, "aadhaarBack")}
@@ -475,6 +488,7 @@ export default function DoctorView() {
                   verifiedAt={identityTime}
                   onClose={() => setDrawer({ open: false, type: null })}
                   onRetake={() => { cropFromGalleryRef.current = true; startCapture("document-front", "aadhaarFront"); }}
+                  onRetakeBack={() => startCapture("document-back", "aadhaarBack")}
                   onApprove={() => approveStep(2)}
                   onCropFront={(img) => openCropFromGallery(img, "aadhaarFront")}
                   onCropBack={(img) => openCropFromGallery(img, "aadhaarBack")}

@@ -172,7 +172,7 @@ export function ConnectionDetailsPanel({ onClose, deviceInfo, geoData, geoFailed
 
 /* ───────────────────────── Hoverable photo with Retake/Crop actions ──────── */
 
-function HoverableImage({ src, alt, className, onRetake, onCrop, isCompleted = false }) {
+function HoverableImage({ src, alt, label, className, onRetake, onCrop, isCompleted = false }) {
   const [hovered, setHovered] = useState(false);
   return (
     <div
@@ -180,22 +180,29 @@ function HoverableImage({ src, alt, className, onRetake, onCrop, isCompleted = f
       onMouseEnter={() => !isCompleted && setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      <img src={src} alt={alt} className="w-full object-cover" />
-      {/* Retake/Crop actions hidden when step is already approved */}
+      <img src={src} alt={alt} className="w-full h-full object-cover" />
+      {label && !hovered && (
+        <span className="absolute bottom-1.5 left-1.5 text-[10px] font-medium text-white bg-black/60 px-1.5 py-0.5 rounded">
+          {label}
+        </span>
+      )}
       {hovered && !isCompleted && (
-        <div className="absolute inset-0 bg-black/80 flex items-center justify-center gap-2">
-          <button
-            onClick={onRetake}
-            className="bg-[rgba(255,255,255,0.02)] border border-[rgba(255,255,255,0.05)] px-2 py-1 rounded-[6px] text-xs font-medium text-white hover:bg-[rgba(255,255,255,0.1)] transition-colors"
-          >
-            Retake
-          </button>
-          <button
-            onClick={onCrop}
-            className="bg-[rgba(255,255,255,0.02)] border border-[rgba(255,255,255,0.05)] px-2 py-1 rounded-[6px] text-xs font-medium text-white hover:bg-[rgba(255,255,255,0.1)] transition-colors"
-          >
-            Crop
-          </button>
+        <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center gap-2">
+          {label && <span className="text-[10px] font-semibold text-[#919093] uppercase tracking-wider">{label}</span>}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onRetake}
+              className="bg-[rgba(255,255,255,0.02)] border border-[rgba(255,255,255,0.05)] px-2 py-1 rounded-[6px] text-xs font-medium text-white hover:bg-[rgba(255,255,255,0.1)] transition-colors"
+            >
+              Retake
+            </button>
+            <button
+              onClick={onCrop}
+              className="bg-[rgba(255,255,255,0.02)] border border-[rgba(255,255,255,0.05)] px-2 py-1 rounded-[6px] text-xs font-medium text-white hover:bg-[rgba(255,255,255,0.1)] transition-colors"
+            >
+              Crop
+            </button>
+          </div>
         </div>
       )}
     </div>
@@ -206,7 +213,7 @@ function HoverableImage({ src, alt, className, onRetake, onCrop, isCompleted = f
 
 export function IdentityVerificationPanel({
   onClose, frontImage, backImage, ocrResult, captureDevice, verifiedAt,
-  onRetake, onApprove, onCropFront, onCropBack, isCompleted = false,
+  onRetake, onRetakeBack, onApprove, onCropFront, onCropBack, isCompleted = false,
 }) {
   const ocrOk = ocrResult && !ocrResult.error && !ocrResult.loading;
   const f = ocrResult?.fields || {};
@@ -250,10 +257,11 @@ export function IdentityVerificationPanel({
       }
     >
       <Card title="Verification Summary">
-        <div className="space-y-2">
+        <div className="flex flex-col gap-2">
           {frontImage && (
             <HoverableImage
-              src={frontImage} alt="Document front" className="max-h-32"
+              src={frontImage} alt="Document front" label="Front"
+              className="h-[100px] w-[186px] mx-auto"
               onRetake={onRetake}
               onCrop={() => onCropFront?.(frontImage)}
               isCompleted={isCompleted}
@@ -261,8 +269,9 @@ export function IdentityVerificationPanel({
           )}
           {backImage && (
             <HoverableImage
-              src={backImage} alt="Document back" className="max-h-32"
-              onRetake={onRetake}
+              src={backImage} alt="Document back" label="Back"
+              className="h-[100px] w-[186px] mx-auto"
+              onRetake={onRetakeBack ?? onRetake}
               onCrop={() => onCropBack?.(backImage)}
               isCompleted={isCompleted}
             />

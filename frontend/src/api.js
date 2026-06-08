@@ -135,12 +135,11 @@ export const getIPGeoInfo = async () => {
 
 export const isAiReady = () => true;
 
-export const runOCR = async ({ imageBase64 }) => {
-  const img = ensureDataUrl(imageBase64);
+export const runOCR = async ({ frontBase64, backBase64 }) => {
   const res = await fetch(`${BACKEND_URL}/api/v1/identity/ocr`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ frontPart: img, backPart: img }),
+    body: JSON.stringify({ frontPart: ensureDataUrl(frontBase64), backPart: ensureDataUrl(backBase64) }),
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));

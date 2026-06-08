@@ -180,11 +180,10 @@ def create_meeting():
                     "recording-*",
                     "session-*",
                 ],
-                #TODO: add onFailure callback to handle recording failures
-                # "onFailure": {
-                #     "waitTime": 60, #if recording fails to start after 60, close the room
-                #     "action": "close-room"
-                # }
+                "onFailure": {
+                    "waitTime": 60, #if recording fails to start after 60, close the room
+                    "action": "close-room"
+                }
             }
         }
     }
