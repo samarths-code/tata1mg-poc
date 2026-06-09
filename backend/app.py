@@ -330,8 +330,13 @@ def videosdk_webhook():
         pass
 
     elif event == "recording-failed":
-        # TODO: handle recording failure — e.g. alert ops, end the current session
-        pass
+        session_id = (payload.get("data") or {}).get("sessionId")
+        if session_id:
+            try:
+                vsdk_post("/v2/sessions/end", {"sessionId": session_id})
+                app.logger.warning("recording-failed: ended session %s", session_id)
+            except Exception as e:
+                app.logger.error("recording-failed: could not end session %s: %s", session_id, e)
 
     return jsonify({"received": True}), 200
 

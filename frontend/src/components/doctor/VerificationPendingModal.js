@@ -89,7 +89,7 @@ export default function VerificationPendingModal({ completedSteps = [], onLeaveA
           <div className="flex items-center justify-end gap-2">
             <button
               onClick={onLeaveAnyway}
-              className="bg-white/5 text-white text-sm font-medium px-3 py-[6px] rounded-[4px] hover:bg-white/10 transition-colors"
+              className="bg-[#991b1b] text-[#fecaca] text-sm font-medium px-3 py-[6px] rounded-[4px] hover:bg-[#7f1d1d] transition-colors"
             >
               Leave Anyway
             </button>

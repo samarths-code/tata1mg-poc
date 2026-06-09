@@ -52,6 +52,7 @@ export default function DoctorView() {
   // ── Capture state ──────────────────────────────────────────────────────────
   const [capture, setCapture] = useState({ active: false, variant: "document-front" });
   const [captureReady, setCaptureReady] = useState(false);
+  const [captureProgress, setCaptureProgress] = useState(null); // null | 0-100
   const captureTargetRef = useRef(null); // 'aadhaarFront' | 'aadhaarBack' | 'customerPhoto' | 'reference'
   const cropFromGalleryRef = useRef(false); // true when re-cropping an already-captured image
   const imageChunksRef = useRef({});
@@ -136,7 +137,9 @@ export default function DoctorView() {
         const { id, index, totalChunk, chunkdata } = payload;
         if (!imageChunksRef.current[id]) imageChunksRef.current[id] = [];
         imageChunksRef.current[id][index] = { index, chunkdata };
-        if (imageChunksRef.current[id].length === totalChunk) {
+        const received = imageChunksRef.current[id].filter(Boolean).length;
+        setCaptureProgress(Math.round((received / totalChunk) * 100));
+        if (received === totalChunk) {
           const base64 = imageChunksRef.current[id]
             .sort((a, b) => a.index - b.index)
             .map((c) => c.chunkdata)
@@ -145,6 +148,7 @@ export default function DoctorView() {
           const target = captureTargetRef.current;
           delete imageChunksRef.current[id];
 
+          setCaptureProgress(null);
           setCapture((c) => ({ ...c, active: false }));
           setCaptureReady(false);
           publishCaptureState("state", { persist: false }, { active: false });
@@ -228,6 +232,7 @@ export default function DoctorView() {
 
   function fireCapture() {
     const target = captureTargetRef.current;
+    setCaptureProgress(0);
     setCapture((c) => ({ ...c, active: true }));
     try {
       triggerCapture("IMAGE_CAPTURE", { persist: true }, { senderId: localParticipant.id, target });
@@ -238,6 +243,7 @@ export default function DoctorView() {
 
   function cancelCapture() {
     const target = captureTargetRef.current;
+    setCaptureProgress(null);
     setCapture({ active: false, variant: capture.variant });
     setCaptureReady(false);
     publishCaptureState("state", { persist: false }, { active: false });
@@ -399,7 +405,7 @@ export default function DoctorView() {
               <CaptureOverlay
                 variant={capture.variant}
                 ready={captureReady}
-                capturing={false}
+                progress={captureProgress}
                 cameras={customerCameras}
                 selectedCameraId={selectedCameraId}
                 onSelectCamera={handleCameraSelect}

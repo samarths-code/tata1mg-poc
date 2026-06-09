@@ -1,5 +1,4 @@
 import React from "react";
-import { CameraIcon } from "@heroicons/react/24/solid";
 
 /**
  * On-video capture overlay matching the Figma capture screens (7/8/9/11/13/14/51-57).
@@ -13,10 +12,32 @@ import { CameraIcon } from "@heroicons/react/24/solid";
  * anchored, so neither can be clipped by the video container's overflow — the
  * controls stay visible whether or not the verification drawer is open.
  */
+// 8-spoke spinner matching the Figma "Loader 2" animation component
+function CaptureSpinner() {
+  return (
+    <div className="relative w-4 h-4 animate-spin" style={{ animationDuration: "0.8s" }}>
+      {Array.from({ length: 8 }, (_, i) => (
+        <div
+          key={i}
+          className="absolute bg-white rounded-sm"
+          style={{
+            width: 2, height: 5,
+            left: "50%", top: 0,
+            marginLeft: -1,
+            opacity: (i + 1) / 8,
+            transform: `rotate(${i * 45}deg)`,
+            transformOrigin: "1px 8px",
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
 export default function CaptureOverlay({
   variant = "document-front", // 'document-front' | 'document-back' | 'face'
   ready = false,              // green (ready) vs red (not aligned)
-  capturing = false,
+  progress = null,            // null = idle, 0-100 = capturing in progress
   onCancel,
   onCapture,
   cameras = [],
@@ -88,13 +109,17 @@ export default function CaptureOverlay({
         {/* Capture */}
         <button
           onClick={onCapture}
-          disabled={!ready || capturing}
-          className={`flex items-center gap-2 px-3 py-[6px] md:px-5 md:py-2.5 rounded text-sm font-semibold text-white transition-colors ${
-            ready && !capturing ? "bg-[#ff6f61]" : "bg-[#ff6f61]/50 cursor-not-allowed"
+          disabled={!ready || progress !== null}
+          className={`flex items-center gap-2 px-3 py-[6px] md:px-5 md:py-2.5 rounded text-sm font-semibold text-white transition-colors bg-[#ff6f61] ${
+            !ready || progress !== null ? "cursor-not-allowed" : ""
           }`}
         >
-          <CameraIcon className="w-4 h-4" />
-          {capturing ? "Capturing…" : captureLabel}
+          {progress !== null ? (
+            <>
+              <CaptureSpinner />
+              {`Capturing ${progress}%`}
+            </>
+          ) : captureLabel}
         </button>
 
         {/* Camera selector — 178px on mobile (Figma), auto on desktop */}

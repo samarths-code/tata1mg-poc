@@ -305,6 +305,118 @@ const STEP_LABELS = {
   3: "Step 3: Document Capture",
 };
 
+function LeaveBTN({ isDoctor, completedStepsRef, completedSteps, showLeaveModal, setShowLeaveModal }) {
+  const { leave, end, localParticipant } = useMeeting();
+
+  const allVerified = !isDoctor || [1, 2, 3].every((s) => completedStepsRef.current.includes(s));
+
+  const performLeave = () => {
+    const name = trimSnackBarText(nameTructed(localParticipant.displayName, 15));
+    if (isDoctor) {
+      toast(`${name} ended the consultation.`, {
+        position: "bottom-left", autoClose: 4000, hideProgressBar: true, closeButton: false, pauseOnHover: true, draggable: true, theme: "dark",
+      });
+      end();
+    } else {
+      toast(`${name} left the meeting.`, {
+        position: "bottom-left", autoClose: 4000, hideProgressBar: true, closeButton: false, pauseOnHover: true, draggable: true, theme: "dark",
+      });
+      leave();
+    }
+  };
+
+  return (
+    <>
+      <button
+        onClick={() => allVerified ? performLeave() : setShowLeaveModal(true)}
+        className="bg-[#991b1b] text-[#fecaca] font-medium text-sm px-3 py-1.5 rounded-lg whitespace-nowrap hover:bg-[#7f1d1d] transition-colors"
+      >
+        End Call
+      </button>
+      {showLeaveModal && (
+        <VerificationPendingModal
+          completedSteps={completedSteps}
+          onLeaveAnyway={() => { setShowLeaveModal(false); performLeave(); }}
+          onClose={() => setShowLeaveModal(false)}
+        />
+      )}
+    </>
+  );
+}
+
+function ScreenShareBTN({ isMobile, isTab }) {
+  const { localScreenShareOn, toggleScreenShare, presenterId } = useMeeting();
+  return isMobile || isTab ? (
+    <MobileIconButton
+      id="screen-share-btn"
+      tooltipTitle={presenterId ? (localScreenShareOn ? "Stop Presenting" : null) : "Present Screen"}
+      buttonText={presenterId ? (localScreenShareOn ? "Stop Presenting" : null) : "Present Screen"}
+      isFocused={localScreenShareOn}
+      Icon={ScreenShareIcon}
+      onClick={async () => {
+        try {
+          const track = await createScreenShareVideoTrack({ optimizationMode: "text", encoderConfig: "h720p_15fps" });
+          toggleScreenShare(track);
+        } catch (err) { console.error("Screen share error:", err); }
+      }}
+      disabled={presenterId ? !localScreenShareOn : isMobile}
+    />
+  ) : null;
+}
+
+function ParticipantsBTN({ isMobile, isTab }) {
+  const { participants } = useMeeting();
+  const { sideBarMode, setSideBarMode } = useMeetingAppContext();
+  return isMobile || isTab ? (
+    <MobileIconButton
+      tooltipTitle="Participants"
+      isFocused={sideBarMode === sideBarModes.PARTICIPANTS}
+      buttonText="Participants"
+      disabledOpacity={1}
+      Icon={ParticipantsIcon}
+      onClick={() => setSideBarMode((s) => s === sideBarModes.PARTICIPANTS ? null : sideBarModes.PARTICIPANTS)}
+      badge={`${new Map(participants)?.size}`}
+    />
+  ) : null;
+}
+
+function DocumentPanelBTN({ isMobile, isTab }) {
+  const { sideBarMode, setSideBarMode } = useMeetingAppContext();
+  return isMobile || isTab ? (
+    <MobileIconButton
+      tooltipTitle="Documents"
+      buttonText="Documents"
+      Icon={ClipboardDocumentListIcon}
+      isFocused={sideBarMode === sideBarModes.DOCUMENT_PANEL}
+      onClick={() => setSideBarMode((s) => s === sideBarModes.DOCUMENT_PANEL ? null : sideBarModes.DOCUMENT_PANEL)}
+    />
+  ) : null;
+}
+
+function MeetingIdCopyBTN() {
+  const { meetingId } = useMeeting();
+  const [isCopied, setIsCopied] = useState(false);
+  return (
+    <div className="flex items-center justify-center">
+      <div className="flex border border-[#303033] p-2 rounded-md items-center justify-center gap-2 bg-[#1b1b1e]">
+        <span className="text-white text-sm font-mono">{meetingId}</span>
+        <button
+          onClick={() => {
+            navigator.clipboard.writeText(meetingId);
+            setIsCopied(true);
+            setTimeout(() => setIsCopied(false), 3000);
+          }}
+        >
+          {isCopied
+            ? <CheckIcon className="h-4 w-4 text-green-400" />
+            : <ClipboardIcon className="h-4 w-4 text-[#919093]" />
+          }
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function BottomBar({ bottomBarHeight, onShowConnectionDetails, completedSteps = [] }) {
   const { sideBarMode, setSideBarMode, participantMode } = useMeetingAppContext();
 
@@ -345,121 +457,6 @@ export function BottomBar({ bottomBarHeight, onShowConnectionDetails, completedS
   const browserName = getBrowserName(navigator.userAgent);
   const supportsOutputDevice = browserName === "Chrome" || browserName === "Edge" || browserName === "Opera";
 
-  const ScreenShareBTN = ({ isMobile, isTab }) => {
-    const { localScreenShareOn, toggleScreenShare, presenterId } = useMeeting();
-    return isMobile || isTab ? (
-      <MobileIconButton
-        id="screen-share-btn"
-        tooltipTitle={presenterId ? (localScreenShareOn ? "Stop Presenting" : null) : "Present Screen"}
-        buttonText={presenterId ? (localScreenShareOn ? "Stop Presenting" : null) : "Present Screen"}
-        isFocused={localScreenShareOn}
-        Icon={ScreenShareIcon}
-        onClick={async () => {
-          try {
-            const track = await createScreenShareVideoTrack({ optimizationMode: "text", encoderConfig: "h720p_15fps" });
-            toggleScreenShare(track);
-          } catch (err) { console.error("Screen share error:", err); }
-        }}
-        disabled={presenterId ? !localScreenShareOn : isMobile}
-      />
-    ) : null;
-  };
-
-  const LeaveBTN = () => {
-    const { leave, end, localParticipant } = useMeeting();
-
-    const allVerified = !isDoctor || [1, 2, 3].every((s) => completedStepsRef.current.includes(s));
-
-    console.log("completedStepsRef",completedStepsRef);
-    
-  
-    console.log("allVerified",allVerified);
-    
-
-    const performLeave = () => {
-      const name = trimSnackBarText(nameTructed(localParticipant.displayName, 15));
-      if (isDoctor) {
-        toast(`${name} ended the consultation.`, {
-          position: "bottom-left", autoClose: 4000, hideProgressBar: true, closeButton: false, pauseOnHover: true, draggable: true, theme: "dark",
-        });
-        end();
-      } else {
-        toast(`${name} left the meeting.`, {
-          position: "bottom-left", autoClose: 4000, hideProgressBar: true, closeButton: false, pauseOnHover: true, draggable: true, theme: "dark",
-        });
-        leave();
-      }
-    };
-
-    return (
-      <>
-        <button
-          onClick={() => allVerified ? performLeave() : setShowLeaveModal(true)}
-          className="bg-[#991b1b] text-[#fecaca] font-medium text-sm px-3 py-1.5 rounded-lg whitespace-nowrap hover:bg-[#7f1d1d] transition-colors"
-        >
-          End Call
-        </button>
-        {showLeaveModal && (
-          <VerificationPendingModal
-            completedSteps={completedSteps}
-            onLeaveAnyway={() => { setShowLeaveModal(false); performLeave(); }}
-            onClose={() => setShowLeaveModal(false)}
-          />
-        )}
-      </>
-    );
-  };
-
-  const ParticipantsBTN = ({ isMobile, isTab }) => {
-    const { participants } = useMeeting();
-    return isMobile || isTab ? (
-      <MobileIconButton
-        tooltipTitle="Participants"
-        isFocused={sideBarMode === sideBarModes.PARTICIPANTS}
-        buttonText="Participants"
-        disabledOpacity={1}
-        Icon={ParticipantsIcon}
-        onClick={() => setSideBarMode((s) => s === sideBarModes.PARTICIPANTS ? null : sideBarModes.PARTICIPANTS)}
-        badge={`${new Map(participants)?.size}`}
-      />
-    ) : null;
-  };
-
-  const DocumentPanelBTN = ({ isMobile, isTab }) => {
-    return isMobile || isTab ? (
-      <MobileIconButton
-        tooltipTitle="Documents"
-        buttonText="Documents"
-        Icon={ClipboardDocumentListIcon}
-        isFocused={sideBarMode === sideBarModes.DOCUMENT_PANEL}
-        onClick={() => setSideBarMode((s) => s === sideBarModes.DOCUMENT_PANEL ? null : sideBarModes.DOCUMENT_PANEL)}
-      />
-    ) : null;
-  };
-
-  const MeetingIdCopyBTN = () => {
-    const { meetingId } = useMeeting();
-    const [isCopied, setIsCopied] = useState(false);
-    return (
-      <div className="flex items-center justify-center">
-        <div className="flex border border-[#303033] p-2 rounded-md items-center justify-center gap-2 bg-[#1b1b1e]">
-          <span className="text-white text-sm font-mono">{meetingId}</span>
-          <button
-            onClick={() => {
-              navigator.clipboard.writeText(meetingId);
-              setIsCopied(true);
-              setTimeout(() => setIsCopied(false), 3000);
-            }}
-          >
-            {isCopied
-              ? <CheckIcon className="h-4 w-4 text-green-400" />
-              : <ClipboardIcon className="h-4 w-4 text-[#919093]" />
-            }
-          </button>
-        </div>
-      </div>
-    );
-  };
 
   // Screen share and participants removed from mobile hamburger per design.
   const mobileFeatures = [
@@ -485,7 +482,7 @@ export function BottomBar({ bottomBarHeight, onShowConnectionDetails, completedS
           <MicBTN />
           <OutputMicBTN />
           <WebCamBTN />
-          <LeaveBTN />
+          <LeaveBTN isDoctor={isDoctor} completedStepsRef={completedStepsRef} completedSteps={completedSteps} showLeaveModal={showLeaveModal} setShowLeaveModal={setShowLeaveModal} />
         </div>
         <Transition appear show={Boolean(open)} as={Fragment}>
           <Dialog as="div" className="relative" style={{ zIndex: 9999 }} onClose={() => setOpen(false)}>
@@ -542,7 +539,7 @@ export function BottomBar({ bottomBarHeight, onShowConnectionDetails, completedS
 
           {/* End Call */}
           <div className="ml-1">
-            <LeaveBTN />
+            <LeaveBTN isDoctor={isDoctor} completedStepsRef={completedStepsRef} completedSteps={completedSteps} showLeaveModal={showLeaveModal} setShowLeaveModal={setShowLeaveModal} />
           </div>
         </div>
       </div>
