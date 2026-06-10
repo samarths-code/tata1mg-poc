@@ -73,6 +73,8 @@ export function MeetingContainer({ onMeetingLeave }) {
   const containerRef = createRef();
   const containerHeightRef = useRef();
   const containerWidthRef = useRef();
+  // Set when OS mutes/ends the mic (phone call). Cleared on recovery.
+  const silenceWasDetectedRef = useRef(false);
 
   useEffect(() => {
     containerHeightRef.current = containerHeight;
@@ -219,15 +221,24 @@ export function MeetingContainer({ onMeetingLeave }) {
   });
 
   const onAudioInputSilence = useCallback(({ devicelabel, state }) => {
+
+    console.log("deviceLabel", devicelabel, state);
+    
+
     if (!isCustomer) return;
     const label = devicelabel ? ` — ${devicelabel}` : "";
     if (state === "detected") {
-      toast.warn(
-        `Your mic is silent${label}. Incoming call or system mute?`,
-        { toastId: "own-mic-silent", position: "bottom-left", autoClose: false, hideProgressBar: true, closeButton: true, theme: "dark" }
-      );
+      silenceWasDetectedRef.current = true;
+      // Show toast only if the track-level handler hasn't already shown it.
+      if (!toast.isActive("own-mic-silent")) {
+        toast.warn(
+          `Your mic is silent${label}. Incoming call or system mute?`,
+          { toastId: "own-mic-silent", position: "bottom-left", autoClose: false, hideProgressBar: true, closeButton: true, theme: "dark" }
+        );
+      }
       publishMicSilence("MIC_SILENCE", { persist: false }, { state, devicelabel: devicelabel ?? null });
     } else {
+      silenceWasDetectedRef.current = false;
       toast.dismiss("own-mic-silent");
       publishMicSilence("MIC_SILENCE", { persist: false }, { state, devicelabel: null });
     }
@@ -383,12 +394,14 @@ export function MeetingContainer({ onMeetingLeave }) {
     },
   });
 
+  const geoAckToastedRef = useRef(false);
   usePubSub("GEO_ACK", {
     onMessageReceived: () => {
-      if (!isDoctor) return;
+      if (!isDoctor || geoAckToastedRef.current) return;
+      geoAckToastedRef.current = true;
       toast.success("Geo cordinate data has been confirmed by recording template.", {
         position: "top-right",
-        autoClose: false,
+        autoClose: 4000,
         hideProgressBar: true,
         closeButton: true,
         theme: "dark",
@@ -451,6 +464,96 @@ export function MeetingContainer({ onMeetingLeave }) {
       event.returnValue = "";
     });
   }, []);
+
+  // Attach mute/unmute/ended listeners directly on the local audio track so the
+  // "Incoming call" toast fires immediately instead of waiting up to 5 s for the
+  // SDK's silence-detection poll (AUDIO_SILENCE_POLL_MS = 5000 in js-sdk).
+  useEffect(() => {
+    if (!localParticipantAllowedJoin || !isCustomer) return;
+
+    const tryAttach = () => {
+      const participant = mMeetingRef.current?.localParticipant;
+      if (!participant?.streams) return null;
+      let track = null;
+      participant.streams.forEach((stream) => {
+        if (stream.kind === "audio") track = stream.track;
+      });
+      if (!track || track.readyState !== "live") return null;
+
+      const onMute = () => {
+        silenceWasDetectedRef.current = true;
+        if (!toast.isActive("own-mic-silent")) {
+          toast.warn("Your mic is silent. Incoming call or system mute?", {
+            toastId: "own-mic-silent",
+            position: "bottom-left", autoClose: false, hideProgressBar: true, closeButton: true, theme: "dark",
+          });
+        }
+      };
+      const onUnmute = () => {
+        // Don't clear the ref here — let the devicechange restart handler do it
+        // so the restart logic still fires when the OS releases devices.
+        toast.dismiss("own-mic-silent");
+      };
+      const onEnded = () => {
+        silenceWasDetectedRef.current = true;
+      };
+
+      track.addEventListener("mute", onMute);
+      track.addEventListener("unmute", onUnmute);
+      track.addEventListener("ended", onEnded);
+      return () => {
+        track.removeEventListener("mute", onMute);
+        track.removeEventListener("unmute", onUnmute);
+        track.removeEventListener("ended", onEnded);
+      };
+    };
+
+    let detach = tryAttach();
+    // Retry once — streams may not be populated synchronously on join.
+    const t = setTimeout(() => { detach?.(); detach = tryAttach(); }, 800);
+    return () => { clearTimeout(t); detach?.(); };
+  }, [localParticipantAllowedJoin, isCustomer]);
+
+  // When the OS releases the audio/video session after a phone call, auto-restart
+  // mic and webcam so the user doesn't have to toggle them manually.
+  useEffect(() => {
+    if (!localParticipantAllowedJoin || !isCustomer) return;
+
+    const restartAfterInterruption = async () => {
+      if (!silenceWasDetectedRef.current) return;
+      silenceWasDetectedRef.current = false;
+      toast.dismiss("own-mic-silent");
+
+      const meeting = mMeetingRef.current;
+      if (!meeting) return;
+
+      if (meeting.localMicOn) {
+        try {
+          const audioTrack = await createMicrophoneAudioTrack({
+            encoderConfig: "speech_standard",
+            microphoneId: selectedMicrophone?.id,
+          });
+          meeting.changeMic(audioTrack);
+        } catch (e) {
+          console.warn("Mic restart after interruption failed:", e);
+        }
+      }
+
+      if (meeting.localWebcamOn) {
+        try {
+          meeting.disableWebcam();
+          await new Promise((r) => setTimeout(r, 300));
+          const videoTrack = await getVideoTrack({ webcamId: selectedWebcam?.id });
+          if (videoTrack) meeting.changeWebcam(videoTrack);
+        } catch (e) {
+          console.warn("Webcam restart after interruption failed:", e);
+        }
+      }
+    };
+
+    navigator.mediaDevices?.addEventListener("devicechange", restartAfterInterruption);
+    return () => navigator.mediaDevices?.removeEventListener("devicechange", restartAfterInterruption);
+  }, [localParticipantAllowedJoin, isCustomer, selectedMicrophone, selectedWebcam, getVideoTrack]);
 
   return (
     <div className="fixed inset-0">
