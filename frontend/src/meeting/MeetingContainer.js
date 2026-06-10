@@ -30,6 +30,7 @@ import MobileCustomerCallView from "../components/MobileCustomerCallView";
 import NetworkQualityPopup from "../components/NetworkQualityPopup";
 import useGeolocation from "../hooks/useGeolocation";
 import { getIPGeoInfo } from "../api";
+import { appParams, flowConfig } from "../appParams";
 
 async function reverseGeocode(lat, lng) {
   try {
@@ -458,11 +459,15 @@ export function MeetingContainer({ onMeetingLeave }) {
   }, [geoError, localParticipantAllowedJoin]);
 
   useEffect(() => {
-    window.addEventListener("beforeunload", (event) => {
+    const onBeforeUnload = (event) => {
       setParticipantLeftReason(meetingLeftReasons.TAB_BROWSER_CLOSED);
       event.preventDefault();
       event.returnValue = "";
-    });
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    // Remove on unmount — otherwise the leave-site warning lingers on the
+    // thank-you page and blocks the rejoin navigation.
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, []);
 
   // Attach mute/unmute/ended listeners directly on the local audio track so the
@@ -566,16 +571,16 @@ export function MeetingContainer({ onMeetingLeave }) {
         {localParticipantAllowedJoin ? (
             <>
               <NetworkQualityPopup limitation={qualityLimitation} />
-              <ImageUploadListner />
+              {flowConfig.enableVerification && <ImageUploadListner />}
               <ResolutionListner />
               <SwitchCameraListner />
 
-              {isDoctor ? (
+              {isDoctor && flowConfig.enableVerification ? (
                 <DoctorView />
               ) : isMobile ? (
                 /* ── Mobile customer: full Figma layout ───────────────────── */
                 <MobileCustomerCallView
-                  meetingTitle={new URLSearchParams(window.location.search).get("meetingTitle") || ""}
+                  meetingTitle={appParams.meetingTitle}
                   statusMessage={statusMessage}
                 />
               ) : (
@@ -584,25 +589,27 @@ export function MeetingContainer({ onMeetingLeave }) {
                   <TopBar
                     bottomBarHeight={bottomBarHeight}
                     caseId={caseId}
-                    meetingTitle={new URLSearchParams(window.location.search).get("meetingTitle") || ""}
+                    meetingTitle={appParams.meetingTitle}
                     onToggleParticipantPanel={() => setShowParticipantPanel((s) => !s)}
                   />
 
                   <div className={`relative flex flex-1 ${isPresenting ? "flex-row" : "flex-row"} bg-[#1b1b1e] overflow-hidden`}>
                     {isPresenting ? <PresenterView height={containerHeight - bottomBarHeight * 2} /> : null}
                     <MemorizedParticipantView isPresenting={isPresenting} sideBarMode={sideBarMode} statusMessage={statusMessage} />
-                    <div>
-                      <SidebarConatiner
-                        height={containerHeight - bottomBarHeight * 2}
-                        sideBarContainerWidth={sideBarContainerWidth}
-                      />
-                    </div>
+                    {flowConfig.showSidebar && (
+                      <div>
+                        <SidebarConatiner
+                          height={containerHeight - bottomBarHeight * 2}
+                          sideBarContainerWidth={sideBarContainerWidth}
+                        />
+                      </div>
+                    )}
                     {showParticipantPanel && (
                       <div className="shrink-0 h-full">
                         <ParticipantDetailsPanel onClose={() => setShowParticipantPanel(false)} />
                       </div>
                     )}
-                    <CustomerVerificationOverlay />
+                    {flowConfig.enableVerification && <CustomerVerificationOverlay />}
                   </div>
 
                   <BottomBar bottomBarHeight={bottomBarHeight} />

@@ -1,6 +1,7 @@
 import { CheckIcon, ClipboardIcon } from "@heroicons/react/24/outline";
 import React, { useState } from "react";
 import { toast } from "react-toastify";
+import { appParams } from "../appParams";
 
 export function MeetingDetailsScreen({
   onClickJoin,
@@ -10,8 +11,7 @@ export function MeetingDetailsScreen({
   setVideoTrack,
   onClickStartMeeting,
 }) {
-  const url = new URLSearchParams(window.location.search);
-  const MeetingId = url.get("meetingId");
+  const MeetingId = appParams.meetingId || null;
 
   const [meetingId, setMeetingId] = useState(MeetingId || "");
   const [meetingIdError, setMeetingIdError] = useState(false);

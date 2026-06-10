@@ -5,6 +5,7 @@ import { useMeetingStore } from "../../store/meetingStore";
 import { MemoizedParticipant } from "../ParticipantView";
 import { BottomBar } from "../../meeting/components/BottomBar";
 import { runOCR, runFaceMatch, runAntiSpoof, isAiReady, maskAadhaarImage } from "../../api";
+import { appParams } from "../../appParams";
 import DoctorTopBar, { DoctorStepBar } from "./DoctorTopBar";
 import useIsMobile from "../../hooks/useIsMobile";
 import CaptureOverlay from "./CaptureOverlay";
@@ -367,7 +368,7 @@ export default function DoctorView() {
   return (
     <div className="flex flex-col h-full bg-[#1b1b1e] relative overflow-hidden">
       <DoctorTopBar
-        meetingTitle={new URLSearchParams(window.location.search).get("meetingTitle") || ""}
+        meetingTitle={appParams.meetingTitle}
         caseId={caseId}
         currentStep={currentStep}
         completedSteps={completedSteps}

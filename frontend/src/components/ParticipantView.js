@@ -2,7 +2,6 @@ import { CameraIcon } from "@heroicons/react/24/solid";
 import { useMeeting, useParticipant, usePubSub, VideoPlayer } from "@videosdk.live/react-sdk";
 import React, { useEffect, useMemo, useRef, useState, Fragment } from "react";
 import { useMeetingAppContext } from "../context/MeetingAppContext";
-import ImageCapturePreviewDialog from "./ImageCapturePreviewDialog";
 import * as ReactDOM from "react-dom";
 import useIsMobile from "../hooks/useIsMobile";
 import useIsTab from "../hooks/useIsTab";
@@ -627,26 +626,6 @@ function ParticipantView({
             )}
           </div>
         </div>
-      )}
-      {showImageCapture && !isLocal && (
-        <div
-          className={`absolute ${isMobile ? "top-1" : "top-2"} left-2 rounded-md flex items-center justify-center p-2 cursor-pointer`}
-          style={{ backgroundColor: "#00000066" }}
-          title="Capture"
-          onClick={() => {
-            try {
-              imageCaptureUpload("IMAGE_CAPTURE", { persist: true }, { senderId: mMeeting.localParticipant.id });
-              setShowImagePreview(true);
-            } catch (e) {
-              console.error("Error triggering image capture:", e);
-            }
-          }}
-        >
-          <CameraIcon className="w-6 h-6 text-white" />
-        </div>
-      )}
-      {showImagePreview && !isLocal && (
-        <ImageCapturePreviewDialog open={showImagePreview} setOpen={setShowImagePreview} />
       )}
       <CornerDisplayName
         {...{
