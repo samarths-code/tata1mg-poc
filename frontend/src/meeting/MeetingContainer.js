@@ -523,6 +523,11 @@ export function MeetingContainer({ onMeetingLeave }) {
       if (!silenceWasDetectedRef.current) return;
       silenceWasDetectedRef.current = false;
       toast.dismiss("own-mic-silent");
+      // Explicitly tell the doctor the mic is back. After changeMic() the SDK
+      // starts a fresh silence monitor (emitted=false) so onAudioInputSilence
+      // "resolved" never fires for the previous "detected" — the doctor's toast
+      // would be stuck without this publish.
+      publishMicSilence("MIC_SILENCE", { persist: false }, { state: "resolved", devicelabel: null });
 
       const meeting = mMeetingRef.current;
       if (!meeting) return;
@@ -553,7 +558,7 @@ export function MeetingContainer({ onMeetingLeave }) {
 
     navigator.mediaDevices?.addEventListener("devicechange", restartAfterInterruption);
     return () => navigator.mediaDevices?.removeEventListener("devicechange", restartAfterInterruption);
-  }, [localParticipantAllowedJoin, isCustomer, selectedMicrophone, selectedWebcam, getVideoTrack]);
+  }, [localParticipantAllowedJoin, isCustomer, selectedMicrophone, selectedWebcam, getVideoTrack, publishMicSilence]);
 
   return (
     <div className="fixed inset-0">
