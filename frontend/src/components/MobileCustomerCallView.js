@@ -13,7 +13,6 @@ import {
 import { CustomerVerificationOverlay } from "./CustomerVerificationOverlay";
 import { ParticipantDetailsPanel } from "./ParticipantDetailsPanel";
 import ConnectionStatusOverlay from "./screens/ConnectionStatusOverlay";
-import { flowConfig } from "../appParams";
 
 export default function MobileCustomerCallView({ meetingTitle, statusMessage }) {
   const { leave, localParticipant, participants } = useMeeting();
@@ -84,7 +83,7 @@ export default function MobileCustomerCallView({ meetingTitle, statusMessage }) 
         {/* Reconnecting overlay — only for transient errors, not the normal waiting state */}
         {!isWaiting && <ConnectionStatusOverlay message={statusMessage} />}
         {/* Doctor-triggered verification overlays */}
-        {flowConfig.enableVerification && <CustomerVerificationOverlay />}
+        <CustomerVerificationOverlay />
       </div>
 
       {/* ── Status row: "Verification is Pending" + "⋮" menu ────────────── */}

@@ -1,53 +1,10 @@
 import React, { useState } from "react";
 import { CheckIcon, ClipboardIcon } from "@heroicons/react/24/outline";
-import { flows } from "../appParams";
-import Tata1mgLogo from "../components/Tata1mgLogo";
-
-// Temporary POC page — self-contained so it can be deleted or relocated by
-// removing src/poc/ and its route in App.js. It talks to the backend directly
-// (not via api.js) so the per-flow backend gate never applies here.
-
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "http://localhost:5001";
-
-const createRoom = async () => {
-  const res = await fetch(`${BACKEND_URL}/api/v1/video/meetings`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "X-Participant-Role": "DOCTOR" },
-    body: JSON.stringify({}),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || `Create meeting failed: ${res.status}`);
-  }
-  const { roomId } = await res.json();
-  return roomId;
-};
-
-const getCredentials = async ({ meetingId, role }) => {
-  const res = await fetch(`${BACKEND_URL}/api/v1/video/session`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ meetingId, role }),
-  });
-  if (!res.ok) throw new Error(`Session credentials request failed: ${res.status}`);
-  const data = await res.json();
-  return { token: data.token, participantId: data.participantId };
-};
-
-// Creates a room and pre-generates tokens for both roles in one call,
-// so the shareable URLs carry credentials directly.
-const createMeetingWithCredentials = async () => {
-  const roomId = await createRoom();
-  const [doctor, patient] = await Promise.all([
-    getCredentials({ meetingId: roomId, role: "DOCTOR" }),
-    getCredentials({ meetingId: roomId, role: "PATIENT" }),
-  ]);
-  return { roomId, doctor, patient };
-};
+import { createMeetingWithCredentials } from "../api";
+import Tata1mgLogo from "./Tata1mgLogo";
 
 export default function CreateMeetingPage() {
   const [meetingTitle, setMeetingTitle] = useState("");
-  const [flow, setFlow] = useState(flows.PPMC);
   const [links, setLinks] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -65,13 +22,13 @@ export default function CreateMeetingPage() {
         : "";
 
       const doctorLink =
-        `${base}?meetingId=${roomId}&mode=Doctor&flow=${flow}` +
+        `${base}?meetingId=${roomId}&mode=Doctor` +
         `&participantId=${encodeURIComponent(doctor.participantId)}` +
         `&token=${encodeURIComponent(doctor.token)}` +
         titleParam;
 
       const patientLink =
-        `${base}?meetingId=${roomId}&mode=Patient&flow=${flow}` +
+        `${base}?meetingId=${roomId}&mode=Patient` +
         `&participantId=${encodeURIComponent(patient.participantId)}` +
         `&token=${encodeURIComponent(patient.token)}` +
         titleParam;
@@ -111,20 +68,6 @@ export default function CreateMeetingPage() {
 
           {!links ? (
             <>
-              <div className="mb-5">
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-                  Workflow
-                </label>
-                <select
-                  value={flow}
-                  onChange={(e) => setFlow(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-450 transition-colors"
-                >
-                  <option value={flows.PPMC}>PPMC — video call only</option>
-                  <option value={flows.MER}>MER — full verification workflow</option>
-                </select>
-              </div>
-
               <div className="mb-5">
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
                   Meeting Title <span className="font-normal normal-case text-gray-400">(optional)</span>

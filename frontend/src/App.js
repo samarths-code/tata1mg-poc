@@ -4,9 +4,8 @@ import { LeaveScreen } from "./components/screens/LeaveScreen";
 import { JoiningScreen } from "./components/screens/JoiningScreen";
 import { MeetingContainer } from "./meeting/MeetingContainer";
 import { MeetingAppProvider } from "./context/MeetingAppContext";
-import CreateMeetingPage from "./poc/CreateMeetingPage";
+import CreateMeetingPage from "./components/CreateMeetingPage";
 import { getToken, getSessionCredentials, getSessionParticipantId } from "./api";
-import { appParams, flowConfig, saveLastMeetingSearch } from "./appParams";
 import { toast } from "react-toastify";
 
 class MeetingErrorBoundary extends React.Component {
@@ -42,14 +41,15 @@ class MeetingErrorBoundary extends React.Component {
 }
 
 const App = () => {
-  const urlMeetingId     = appParams.meetingId;
-  const urlMode          = appParams.mode;
-  const caseId           = appParams.caseId;
-  const urlToken         = appParams.token;
-  const urlParticipantId = appParams.participantId;
-  const urlMeetingTitle  = appParams.meetingTitle;
+  const searchParams = new URLSearchParams(window.location.search);
+  const urlMeetingId    = searchParams.get("meetingId")    || "";
+  const urlMode         = searchParams.get("mode")         || "";
+  const caseId          = searchParams.get("caseId")       || "";
+  const urlToken         = searchParams.get("token")         || "";
+  const urlParticipantId = searchParams.get("participantId") || "";
+  const urlMeetingTitle  = searchParams.get("meetingTitle")  || "";
 
-  const rawMode = urlMode;
+  const rawMode = urlMode.toUpperCase();
   const participantMode = rawMode === "PATIENT" ? "CUSTOMER" : rawMode || undefined;
   // When a token is supplied directly via the URL, skip the credentials API and
   // show the join form with the meeting ID pre-filled & locked (name stays editable).
@@ -83,13 +83,6 @@ const App = () => {
   useEffect(() => {
     // Skip backend call when token was embedded in the URL.
     if (!isAutoJoin || urlToken) return;
-
-    // Flows without backend access have no credentials fallback — the link
-    // must carry a pre-minted token.
-    if (!flowConfig.enableBackend) {
-      setCredentialError("This link is missing credentials. Please check the link and try again.");
-      return;
-    }
 
     getSessionCredentials({ meetingId: urlMeetingId, mode: rawMode })
       .then(({ token: tok, participantId: pid }) => {
@@ -180,7 +173,6 @@ const App = () => {
               >
                 <MeetingContainer
                   onMeetingLeave={() => {
-                    saveLastMeetingSearch();
                     window.history.replaceState(null, "", "/thank-you");
                     setLeaveScreenName(participantName);
                     setToken("");
@@ -211,7 +203,8 @@ const AppRouter = () => {
 
   // Only show the joining flow when both meetingId and mode are present in the URL.
   // Any other visit to "/" (direct, bookmark, no params) shows the create-meeting page.
-  if (!appParams.meetingId || !appParams.mode) return <CreateMeetingPage />;
+  const sp = new URLSearchParams(window.location.search);
+  if (!sp.get("meetingId") || !sp.get("mode")) return <CreateMeetingPage />;
 
   return <App />;
 };

@@ -1,10 +1,9 @@
 import React, { useState } from "react";
 import { CheckCircleIcon } from "@heroicons/react/24/solid";
 import { StarIcon as StarSolid } from "@heroicons/react/24/solid";
-import { StarIcon as StarOutline, ShieldCheckIcon } from "@heroicons/react/24/outline";
+import { StarIcon as StarOutline } from "@heroicons/react/24/outline";
 import Tata1mgLogo from "../Tata1mgLogo";
 import { useMeetingStore } from "../../store/meetingStore";
-import { getLastMeetingSearch } from "../../appParams";
 
 const STAR_LABELS = ["", "Poor", "Fair", "Good", "Very Good", "Excellent"];
 
@@ -57,7 +56,6 @@ function StarRating() {
 export function LeaveScreen({ participantName }) {
   const isDoctor = useMeetingStore((s) => s.isDoctor);
   const displayName = participantName || (isDoctor ? "Doctor" : "Guest");
-  const lastMeetingSearch = getLastMeetingSearch();
 
   return (
     <div className="fixed inset-0 z-50 bg-white overflow-y-auto">
@@ -86,24 +84,14 @@ export function LeaveScreen({ participantName }) {
             Thank you for your time and care.
           </p>
 
-          <div className="mt-6 flex items-center justify-center gap-4">
-            {lastMeetingSearch && (
-              <button
-                onClick={() => { window.location.href = `/${lastMeetingSearch}`; }}
-                className="bg-[rgba(0,0,0,0.02)] hover:bg-[rgba(0,0,0,0.05)] border border-[rgba(0,0,0,0.05)] text-black px-4 py-2 rounded-[10px] text-base font-medium transition-colors"
-              >
-                Rejoin
-              </button>
-            )}
-            {isDoctor && (
-              <button
-                onClick={() => window.location.reload()}
-                className="bg-[#ff6f61] hover:bg-orange-500 text-white px-4 py-2 rounded-[4px] text-base font-medium transition-colors"
-              >
-                Return to Dashboard
-              </button>
-            )}
-          </div>
+          {isDoctor && (
+            <button
+              onClick={() => window.location.reload()}
+              className="mt-4 bg-orange-450 hover:bg-orange-500 text-white px-6 py-2.5 rounded-xl text-sm font-semibold transition-colors"
+            >
+              Return to Dashboard
+            </button>
+          )}
         </div>
 
         {/* Rating card */}

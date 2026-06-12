@@ -24,7 +24,6 @@ import useIsTab from "../../hooks/useIsTab";
 import useIsMobile from "../../hooks/useIsMobile";
 import { MobileIconButton } from "../../components/buttons/MobileIconButton";
 import { participantModes, sideBarModes } from "../../utils/common";
-import { flowConfig } from "../../appParams";
 import { Dialog, Popover, Transition } from "@headlessui/react";
 import { useMeetingAppContext } from "../../context/MeetingAppContext";
 import useMediaStream from "../../hooks/useMediaStream";
@@ -309,10 +308,7 @@ const STEP_LABELS = {
 function LeaveBTN({ isDoctor, completedStepsRef, completedSteps, showLeaveModal, setShowLeaveModal }) {
   const { leave, end, localParticipant } = useMeeting();
 
-  const allVerified =
-    !isDoctor ||
-    !flowConfig.enableVerification ||
-    [1, 2, 3].every((s) => completedStepsRef.current.includes(s));
+  const allVerified = !isDoctor || [1, 2, 3].every((s) => completedStepsRef.current.includes(s));
 
   const performLeave = () => {
     const name = trimSnackBarText(nameTructed(localParticipant.displayName, 15));
@@ -464,7 +460,7 @@ export function BottomBar({ bottomBarHeight, onShowConnectionDetails, completedS
 
   // Screen share and participants removed from mobile hamburger per design.
   const mobileFeatures = [
-    ...(isDoctor && flowConfig.showSidebar ? ["DOCUMENT_PANEL"] : []),
+    ...(isDoctor ? ["DOCUMENT_PANEL"] : []),
     "MEETING_ID_COPY",
   ];
 
