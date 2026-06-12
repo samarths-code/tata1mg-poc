@@ -172,19 +172,9 @@ def create_meeting():
     webhook_url = get_webhook_url()
 
     room_config: dict = {
-        "autoStartConfig": {
-            "recording": {
-                "enabled": True,
-                "webhookUrl": webhook_url,
-                "events": [
-                    "recording-*",
-                    "session-*",
-                ],
-                "onFailure": {
-                    "waitTime": 60, #if recording fails to start after 60, close the room
-                    "action": "close-room"
-                }
-            }
+        "webhook": {
+            "endPoint": webhook_url,
+            "events": ["recording-*", "participant-*", "session-*"],
         }
     }
 
