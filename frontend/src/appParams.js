@@ -51,8 +51,22 @@ export const appParams = Object.freeze({
  * @type {Readonly<{ showSidebar: boolean, enableBackend: boolean, enableVerification: boolean }>}
  */
 const FLOW_CONFIGS = {
-  [flows.MER]: { showSidebar: true, enableBackend: true, enableVerification: true },
-  [flows.PPMC]: { showSidebar: false, enableBackend: false, enableVerification: false },
+  [flows.MER]: {
+    showSidebar: true,
+    enableBackend: true,
+    enableVerification: true,
+    enableDisableLink: false,
+    screenShare: "none",
+    whiteboard: false,
+  },
+  [flows.PPMC]: {
+    showSidebar: false,
+    enableBackend: false,  // credentials fetched from URL token; disable-link uses its own fetch
+    enableVerification: false,
+    enableDisableLink: true,
+    screenShare: "doctor", // "doctor" | "both" | "none"
+    whiteboard: false,
+  },
 };
 
 export const flowConfig = Object.freeze(FLOW_CONFIGS[appParams.flow]);

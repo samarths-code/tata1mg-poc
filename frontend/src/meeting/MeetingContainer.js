@@ -31,6 +31,9 @@ import NetworkQualityPopup from "../components/NetworkQualityPopup";
 import useGeolocation from "../hooks/useGeolocation";
 import { getIPGeoInfo } from "../api";
 import { appParams, flowConfig } from "../appParams";
+import AdmitDialog from "../components/ppmc/AdmitDialog";
+import PpmcPatientLobby from "../components/ppmc/PpmcPatientLobby";
+import DisableLinkDialog from "../components/ppmc/DisableLinkDialog";
 
 async function reverseGeocode(lat, lng) {
   try {
@@ -69,6 +72,10 @@ export function MeetingContainer({ onMeetingLeave }) {
   const [localParticipantAllowedJoin, setLocalParticipantAllowedJoin] = useState(null);
   const [meetingState, setMeetingState] = useState("CONNECTED");
   const [qualityLimitation, setQualityLimitation] = useState(null);
+
+  // PPMC only — doctor admit dialog and patient waiting state
+  const [entryRequest, setEntryRequest] = useState(null);   // { participantId, name, allow, deny }
+  const [entryDenied, setEntryDenied] = useState(false);    // patient was denied by doctor
 
   const mMeetingRef = useRef();
   const containerRef = createRef();
@@ -259,6 +266,15 @@ export function MeetingContainer({ onMeetingLeave }) {
     onRecordingStateChanged: _handleOnRecordingStateChanged,
     onAudioInputSilence,
     onQualityLimitation: _handleOnQualityLimitation,
+    // PPMC only — doctor admits/denies patient entry (ask_join token)
+    onEntryRequested: (data) => {
+      if (isDoctor) setEntryRequest(data);
+    },
+    // PPMC only — patient learns whether their join was allowed or denied
+    onEntryResponded: (_participantId, decision) => {
+      if (decision === "denied") setEntryDenied(true);
+      // "allowed" → onMeetingJoined fires next; no state change needed here
+    },
   });
 
   const isPresenting = mMeeting.presenterId ? true : false;
@@ -584,7 +600,7 @@ export function MeetingContainer({ onMeetingLeave }) {
                   statusMessage={statusMessage}
                 />
               ) : (
-                /* ── Desktop customer: existing layout ────────────────────── */
+                /* ── Desktop customer / PPMC doctor: existing layout ──────── */
                 <>
                   <TopBar
                     bottomBarHeight={bottomBarHeight}
@@ -610,14 +626,33 @@ export function MeetingContainer({ onMeetingLeave }) {
                       </div>
                     )}
                     {flowConfig.enableVerification && <CustomerVerificationOverlay />}
+
+                    {/* PPMC: doctor disable-link button — floats top-right inside call */}
+                    {flowConfig.enableDisableLink && isDoctor && (
+                      <div className="absolute top-3 right-3 z-20">
+                        <DisableLinkDialog />
+                      </div>
+                    )}
                   </div>
 
                   <BottomBar bottomBarHeight={bottomBarHeight} />
                 </>
               )}
+
+              {/* PPMC: doctor admit/deny dialog — appears over the call UI */}
+              {flowConfig.enableDisableLink && isDoctor && (
+                <AdmitDialog
+                  request={entryRequest}
+                  onAllow={() => { entryRequest?.allow(); setEntryRequest(null); }}
+                  onDeny={() => { entryRequest?.deny(); setEntryRequest(null); }}
+                />
+              )}
             </>
         ) : (
-          <WaitingToJoinScreen />
+          /* Waiting state — PPMC patient sees lobby; everyone else sees spinner */
+          flowConfig.enableDisableLink && !isDoctor
+            ? <PpmcPatientLobby denied={entryDenied} />
+            : <WaitingToJoinScreen />
         )}
 
         <ConfirmBox

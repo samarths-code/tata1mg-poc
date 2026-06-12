@@ -145,6 +145,29 @@ export const runAntiSpoof = async ({ imageBase64 }) => {
   return res.json();
 };
 
+// ── PPMC-exclusive APIs ───────────────────────────────────────────────────────
+// These bypass backendFetch intentionally — PPMC has enableBackend:false (which
+// guards credential calls), but the disable-link endpoint is PPMC-only and must
+// still reach the backend.
+
+export const disableMeeting = async (meetingId) => {
+  const res = await fetch(
+    `${BACKEND_URL}/api/v1/video/meetings/${encodeURIComponent(meetingId)}/disable`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Participant-Role": "DOCTOR",
+      },
+    }
+  );
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body?.message || `Failed to disable meeting: ${res.status}`);
+  }
+  return res.json();
+};
+
 export const maskAadhaarImage = async ({ imageBase64 }) => {
   const res = await backendFetch(`/api/v1/identity/aadhaar-mask`, {
     method: "POST",
