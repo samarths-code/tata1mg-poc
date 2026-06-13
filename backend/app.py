@@ -13,6 +13,12 @@ load_dotenv()
 
 app = Flask(__name__)
 
+import sheet_sync    # noqa: E402 — imported after app so sheet_sync can reference it
+import ppmc_routes   # noqa: E402 — frontend-URL bulk flow + disable endpoint
+import ppmc_embed    # noqa: E402 — prebuilt embed bulk flow
+app.register_blueprint(ppmc_routes.bp)
+app.register_blueprint(ppmc_embed.bp)
+
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
@@ -42,6 +48,8 @@ def get_secret() -> str:
 
 def get_webhook_url() -> Optional[str]:
     return os.environ.get("VIDEOSDK_WEBHOOK_URL") or None
+
+
 
 
 # ---------------------------------------------------------------------------
@@ -90,6 +98,7 @@ def require_doctor():
     if resolve_role() != "DOCTOR":
         return jsonify({"message": "Doctor access required"}), 403
     return None
+
 
 
 # ---------------------------------------------------------------------------
@@ -171,16 +180,12 @@ def create_meeting():
 
     webhook_url = get_webhook_url()
 
-    room_config: dict = {
-        "webhook": {
+    room_config: dict = {}
+    if webhook_url:
+        room_config["webhook"] = {
             "endPoint": webhook_url,
             "events": ["recording-*", "participant-*", "session-*"],
         }
-    }
-
-    # Remove webhookUrl from config if not set — VideoSDK rejects null/empty values
-    if not webhook_url:
-        room_config["autoStartConfig"]["recording"].pop("webhookUrl")
 
     try:
         res = vsdk_post("/v2/rooms", room_config)
@@ -304,29 +309,60 @@ def identity_aadhaar_mask():
 # Webhooks — VideoSDK recording events
 # ---------------------------------------------------------------------------
 
+def _fetch_recording_url(room_id: str) -> Optional[str]:
+    """Return the fileUrl for the latest recording of room_id, or None."""
+    try:
+        res = vsdk_get(f"/v2/recordings?roomId={room_id}&page=1&perPage=1")
+        if res.ok:
+            records = res.json().get("data") or []
+            if records:
+                return (records[0].get("file") or {}).get("fileUrl")
+    except Exception as exc:
+        app.logger.warning("fetch_recording_url failed for %s: %s", room_id, exc)
+    return None
+
+
 @app.route("/webhooks/videosdk", methods=["POST"])
 def videosdk_webhook():
     payload = request.get_json(silent=True) or {}
-    event = payload.get("webhookType")
+    event   = payload.get("webhookType")
+    data    = payload.get("data") or {}
     
-    print("payload", payload)
+    print("event" , event)
 
-    if event == "recording-started":
-        # recording started
-        pass
+    # VideoSDK nests meetingId/roomId inside "data"; fall back to top-level for older shapes
+    room_id = data.get("meetingId") or data.get("roomId") or payload.get("roomId") or payload.get("meetingId")
+
+    app.logger.info("webhook %s room=%s", event, room_id)
+
+    if event == "session-started":
+        print("session-started", room_id)
+        if room_id:
+            sheet_sync.update_row(room_id, status="IN_PROGRESS")
+
+    elif event == "session-ended":
+        if room_id:
+            sheet_sync.update_row(room_id, status="COMPLETED")
+            file_url = _fetch_recording_url(room_id)
+            if file_url:
+                sheet_sync.update_row(room_id, recording_url=file_url)
 
     elif event == "recording-stopped":
-        # TODO: fetch recording from videosdk and upload to 1mg storage, then delete from videosdk
-        pass
+        if room_id:
+            file_url = _fetch_recording_url(room_id)
+            if file_url is None:
+                # fall back to whatever the webhook payload carries
+                file_url = (data.get("file") or {}).get("fileUrl") or data.get("fileUrl")
+            sheet_sync.update_row(room_id, recording_url=file_url or "")
 
     elif event == "recording-failed":
-        session_id = (payload.get("data") or {}).get("sessionId")
+        session_id = data.get("sessionId")
         if session_id:
             try:
                 vsdk_post("/v2/sessions/end", {"sessionId": session_id})
                 app.logger.warning("recording-failed: ended session %s", session_id)
-            except Exception as e:
-                app.logger.error("recording-failed: could not end session %s: %s", session_id, e)
+            except Exception as exc:
+                app.logger.error("recording-failed: could not end session %s: %s", session_id, exc)
 
     return jsonify({"received": True}), 200
 
