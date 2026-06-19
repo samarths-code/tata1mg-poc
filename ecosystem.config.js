@@ -7,8 +7,6 @@ module.exports = {
         interpreter: "none",
         cwd: __dirname,
 
-        // no `watch` in production — that's what kept triggering the
-        // "Restarting with watchdog" reloads you saw in the logs
         watch: false,
 
         env: {
