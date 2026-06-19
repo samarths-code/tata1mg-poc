@@ -15,7 +15,9 @@ The Apps Script receives the response and appends rows to the sheet itself.
 import datetime
 import os
 import secrets
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional
+from urllib.parse import quote
 
 import jwt
 import requests
@@ -114,13 +116,6 @@ def _rtc_token(
     )
 
 
-def _token_expiry(session_date_str: str) -> datetime.datetime:
-    """23:59 IST on session_date + 6 h grace = 00:29 UTC next calendar day."""
-    try:
-        d = datetime.datetime.strptime(session_date_str, "%Y-%m-%d")
-    except ValueError:
-        d = datetime.datetime.utcnow()
-    return datetime.datetime(d.year, d.month, d.day, 18, 29, 0) + datetime.timedelta(hours=6)
 
 
 def _vsdk_post(path: str, body: Optional[dict] = None):
@@ -159,9 +154,19 @@ def _create_room() -> str:
     return room_id
 
 
-def _embed_url(name: str, meeting_id: str, token: str, participant_id: str) -> str:
+_MAX_NAME_LEN = 30  # characters before URL-encoding; keeps URLs reasonable
+
+def _safe_name(name: str, fallback: str) -> str:
+    """Sanitize, truncate, and URL-encode a display name for the embed URL."""
+    cleaned = (name or "").strip() or fallback
+    if len(cleaned) > _MAX_NAME_LEN:
+        cleaned = cleaned[:_MAX_NAME_LEN].rstrip()
+    return quote(cleaned, safe="")  # encode spaces → %20, handles all special chars
+
+
+def _embed_url(name: str, meeting_id: str, token: str, participant_id: str, fallback: str = "Participant") -> str:
     return (
-        f"{_EMBED_BASE}?name={name}&meetingId={meeting_id}"
+        f"{_EMBED_BASE}?name={_safe_name(name, fallback)}&meetingId={meeting_id}"
         f"&token={token}&participantId={participant_id}&{_EMBED_FIXED}"
     )
 
@@ -172,47 +177,51 @@ def _embed_url(name: str, meeting_id: str, token: str, participant_id: str) -> s
 @bp.route("/api/v1/ppmc/embed/bulk", methods=["POST"])
 def ppmc_embed_bulk():
     """
-    Create N VideoSDK rooms and return pre-minted VideoSDK prebuilt embed links.
+    Create VideoSDK rooms for each patient row and return pre-minted embed links.
     Auth: X-PPMC-Key header (PPMC_SHARED_KEY env var)
-    Body: {"date": "YYYY-MM-DD", "count": N}
+    Body: {"sessions": [{"patientName": "Alka", "doctorName": "Dr. Kumar"}, ...]}
     Returns: [{"meetingId": "...", "doctorLink": "...", "patientLink": "..."}, ...]
+
+    patientName becomes the display name on the patient embed link.
+    doctorName becomes the display name on the doctor embed link.
     """
     err = _require_ppmc_key()
     if err:
         return err
 
-    body         = request.get_json(silent=True) or {}
-    session_date = str(body.get("date", "")).strip()
-    if not session_date:
-        return jsonify({"message": "date is required (YYYY-MM-DD)"}), 400
+    body           = request.get_json(silent=True) or {}
+    sessions_input = body.get("sessions")
 
-    try:
-        count = int(body.get("count", 0))
-    except (TypeError, ValueError):
-        return jsonify({"message": "count must be an integer"}), 400
+    if not isinstance(sessions_input, list) or len(sessions_input) == 0:
+        return jsonify({"message": "sessions must be a non-empty array"}), 400
+    if len(sessions_input) > _MAX_BULK:
+        return jsonify({"message": f"sessions cannot exceed {_MAX_BULK} at a time"}), 400
 
-    if count < 1 or count > _MAX_BULK:
-        return jsonify({"message": f"count must be between 1 and {_MAX_BULK}"}), 400
+    expires_at = datetime.datetime.utcnow() + datetime.timedelta(days=30)
 
-    expires_at = _token_expiry(session_date)
-    sessions   = []
-
-    for _ in range(count):
-        try:
-            room_id = _create_room()
-        except RuntimeError as exc:
-            return jsonify({"message": str(exc)}), 502
-
-        doctor_pid  = f"doctor-{room_id}"[:64]
-        patient_pid = f"patient-{room_id}"[:64]
-
+    def _create_session(entry: dict):
+        patient_name = str(entry.get("patientName") or "").strip() or "Patient"
+        doctor_name  = str(entry.get("doctorName")  or "").strip() or "Doctor"
+        room_id      = _create_room()  # raises RuntimeError on failure
+        doctor_pid   = f"doctor-{room_id}"[:64]
+        patient_pid  = f"patient-{room_id}"[:64]
         doctor_token  = _rtc_token(room_id, doctor_pid,  ["allow_join", "allow_mod"], expires_at)
         patient_token = _rtc_token(room_id, patient_pid, ["allow_join"],              expires_at)
-
-        sessions.append({
+        return {
             "meetingId":   room_id,
-            "doctorLink":  _embed_url("Doctor",  room_id, doctor_token,  doctor_pid),
-            "patientLink": _embed_url("Patient", room_id, patient_token, patient_pid),
-        })
+            "doctorLink":  _embed_url(doctor_name,  room_id, doctor_token,  doctor_pid,  fallback="Doctor"),
+            "patientLink": _embed_url(patient_name, room_id, patient_token, patient_pid, fallback="Patient"),
+        }
 
-    return jsonify(sessions), 200
+    results  = [None] * len(sessions_input)
+    with ThreadPoolExecutor(max_workers=10) as pool:
+        futures = {pool.submit(_create_session, entry): idx
+                   for idx, entry in enumerate(sessions_input)}
+        for future in as_completed(futures):
+            idx = futures[future]
+            try:
+                results[idx] = future.result()
+            except RuntimeError as exc:
+                return jsonify({"message": str(exc)}), 502
+
+    return jsonify(results), 200

@@ -18,6 +18,7 @@ import datetime
 import os
 import re
 import secrets
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional
 
 import jwt
@@ -118,13 +119,6 @@ def _rtc_token(
     )
 
 
-def _token_expiry(session_date_str: str) -> datetime.datetime:
-    """23:59 IST on session_date + 6 h grace = 00:29 UTC next calendar day."""
-    try:
-        d = datetime.datetime.strptime(session_date_str, "%Y-%m-%d")
-    except ValueError:
-        d = datetime.datetime.utcnow()
-    return datetime.datetime(d.year, d.month, d.day, 18, 29, 0) + datetime.timedelta(hours=6)
 
 
 def _vsdk_post(path: str, body: Optional[dict] = None):
@@ -168,39 +162,42 @@ def _create_room() -> str:
 @bp.route("/api/v1/ppmc/sessions/bulk", methods=["POST"])
 def ppmc_bulk_sessions():
     """
-    Create N VideoSDK rooms and return pre-minted custom-frontend links.
-    Called by the Apps Script custom menu — never by the frontend directly.
+    Create VideoSDK rooms for each patient row and return pre-minted custom-frontend links.
+    Called by the Apps Script "Generate links" menu — never by the frontend directly.
 
     Auth: X-PPMC-Key header (PPMC_SHARED_KEY env var)
-    Body: {"date": "YYYY-MM-DD", "count": N}
+    Body: {
+      "sessions": [
+        {"patientName": "Alka", "doctorName": "Dr. Kumar"},
+        ...
+      ]
+    }
     Returns: [{"meetingId": "...", "doctorLink": "...", "patientLink": "..."}, ...]
 
-    Links point to PPMC_FRONTEND_BASE_URL with flow=ppmc. Patient token uses
-    ask_join — the doctor must admit them via the AdmitDialog component.
-    The Apps Script receives this response and appends rows to the sheet itself.
+    patientName is embedded as meetingTitle in the doctor link (doctor sees patient name).
+    doctorName  is embedded as meetingTitle in the patient link (patient sees doctor name).
+    Patient token uses ask_join — doctor must admit via AdmitDialog in React frontend.
     """
     err = _require_ppmc_key()
     if err:
         return err
 
-    body         = request.get_json(silent=True) or {}
-    session_date = str(body.get("date", "")).strip()
-    if not session_date:
-        return jsonify({"message": "date is required (YYYY-MM-DD)"}), 400
+    body     = request.get_json(silent=True) or {}
+    sessions_input = body.get("sessions")
 
-    try:
-        count = int(body.get("count", 0))
-    except (TypeError, ValueError):
-        return jsonify({"message": "count must be an integer"}), 400
+    if not isinstance(sessions_input, list) or len(sessions_input) == 0:
+        return jsonify({"message": "sessions must be a non-empty array"}), 400
+    if len(sessions_input) > _MAX_BULK:
+        return jsonify({"message": f"sessions cannot exceed {_MAX_BULK} at a time"}), 400
 
-    if count < 1 or count > _MAX_BULK:
-        return jsonify({"message": f"count must be between 1 and {_MAX_BULK}"}), 400
-
-    expires_at = _token_expiry(session_date)
+    expires_at = datetime.datetime.utcnow() + datetime.timedelta(days=30)
     base_url   = os.environ.get("PPMC_FRONTEND_BASE_URL", "http://localhost:3000").rstrip("/")
-    sessions   = []
+    results    = []
 
-    for _ in range(count):
+    for entry in sessions_input:
+        patient_name = str(entry.get("patientName") or "").strip() or "Patient"
+        doctor_name  = str(entry.get("doctorName")  or "").strip() or "Doctor"
+
         try:
             room_id = _create_room()
         except RuntimeError as exc:
@@ -212,22 +209,25 @@ def ppmc_bulk_sessions():
         doctor_token  = _rtc_token(room_id, doctor_pid,  ["allow_join", "allow_mod"], expires_at)
         patient_token = _rtc_token(room_id, patient_pid, ["ask_join"],                expires_at)
 
-        doctor_link  = (
+        from urllib.parse import quote
+        doctor_link = (
             f"{base_url}/?meetingId={room_id}&mode=DOCTOR&flow=ppmc"
             f"&token={doctor_token}&participantId={doctor_pid}"
+            f"&meetingTitle={quote(patient_name)}"
         )
         patient_link = (
             f"{base_url}/?meetingId={room_id}&mode=PATIENT&flow=ppmc"
             f"&token={patient_token}&participantId={patient_pid}"
+            f"&meetingTitle={quote(doctor_name)}"
         )
 
-        sessions.append({
+        results.append({
             "meetingId":   room_id,
             "doctorLink":  doctor_link,
             "patientLink": patient_link,
         })
 
-    return jsonify(sessions), 200
+    return jsonify(results), 200
 
 
 @bp.route("/api/v1/ppmc/recordings", methods=["POST"])
@@ -275,6 +275,53 @@ def fetch_recording():
         sheet_sync.update_row(clean_id, recording_url=file_url)
 
     return jsonify({"found": True, "recordingId": recording_id, "fileUrl": file_url}), 200
+
+
+@bp.route("/api/v1/ppmc/recordings/bulk", methods=["POST"])
+def fetch_recordings_bulk():
+    """
+    Fetch recordings for multiple meeting IDs in parallel.
+    Much faster than calling /api/v1/ppmc/recordings N times serially.
+
+    Auth: X-PPMC-Key header
+    Body: {"meetingIds": ["id1", "id2", ...]}
+    Returns: [{"meetingId": "...", "found": true, "fileUrl": "..."}, ...]
+    """
+    err = _require_ppmc_key()
+    if err:
+        return err
+
+    body       = request.get_json(silent=True) or {}
+    meeting_ids = body.get("meetingIds", [])
+
+    if not isinstance(meeting_ids, list) or not meeting_ids:
+        return jsonify({"message": "meetingIds must be a non-empty array"}), 400
+    if len(meeting_ids) > 200:
+        return jsonify({"message": "meetingIds cannot exceed 200 at a time"}), 400
+
+    clean_ids = [_sanitize_id(mid) for mid in meeting_ids]
+    clean_ids = [mid for mid in clean_ids if mid]
+
+    def _fetch_one(room_id: str) -> dict:
+        try:
+            res = _vsdk_get(f"/v2/recordings?roomId={room_id}&page=1&perPage=1")
+            if not res.ok:
+                return {"meetingId": room_id, "found": False, "fileUrl": None}
+            records = res.json().get("data") or []
+            if not records:
+                return {"meetingId": room_id, "found": False, "fileUrl": None}
+            file_url = (records[0].get("file") or {}).get("fileUrl")
+            return {"meetingId": room_id, "found": bool(file_url), "fileUrl": file_url}
+        except Exception as exc:
+            return {"meetingId": room_id, "found": False, "fileUrl": None, "error": str(exc)}
+
+    results = []
+    with ThreadPoolExecutor(max_workers=10) as pool:
+        futures = {pool.submit(_fetch_one, mid): mid for mid in clean_ids}
+        for future in as_completed(futures):
+            results.append(future.result())
+
+    return jsonify(results), 200
 
 
 @bp.route("/api/v1/video/meetings/<room_id>/disable", methods=["POST"])
