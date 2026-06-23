@@ -13,9 +13,9 @@ load_dotenv()
 
 app = Flask(__name__)
 
-from . import sheet_sync    # noqa: E402 — imported after app so sheet_sync can reference it
-from . import ppmc_routes   # noqa: E402 — frontend-URL bulk flow + disable endpoint
-from . import ppmc_embed    # noqa: E402 — prebuilt embed bulk flow
+import sheet_sync    # noqa: E402 — imported after app so sheet_sync can reference it
+import ppmc_routes   # noqa: E402 — frontend-URL bulk flow + disable endpoint
+import ppmc_embed    # noqa: E402 — prebuilt embed bulk flow
 app.register_blueprint(ppmc_routes.bp)
 app.register_blueprint(ppmc_embed.bp)
 
@@ -130,7 +130,7 @@ def build_rtc_token(*, room_id: str, participant_id: str, role: str) -> str:
         "roomId": room_id,
         "roles": ["rtc"],
         "iat": now,
-        "exp": now + datetime.timedelta(minutes=30),
+        "exp": now + datetime.timedelta(hours=1),
     }
     if participant_id:
         payload["participantId"] = participant_id
@@ -238,8 +238,12 @@ def get_token():
 @app.route("/api/v1/video/session", methods=["POST"])
 def session_credentials():
     """
-    Returns a token and a deterministic participantId for a given meetingId + role.
-    Deterministic IDs preserve the same identity across re-joins.
+    Returns a token and participantId for a given meetingId + role (token-on-open).
+
+    Doctor links are opened from multiple tabs and shared with a supervising agent,
+    so each doctor join gets a UNIQUE participantId — otherwise same-id joins kick
+    each other. The patient is a single participant, so its id stays deterministic
+    (preserves identity across re-joins).
     """
     body = request.get_json(silent=True) or {}
     role = "doctor" if str(body.get("role", "")).upper() == "DOCTOR" else "patient"
@@ -248,7 +252,10 @@ def session_credentials():
     if not room_id:
         return jsonify({"message": "meetingId is required"}), 400
 
-    participant_id = f"{role}-{room_id}"[:64]
+    if role == "doctor":
+        participant_id = f"doctor-{room_id}-{secrets.token_hex(4)}"[:64]
+    else:
+        participant_id = f"patient-{room_id}"[:64]
     token = build_rtc_token(room_id=room_id, participant_id=participant_id, role=role)
     return jsonify({"token": token, "participantId": participant_id}), 200
 
@@ -346,6 +353,13 @@ def videosdk_webhook():
             file_url = _fetch_recording_url(room_id)
             if file_url:
                 sheet_sync.update_row(room_id, recording_url=file_url)
+            # PPMC: once the session ends, permanently deactivate the room so the
+            # links can't be reused to start a fresh call.
+            try:
+                vsdk_post("/v2/rooms/deactivate", {"roomId": room_id})
+                app.logger.info("session-ended: deactivated room %s", room_id)
+            except Exception as exc:
+                app.logger.error("session-ended: could not deactivate room %s: %s", room_id, exc)
 
     elif event == "recording-stopped":
         if room_id:
@@ -384,3 +398,4 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     debug = os.environ.get("FLASK_DEBUG", "0") == "1"
     app.run(host="0.0.0.0", port=port, debug=debug, use_reloader=debug, reloader_type="watchdog")
+r
