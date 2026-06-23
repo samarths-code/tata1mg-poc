@@ -13,9 +13,9 @@ load_dotenv()
 
 app = Flask(__name__)
 
-import sheet_sync    # noqa: E402 — imported after app so sheet_sync can reference it
-import ppmc_routes   # noqa: E402 — frontend-URL bulk flow + disable endpoint
-import ppmc_embed    # noqa: E402 — prebuilt embed bulk flow
+from . import sheet_sync    # noqa: E402 — imported after app so sheet_sync can reference it
+from . import ppmc_routes   # noqa: E402 — frontend-URL bulk flow + disable endpoint
+from . import ppmc_embed    # noqa: E402 — prebuilt embed bulk flow
 app.register_blueprint(ppmc_routes.bp)
 app.register_blueprint(ppmc_embed.bp)
 
@@ -115,6 +115,28 @@ def build_crawler_token() -> str:
         "roles": ["crawler"],
         "iat": now,
         "exp": now + datetime.timedelta(minutes=30),
+    }
+    return jwt.encode(payload, get_secret(), algorithm="HS256")
+
+
+def build_precall_token() -> str:
+    """
+    Short-lived crawler-role token for the client's runPreCallTest() (VideoSDK 0.12.5).
+
+    The pre-call test hits VideoSDK's V2 precall API, which rejects `rtc` tokens
+    ("not allowed to access V2 api with role `rtc`"). It needs role `crawler`.
+    Unlike build_crawler_token() (which is never sent to the client), this one is
+    handed to the browser, so it is scoped as tightly as the API allows: join-only
+    permission, no room binding, short TTL.
+    """
+    now = datetime.datetime.utcnow()
+    payload = {
+        "apikey": get_api_key(),
+        "permissions": ["allow_join"],
+        "version": 2,
+        "roles": ["crawler"],
+        "iat": now,
+        "exp": now + datetime.timedelta(minutes=10),
     }
     return jwt.encode(payload, get_secret(), algorithm="HS256")
 
@@ -233,6 +255,12 @@ def get_token():
     participant_id = sanitize_id(body.get("participantId")) or f"{role}-{secrets.token_hex(6)}"
     token = build_rtc_token(room_id=room_id, participant_id=participant_id, role=role)
     return jsonify({"token": token}), 200
+
+
+@app.route("/api/v1/video/precall-token", methods=["POST", "GET"])
+def precall_token():
+    """Crawler-role token for the client pre-call network test (runPreCallTest)."""
+    return jsonify({"token": build_precall_token()}), 200
 
 
 @app.route("/api/v1/video/session", methods=["POST"])
