@@ -2,6 +2,7 @@ import datetime
 import os
 import re
 import secrets
+import threading
 import warnings
 from typing import Optional
 import jwt
@@ -357,54 +358,63 @@ def _fetch_recording_url(room_id: str) -> Optional[str]:
     return None
 
 
+def _process_webhook(event: str, room_id: Optional[str], data: dict) -> None:
+    """
+    Runs the slow, network-bound webhook side effects (Google Apps Script sheet
+    sync, VideoSDK recording lookups) OFF the request thread.
+
+    These call out to script.google.com and api.videosdk.live with multi-second
+    timeouts; doing them inline would pin a worker for the full timeout on every
+    webhook and stall unrelated requests. Errors here only affect bookkeeping, so
+    we log and move on — the webhook has already been acked with 200.
+    """
+    try:
+        if event == "session-started":
+            if room_id:
+                sheet_sync.update_row(room_id, status="IN_PROGRESS")
+
+        elif event == "session-ended":
+            if room_id:
+                sheet_sync.update_row(room_id, status="COMPLETED")
+                file_url = _fetch_recording_url(room_id)
+                if file_url:
+                    sheet_sync.update_row(room_id, recording_url=file_url)
+
+        elif event == "recording-stopped":
+            if room_id:
+                file_url = _fetch_recording_url(room_id)
+                if file_url is None:
+                    # fall back to whatever the webhook payload carries
+                    file_url = (data.get("file") or {}).get("fileUrl") or data.get("fileUrl")
+                sheet_sync.update_row(room_id, recording_url=file_url or "")
+
+        elif event == "recording-failed":
+            session_id = data.get("sessionId")
+            if session_id:
+                vsdk_post("/v2/sessions/end", {"sessionId": session_id})
+                app.logger.warning("recording-failed: ended session %s", session_id)
+    except Exception as exc:
+        app.logger.error("webhook side-effect failed for %s room=%s: %s", event, room_id, exc)
+
+
 @app.route("/webhooks/videosdk", methods=["POST"])
 def videosdk_webhook():
     payload = request.get_json(silent=True) or {}
     event   = payload.get("webhookType")
     data    = payload.get("data") or {}
-    
-    print("event" , event)
 
     # VideoSDK nests meetingId/roomId inside "data"; fall back to top-level for older shapes
     room_id = data.get("meetingId") or data.get("roomId") or payload.get("roomId") or payload.get("meetingId")
 
     app.logger.info("webhook %s room=%s", event, room_id)
 
-    if event == "session-started":
-        print("session-started", room_id)
-        if room_id:
-            sheet_sync.update_row(room_id, status="IN_PROGRESS")
-
-    elif event == "session-ended":
-        if room_id:
-            sheet_sync.update_row(room_id, status="COMPLETED")
-            file_url = _fetch_recording_url(room_id)
-            if file_url:
-                sheet_sync.update_row(room_id, recording_url=file_url)
-            # PPMC: once the session ends, permanently deactivate the room so the
-            # links can't be reused to start a fresh call.
-            # try:
-            #     # vsdk_post("/v2/rooms/deactivate", {"roomId": room_id})
-            #     # app.logger.info("session-ended: deactivated room %s", room_id)
-            # except Exception as exc:
-            #     app.logger.error("session-ended: could not deactivate room %s: %s", room_id, exc)
-
-    elif event == "recording-stopped":
-        if room_id:
-            file_url = _fetch_recording_url(room_id)
-            if file_url is None:
-                # fall back to whatever the webhook payload carries
-                file_url = (data.get("file") or {}).get("fileUrl") or data.get("fileUrl")
-            sheet_sync.update_row(room_id, recording_url=file_url or "")
-
-    elif event == "recording-failed":
-        session_id = data.get("sessionId")
-        if session_id:
-            try:
-                vsdk_post("/v2/sessions/end", {"sessionId": session_id})
-                app.logger.warning("recording-failed: ended session %s", session_id)
-            except Exception as exc:
-                app.logger.error("recording-failed: could not end session %s: %s", session_id, exc)
+    # Ack immediately; do the slow sheet/recording work in the background so the
+    # request thread is never blocked on script.google.com / VideoSDK timeouts.
+    threading.Thread(
+        target=_process_webhook,
+        args=(event, room_id, data),
+        daemon=True,
+    ).start()
 
     return jsonify({"received": True}), 200
 

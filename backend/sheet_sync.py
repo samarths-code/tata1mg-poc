@@ -32,7 +32,7 @@ def update_row(meeting_id: str, *, status: str = None, recording_url: str = None
         payload["recordingUrl"] = recording_url
 
     try:
-        res = requests.post(_WEBAPP_URL, json=payload, timeout=10)
+        res = requests.post(_WEBAPP_URL, json=payload, timeout=(3, 5))
         if res.ok:
             logger.info("sheet_sync: updated %s → %s", meeting_id, payload)
         else:
