@@ -383,11 +383,11 @@ def videosdk_webhook():
                 sheet_sync.update_row(room_id, recording_url=file_url)
             # PPMC: once the session ends, permanently deactivate the room so the
             # links can't be reused to start a fresh call.
-            try:
-                vsdk_post("/v2/rooms/deactivate", {"roomId": room_id})
-                app.logger.info("session-ended: deactivated room %s", room_id)
-            except Exception as exc:
-                app.logger.error("session-ended: could not deactivate room %s: %s", room_id, exc)
+            # try:
+            #     # vsdk_post("/v2/rooms/deactivate", {"roomId": room_id})
+            #     # app.logger.info("session-ended: deactivated room %s", room_id)
+            # except Exception as exc:
+            #     app.logger.error("session-ended: could not deactivate room %s: %s", room_id, exc)
 
     elif event == "recording-stopped":
         if room_id:
