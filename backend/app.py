@@ -14,7 +14,7 @@ load_dotenv()
 
 app = Flask(__name__)
 
-from . import sheet_sync    # noqa: E402 — imported after app so sheet_sync can reference it
+# from . import sheet_sync    # noqa: E402 — imported after app so sheet_sync can reference it
 from . import ppmc_routes   # noqa: E402 — frontend-URL bulk flow + disable endpoint
 from . import ppmc_embed    # noqa: E402 — prebuilt embed bulk flow
 app.register_blueprint(ppmc_routes.bp)
