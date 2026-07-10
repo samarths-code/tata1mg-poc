@@ -1,27 +1,9 @@
-import { useEffect, useState } from "react";
-import { runNetworkTest } from "../lib/precallTest";
+import usePrecallTest from "../lib/usePrecallTest";
 
-export default function NetworkStats() {
-  // Keep the original state machine — it's been proven to work.
-  const [error, setError] = useState("no-error-loading");
+export default function NetworkStats({ token }) {
+  // usePrecallTest owns the state machine and auto-runs once `token` is ready.
   // VideoSDK 0.12.5 reports a 0–10 quality score (not Mbps); see lib/precallTest.js.
-  const [result, setResult] = useState(null);
-
-  useEffect(() => { getNetworkStatistics(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const getNetworkStatistics = async () => {
-    setError("no-error-loading");
-    try {
-      const stats = await runNetworkTest({ samplingDuration: 12000 });
-      setResult(stats);
-      setError(stats?.rating === "unknown" ? "timeout" : "no-error");
-    } catch (ex) {
-      console.log("NetworkStats error:", ex);
-      const msg = String(ex?.message ?? ex);
-      if (msg.includes("no Network") || msg.includes("no network")) setError("no-wifi");
-      else setError("timeout");
-    }
-  };
+  const { status, result, run } = usePrecallTest({ token, samplingDuration: 12000 });
 
   const q = result ?? { label: "Unknown", color: "text-white/70" };
 
@@ -29,16 +11,16 @@ export default function NetworkStats() {
 
   return (
     <div className={pill}>
-      {error === "no-error-loading" && (
+      {(status === "idle" || status === "loading") && (
         <>
           <RefreshSvg className="w-3.5 h-3.5 text-white/60 animate-spin" />
           <span className="text-white/70 font-normal">Checking…</span>
         </>
       )}
 
-      {error === "no-error" && (
+      {status === "success" && (
         <>
-          <button onClick={getNetworkStatistics} className="flex items-center gap-1.5 focus:outline-none">
+          <button onClick={run} className="flex items-center gap-1.5 focus:outline-none">
             <RefreshSvg className="w-3.5 h-3.5 text-white/70" />
             <span className={`font-medium ${q.color}`}>{q.label}</span>
           </button>
@@ -51,17 +33,17 @@ export default function NetworkStats() {
         </>
       )}
 
-      {error === "no-wifi" && (
+      {status === "no-wifi" && (
         <>
           <span className="text-red-400">No network</span>
-          <button onClick={getNetworkStatistics} className="focus:outline-none ml-0.5">
+          <button onClick={run} className="focus:outline-none ml-0.5">
             <RefreshSvg className="w-3.5 h-3.5 text-white/70" />
           </button>
         </>
       )}
 
-      {error === "timeout" && (
-        <button onClick={getNetworkStatistics} className="flex items-center gap-1.5 focus:outline-none text-white/60 hover:text-white/90 transition-colors">
+      {status === "timeout" && (
+        <button onClick={run} className="flex items-center gap-1.5 focus:outline-none text-white/60 hover:text-white/90 transition-colors">
           <RefreshSvg className="w-3.5 h-3.5" />
           <span>Retry</span>
         </button>

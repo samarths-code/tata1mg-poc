@@ -38,6 +38,7 @@ export function JoiningScreen({
   webcamOn,
   isAutoJoin,
   tokenReady,
+  token,
   credentialError,
   meetingTitle,
 }) {
@@ -343,7 +344,7 @@ export function JoiningScreen({
       className={`relative bg-[#303033] ${rounded} overflow-hidden shrink-0 w-full`}
       style={{ height, width }}
     >
-      <div className="absolute right-4 top-4 z-10"><NetworkStats /></div>
+      <div className="absolute right-4 top-4 z-10"><NetworkStats token={token} /></div>
       <audio playsInline muted ref={audioPlayerRef} controls={false} />
       <video
         autoPlay playsInline muted ref={videoPlayerRef} controls={false}
@@ -411,7 +412,7 @@ export function JoiningScreen({
 
   return (
     <>
-      {!permissionDone && <PermissionSetup onDone={() => setPermissionDone(true)} />}
+      {!permissionDone && <PermissionSetup onDone={() => setPermissionDone(true)} token={token} />}
 
       {/* ── Internet disconnect popup ───────────────────────────────────────── */}
       {isOffline && (

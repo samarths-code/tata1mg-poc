@@ -151,6 +151,7 @@ const App = () => {
               setWebcamOn={setWebcamOn}
               isAutoJoin={isAutoJoin}
               tokenReady={!!token}
+              token={token}
               credentialError={credentialError}
               meetingTitle={urlMeetingTitle}
             />

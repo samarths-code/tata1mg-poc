@@ -18,7 +18,6 @@
 // For in-call quality use the local participant's getAudioStats()/getVideoStats()
 // instead — see meeting/MeetingContainer.js.
 import { runPreCallTest } from "@videosdk.live/react-sdk";
-import { getToken } from "../api";
 
 // Same thresholds the SDK itself uses internally (scoreToRating).
 const RATINGS = {
@@ -47,9 +46,9 @@ function round(n) {
  * Run the SDK pre-call test and normalise it into a flat, UI-friendly object.
  *
  * @param {object}  opts
- * @param {string} [opts.token]            Pre-minted rtc token. If omitted, we mint one
- *                                         via getToken() for the current (cached) room.
- * @param {string} [opts.roomId]           Room to mint the token for, if `token` omitted.
+ * @param {string}  opts.token             The meeting token (the same one the join
+ *                                         flow already holds). Required — runPreCallTest
+ *                                         spins up a real test connection with it.
  * @param {number} [opts.samplingDuration] 10000–120000 ms (SDK clamps). Default 12000.
  * @param {boolean}[opts.audioOnly]        Skip the camera test. Default true —
  *                                         a consultation cares about audio first
@@ -63,14 +62,11 @@ function round(n) {
  */
 export async function runNetworkTest({
   token,
-  roomId,
   samplingDuration = 12000,
   audioOnly = true,
 } = {}) {
-  // The meeting's normal rtc token works for runPreCallTest — no dedicated precall
-  // token endpoint is needed. Reuse/mint the same rtc token the join flow uses.
-  const tok = token || (await getToken({ roomId }));
-  const result = await runPreCallTest({ token: tok, audioOnly, samplingDuration });
+  if (!token) throw new Error("runNetworkTest: token is required");
+  const result = await runPreCallTest({ token, audioOnly, samplingDuration });
   return normalise(result);
 }
 

@@ -101,7 +101,7 @@ function permissionErrMsg(errorName, isLocation = false) {
     : "Could not access device. Check it is connected and not blocked.";
 }
 
-export default function PermissionSetup({ onDone }) {
+export default function PermissionSetup({ onDone, token }) {
   const [camera,   setCamera]   = useState(STATUS.IDLE);
   const [mic,      setMic]      = useState(STATUS.IDLE);
   const [speaker,  setSpeaker]  = useState(STATUS.IDLE);
@@ -184,7 +184,7 @@ export default function PermissionSetup({ onDone }) {
     setNetwork(STATUS.CHECKING);
     try {
       // VideoSDK 0.12.5: runPreCallTest reports a quality rating, not Mbps.
-      const stats = await runNetworkTest({ samplingDuration: 12000 });
+      const stats = await runNetworkTest({ token, samplingDuration: 12000 });
       if (stats?.rating === "unknown") {
         setNetwork(STATUS.DENIED);
       } else {
