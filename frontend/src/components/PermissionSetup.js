@@ -229,7 +229,7 @@ export default function PermissionSetup({ onDone }) {
           <PermissionRow
             icon={CameraIcon}
             label="Camera"
-            detail="Required for video consultation with the doctor."
+            detail="Required for video consultation with the agent."
             status={camera}
             onRetry={runChecks}
           />
@@ -243,7 +243,7 @@ export default function PermissionSetup({ onDone }) {
           <PermissionRow
             icon={VolumeIcon}
             label="Speaker / Sound"
-            detail="Required to hear the doctor clearly during the consultation."
+            detail="Required to hear the agent clearly during the consultation."
             status={speaker}
           />
           <PermissionRow

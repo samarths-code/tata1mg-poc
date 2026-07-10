@@ -54,7 +54,7 @@ function StarRating() {
 
 export function LeaveScreen({ participantName }) {
   const isDoctor = useMeetingStore((s) => s.isDoctor);
-  const displayName = participantName || (isDoctor ? "Doctor" : "Guest");
+  const displayName = participantName || (isDoctor ? "Agent" : "Guest");
 
   return (
     <div className="fixed inset-0 z-50 bg-white overflow-y-auto">

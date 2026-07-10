@@ -459,7 +459,7 @@ export function JoiningScreen({
               {isAutoJoin ? (
                 <>
                   <p className="text-[#5e5e61] text-sm font-medium leading-5">
-                    Your doctor is ready to meet you
+                    Your agent is ready to meet you
                   </p>
                   <h1 className="text-black text-xl font-medium leading-7 px-2">
                     {meetingTitle || "Monthly Health Consultation & Online Consultation"}
@@ -627,7 +627,7 @@ function AutoJoinPanel({
   onClickStartMeeting,
   meetingTitle,
 }) {
-  const roleLabel = participantMode === participantModes.DOCTOR ? "Doctor" : "Patient";
+  const roleLabel = participantMode === participantModes.DOCTOR ? "Agent" : "Client";
   const canJoin = participantName.length >= 3 && tokenReady && !credentialError;
 
   return (

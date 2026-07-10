@@ -247,7 +247,7 @@ export function MeetingContainer({ onMeetingLeave }) {
       if (!isDoctor || senderId === mMeetingRef.current?.localParticipant?.id) return;
       if (payload.state === "detected") {
         toast.warn(
-          `Patient's mic is silent${payload.devicelabel ? ` — ${payload.devicelabel}` : ""}. They may have an incoming call.`,
+          `Client's mic is silent${payload.devicelabel ? ` — ${payload.devicelabel}` : ""}. They may have an incoming call.`,
           { toastId: "patient-mic-silent", position: "bottom-left", autoClose: false, hideProgressBar: true, closeButton: true, theme: "dark" }
         );
       } else {
