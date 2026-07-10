@@ -2,7 +2,6 @@ import React, { useState } from "react";
 import { CheckCircleIcon } from "@heroicons/react/24/solid";
 import { StarIcon as StarSolid } from "@heroicons/react/24/solid";
 import { StarIcon as StarOutline } from "@heroicons/react/24/outline";
-import Tata1mgLogo from "../Tata1mgLogo";
 import { useMeetingStore } from "../../store/meetingStore";
 
 const STAR_LABELS = ["", "Poor", "Fair", "Good", "Very Good", "Excellent"];
@@ -59,11 +58,6 @@ export function LeaveScreen({ participantName }) {
 
   return (
     <div className="fixed inset-0 z-50 bg-white overflow-y-auto">
-
-      {/* Logo — top-left */}
-      <div className="absolute top-[18px] left-[16px] md:top-[30px] md:left-[30px]">
-        <Tata1mgLogo dark />
-      </div>
 
       {/* Centred content — stacks naturally so nothing clips on small screens */}
       <div className="min-h-full flex flex-col items-center justify-center gap-8 px-6 pt-[80px] pb-10">

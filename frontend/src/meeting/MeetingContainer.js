@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef, createRef, useCallback } from "reac
 import {
   Constants,
   createMicrophoneAudioTrack,
-  getNetworkStats,
   useMeeting,
   usePubSub,
 } from "@videosdk.live/react-sdk";
@@ -35,10 +34,46 @@ async function reverseGeocode(lat, lng) {
   try {
     const res = await fetch(
       `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
-      { headers: { "User-Agent": "Tata1mg-VideoMER/1.0" } }
+      { headers: { "User-Agent": "VideoMER/1.0" } }
     );
     const data = await res.json();
     return data.display_name ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function _avg(arr) {
+  const nums = arr.filter((n) => typeof n === "number" && !Number.isNaN(n));
+  return nums.length ? nums.reduce((a, b) => a + b, 0) / nums.length : null;
+}
+
+// Summarise live in-call RTC stats for telemetry. VideoSDK 0.12.5 removed the
+// pre-call getNetworkStats() speedtest; during a call the real signal is the
+// participant's live stats. A participant's getAudioStats()/getVideoStats()
+// each return an array of { bitrate(kbps), rtt, jitter, totalPackets, packetsLost }.
+// Local participant = what we SEND (uplink); a remote participant = what we
+// RECEIVE (downlink).
+async function readStreamStats(participant) {
+  if (!participant) return null;
+  try {
+    const [audio, video] = await Promise.all([
+      participant.getAudioStats ? participant.getAudioStats() : [],
+      participant.getVideoStats ? participant.getVideoStats() : [],
+    ]);
+    const all = [...(audio || []), ...(video || [])];
+    if (!all.length) return null;
+    const bitrateKbps = all.reduce((sum, s) => sum + (s.bitrate || 0), 0);
+    const rtt = _avg(all.map((s) => s.rtt));
+    const jitter = _avg(all.map((s) => s.jitter));
+    const totalPackets = all.reduce((sum, s) => sum + (s.totalPackets || 0), 0);
+    const packetsLost = all.reduce((sum, s) => sum + (s.packetsLost || 0), 0);
+    return {
+      mbps: Math.round((bitrateKbps / 1000) * 100) / 100,
+      rtt: rtt == null ? null : Math.round(rtt),
+      jitter: jitter == null ? null : Math.round(jitter),
+      packetLossPct: totalPackets > 0 ? Math.round((packetsLost / totalPackets) * 1000) / 10 : null,
+    };
   } catch {
     return null;
   }
@@ -171,7 +206,8 @@ export function MeetingContainer({ onMeetingLeave }) {
   }
 
   const _handleOnError = (data) => {
-    const { code, message } = data;
+    console.error("[VideoSDK] onError:", data);
+    const { code, message } = data || {};
     const joiningErrCodes = [4001, 4002, 4003, 4004, 4005, 4006, 4007, 4008, 4009, 4010];
     const isJoiningError = joiningErrCodes.findIndex((c) => c === code) !== -1;
     const isCriticalError = `${code}`.startsWith("500");
@@ -316,12 +352,21 @@ export function MeetingContainer({ onMeetingLeave }) {
         console.error("Error publishing device info (phase 1):", err);
       }
 
-      // ── Phase 2: enrich with network stats + geo (slow, runs in background) ──
-      let downloadSpeed, uploadSpeed;
+      // ── Phase 2: enrich with live in-call network stats + geo (background) ──
+      // 0.12.5 replacement for getNetworkStats(): read the participant RTC stats.
+      // Wait a few seconds first so the RTP counters have accumulated.
+      let downloadSpeed, uploadSpeed, latencyMs, packetLossPct, jitterMs;
       try {
-        const stats = await getNetworkStats({ timeoutDuration: 8000 });
-        downloadSpeed = stats.downloadSpeed;
-        uploadSpeed = stats.uploadSpeed;
+        await new Promise((r) => setTimeout(r, 5000));
+        const lp = mMeetingRef.current?.localParticipant;
+        const remote = [...(mMeetingRef.current?.participants?.values() ?? [])]
+          .find((p) => p?.id !== lp?.id);
+        const [up, down] = await Promise.all([readStreamStats(lp), readStreamStats(remote)]);
+        uploadSpeed   = up?.mbps ?? null;          // what the customer sends (uplink)
+        downloadSpeed = down?.mbps ?? null;        // what the customer receives (downlink)
+        latencyMs     = up?.rtt ?? down?.rtt ?? null;
+        packetLossPct = up?.packetLossPct ?? null;
+        jitterMs      = up?.jitter ?? null;
       } catch (_) {}
 
       const ipGeo = await getIPGeoInfo();
@@ -337,6 +382,9 @@ export function MeetingContainer({ onMeetingLeave }) {
           audioOutputs,
           downloadSpeed,
           uploadSpeed,
+          latencyMs,
+          packetLossPct,
+          jitterMs,
           city: ipGeo?.city,
           region: ipGeo?.region,
           country: ipGeo?.country,

@@ -1,4 +1,4 @@
-import { CameraIcon } from "@heroicons/react/24/solid";
+import { CameraIcon, CheckCircleIcon } from "@heroicons/react/24/solid";
 import { useMeeting, useParticipant, usePubSub, VideoPlayer } from "@videosdk.live/react-sdk";
 import React, { useEffect, useMemo, useRef, useState, Fragment } from "react";
 import { useMeetingAppContext } from "../context/MeetingAppContext";
@@ -647,6 +647,15 @@ function ParticipantView({
       )}
       {showImagePreview && !isLocal && (
         <ImageCapturePreviewDialog open={showImagePreview} setOpen={setShowImagePreview} />
+      )}
+      {/* Face-detected chip — translucent black (rgba(0,0,0,0.5)), 6px radius.
+          Shown on both local and remote tiles while the camera is on.
+          Static placeholder — wire to real face-detection state later. */}
+      {webcamOn && !isPip && (
+        <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1.5 bg-[rgba(0,0,0,0.5)] rounded-[6px] px-3 py-1.5">
+          <CheckCircleIcon className="w-4 h-4 shrink-0 text-[#4bd559]" />
+          <span className="text-white text-sm font-medium leading-none whitespace-nowrap">Face detected</span>
+        </div>
       )}
       <CornerDisplayName
         {...{

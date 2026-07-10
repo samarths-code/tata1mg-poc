@@ -90,7 +90,7 @@ export function generateMERpdf({
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
   doc.setTextColor(255, 235, 230);
-  doc.text("Tata 1mg  ·  Video MER System", ML, 23);
+  doc.text("Video MER System", ML, 23);
 
   y = 33;
 
@@ -223,7 +223,7 @@ export function generateMERpdf({
     { maxWidth: CW }
   );
   doc.text(
-    `Tata 1mg Video MER  ·  ${ts} IST  ·  Case: ${caseId || "N/A"}`,
+    `Video MER  ·  ${ts} IST  ·  Case: ${caseId || "N/A"}`,
     ML, footerY + 10
   );
 

@@ -19,9 +19,9 @@ import useMediaStream from "../../hooks/useMediaStream";
 import useIsMobile from "../../hooks/useIsMobile";
 import PermissionSetup from "../PermissionSetup";
 import { participantModes } from "../../utils/common";
-import Tata1mgLogo from "../Tata1mgLogo";
 import DeviceEnableModal from "../DeviceEnableModal";
 import { ShieldCheckIcon, ChevronRightIcon, MicrophoneIcon, VideoCameraIcon, VideoCameraSlashIcon, SpeakerWaveIcon, SpeakerXMarkIcon } from "@heroicons/react/24/outline";
+import { CheckCircleIcon } from "@heroicons/react/24/solid";
 
 export function JoiningScreen({
   setSpekerOn,
@@ -338,13 +338,22 @@ export function JoiningScreen({
   // ── Render helpers (plain functions, NOT components) ─────────────────────────
   // Defined as functions called with {renderCameraCard(...)} not <CameraCard/>.
   // Defining them as components inside a render body would give React a new type
-  // on every render → unmount+remount → NetworkStats fires getNetworkStats again.
+  // on every render → unmount+remount → NetworkStats re-runs the pre-call test again.
   const renderCameraCard = (height, width, rounded = "rounded-[24px]") => (
     <div
       className={`relative bg-[#303033] ${rounded} overflow-hidden shrink-0 w-full`}
       style={{ height, width }}
     >
       <div className="absolute right-4 top-4 z-10"><NetworkStats /></div>
+      {/* Face-detected badge — translucent dark box, square corners (per Figma).
+          Static placeholder shown while the camera is on; wire to real
+          face-detection state later. */}
+      {webcamOn && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1.5 bg-[rgba(0,0,0,0.5)] rounded-[6px] px-3 py-1.5">
+          <CheckCircleIcon className="w-4 h-4 shrink-0 text-[#4bd559]" />
+          <span className="text-white text-sm font-medium leading-none whitespace-nowrap">Face detected</span>
+        </div>
+      )}
       <audio playsInline muted ref={audioPlayerRef} controls={false} />
       <video
         autoPlay playsInline muted ref={videoPlayerRef} controls={false}
@@ -450,11 +459,6 @@ export function JoiningScreen({
 
       <div className="bg-white min-h-screen relative overflow-x-hidden">
 
-        {/* Logo — top-left */}
-        <div className="absolute left-[16px] md:left-[30px] top-[18px] md:top-[30px] z-10">
-          <Tata1mgLogo dark />
-        </div>
-
         {isMobile ? (
           /* ── MOBILE LAYOUT ─────────────────────────────────────────────────────
              Order matches Figma 437-23578: header → camera → selectors → button  */
@@ -465,7 +469,7 @@ export function JoiningScreen({
               {isAutoJoin ? (
                 <>
                   <p className="text-[#5e5e61] text-sm font-medium leading-5">
-                    Your Tata 1mg doctor is ready to meet you
+                    Your doctor is ready to meet you
                   </p>
                   <h1 className="text-black text-xl font-medium leading-7 px-2">
                     {meetingTitle || "Monthly Health Consultation & Online Consultation"}
@@ -641,7 +645,7 @@ function AutoJoinPanel({
       {/* Meeting info */}
       <div className="flex flex-col gap-2 items-center">
         <p className="text-[#5e5e61] text-sm font-medium leading-5">
-          Join your Tata 1mg consultation instantly
+          Join your consultation instantly
         </p>
         {credentialError ? (
           <p className="text-sm text-[#dc2626] bg-[#fee2e2] border border-[#fca5a5] rounded-xl px-4 py-3 mt-1">

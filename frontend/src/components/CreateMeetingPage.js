@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import { CheckIcon, ClipboardIcon } from "@heroicons/react/24/outline";
 import { createMeetingWithCredentials } from "../api";
-import Tata1mgLogo from "./Tata1mgLogo";
 
 export default function CreateMeetingPage() {
   const [meetingTitle, setMeetingTitle] = useState("");
@@ -55,10 +54,6 @@ export default function CreateMeetingPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-      <header className="px-[30px] py-[22px] flex items-center">
-        <Tata1mgLogo height={36} dark />
-      </header>
-
       <div className="flex flex-1 items-center justify-center px-4 py-10">
         <div className="w-full max-w-md bg-white rounded-2xl shadow-md border border-gray-200 p-8">
           <h2 className="text-2xl font-bold text-gray-800 mb-1">Create a Meeting</h2>

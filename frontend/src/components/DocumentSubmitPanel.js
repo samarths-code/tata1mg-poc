@@ -90,7 +90,7 @@ const DocumentSubmitPanel = ({ panelHeight }) => {
           ? "Submitted"
           : submissionStatus === "submitting"
           ? "Submitting..."
-          : "Submit to Tata 1mg"}
+          : "Submit"}
       </button>
 
       {submissionStatus === "error" && (
