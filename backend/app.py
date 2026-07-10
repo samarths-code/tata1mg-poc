@@ -30,7 +30,10 @@ warnings.filterwarnings("ignore", category=Warning, module="urllib3")
 VIDEOSDK_API = "https://api.videosdk.live"
 VIDEOSDK_AI  = "https://api.videosdk.live/ai/v1"
 
-ALLOWED_ORIGINS = "*"
+# CORS allow-list, from env. "*" (default) allows any origin; otherwise a
+# comma-separated list of exact origins.
+ALLOWED_ORIGINS = os.environ.get("ALLOWED_ORIGINS", "*")
+_ALLOWED_ORIGIN_SET = {o.strip() for o in ALLOWED_ORIGINS.split(",") if o.strip()}
 
 
 def get_api_key() -> str:
@@ -57,11 +60,28 @@ def get_webhook_url() -> Optional[str]:
 # CORS
 # ---------------------------------------------------------------------------
 
+def _cors_origin() -> str:
+    """Resolve the Access-Control-Allow-Origin value for the current request.
+
+    "*" (default) allows any origin. Otherwise echo back the request's Origin
+    only when it is in the allow-list — echoing the whole comma-separated list
+    would be an invalid header.
+    """
+    if "*" in _ALLOWED_ORIGIN_SET:
+        return "*"
+    origin = request.headers.get("Origin", "")
+    return origin if origin in _ALLOWED_ORIGIN_SET else ""
+
+
 # after_request runs on every response — including Flask's own 404s — so
 # OPTIONS preflights to any path always get the headers the browser needs.
 @app.after_request
 def handle_cors(response: Response) -> Response:
-    response.headers["Access-Control-Allow-Origin"]  = ALLOWED_ORIGINS
+    allow_origin = _cors_origin()
+    if allow_origin:
+        response.headers["Access-Control-Allow-Origin"] = allow_origin
+        if allow_origin != "*":
+            response.headers["Vary"] = "Origin"
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, X-Participant-Role"
     if request.method == "OPTIONS":
