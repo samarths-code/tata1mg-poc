@@ -412,7 +412,7 @@ export function JoiningScreen({
 
   return (
     <>
-      {!permissionDone && <PermissionSetup onDone={() => setPermissionDone(true)} token={token} />}
+      {!permissionDone && <PermissionSetup onDone={() => setPermissionDone(true)} />}
 
       {/* ── Internet disconnect popup ───────────────────────────────────────── */}
       {isOffline && (

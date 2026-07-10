@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { runNetworkTest } from "../lib/precallTest";
 import { XMarkIcon, ChevronRightIcon } from "@heroicons/react/24/outline";
 
 const STATUS = { IDLE: "idle", CHECKING: "checking", GRANTED: "granted", DENIED: "denied" };
@@ -33,14 +32,6 @@ const MapPinIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
     <circle cx="12" cy="10" r="3" />
-  </svg>
-);
-
-const GlobeIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="10" />
-    <line x1="2" y1="12" x2="22" y2="12" />
-    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
   </svg>
 );
 
@@ -101,13 +92,11 @@ function permissionErrMsg(errorName, isLocation = false) {
     : "Could not access device. Check it is connected and not blocked.";
 }
 
-export default function PermissionSetup({ onDone, token }) {
+export default function PermissionSetup({ onDone }) {
   const [camera,   setCamera]   = useState(STATUS.IDLE);
   const [mic,      setMic]      = useState(STATUS.IDLE);
   const [speaker,  setSpeaker]  = useState(STATUS.IDLE);
   const [location, setLocation] = useState(STATUS.IDLE);
-  const [network,  setNetwork]  = useState(STATUS.IDLE);
-  const [networkDetail,  setNetworkDetail]  = useState(null);
   const [locationDetail, setLocationDetail] = useState(null);
   const [cameraError,   setCameraError]   = useState(null);
   const [micError,      setMicError]      = useState(null);
@@ -180,21 +169,6 @@ export default function PermissionSetup({ onDone, token }) {
         code === 3 ? "timeout" : "unknown"
       );
     }
-
-    setNetwork(STATUS.CHECKING);
-    try {
-      // VideoSDK 0.12.5: runPreCallTest reports a quality rating, not Mbps.
-      const stats = await runNetworkTest({ token, samplingDuration: 12000 });
-      if (stats?.rating === "unknown") {
-        setNetwork(STATUS.DENIED);
-      } else {
-        const latency = stats.latencyMs != null ? ` · ${stats.latencyMs} ms` : "";
-        setNetworkDetail(`${stats.label}${latency}`);
-        setNetwork(STATUS.GRANTED);
-      }
-    } catch {
-      setNetwork(STATUS.DENIED);
-    }
   }
 
   const hasDenied = camera === STATUS.DENIED || mic === STATUS.DENIED || location === STATUS.DENIED;
@@ -251,12 +225,6 @@ export default function PermissionSetup({ onDone, token }) {
             label="Location"
             detail={locationDetail || "Required for verification and service availability."}
             status={location}
-          />
-          <PermissionRow
-            icon={GlobeIcon}
-            label="Network Speed"
-            detail={networkDetail || "Checking your internet connection for a stable consultation experience."}
-            status={network}
           />
 
           {/* Inline error block for denied permissions */}
