@@ -195,16 +195,16 @@ def ppmc_bulk_sessions():
     results    = []
 
     for entry in sessions_input:
-        patient_name = str(entry.get("patientName") or "").strip() or "Patient"
-        doctor_name  = str(entry.get("doctorName")  or "").strip() or "Doctor"
+        patient_name = str(entry.get("patientName") or "").strip() or "Client"
+        doctor_name  = str(entry.get("doctorName")  or "").strip() or "Agent"
 
         try:
             room_id = _create_room()
         except RuntimeError as exc:
             return jsonify({"message": str(exc)}), 502
 
-        doctor_pid  = f"doctor-{room_id}"[:64]
-        patient_pid = f"patient-{room_id}"[:64]
+        doctor_pid  = f"agent-{room_id}"[:64]
+        patient_pid = f"client-{room_id}"[:64]
 
         doctor_token  = _rtc_token(room_id, doctor_pid,  ["allow_join", "allow_mod"], expires_at)
         patient_token = _rtc_token(room_id, patient_pid, ["ask_join"],                expires_at)

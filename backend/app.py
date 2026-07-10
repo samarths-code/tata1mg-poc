@@ -253,7 +253,8 @@ def get_token():
     if not room_id:
         return jsonify({"message": "roomId is required"}), 400
 
-    participant_id = sanitize_id(body.get("participantId")) or f"{role}-{secrets.token_hex(6)}"
+    pid_label = "agent" if role == "doctor" else "client"
+    participant_id = sanitize_id(body.get("participantId")) or f"{pid_label}-{secrets.token_hex(6)}"
     token = build_rtc_token(room_id=room_id, participant_id=participant_id, role=role)
     return jsonify({"token": token}), 200
 
@@ -282,9 +283,9 @@ def session_credentials():
         return jsonify({"message": "meetingId is required"}), 400
 
     if role == "doctor":
-        participant_id = f"doctor-{room_id}-{secrets.token_hex(4)}"[:64]
+        participant_id = f"agent-{room_id}-{secrets.token_hex(4)}"[:64]
     else:
-        participant_id = f"patient-{room_id}"[:64]
+        participant_id = f"client-{room_id}"[:64]
     token = build_rtc_token(room_id=room_id, participant_id=participant_id, role=role)
     return jsonify({"token": token, "participantId": participant_id}), 200
 

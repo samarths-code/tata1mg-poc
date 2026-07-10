@@ -169,13 +169,13 @@ def ppmc_embed_bulk():
         return jsonify({"message": f"sessions cannot exceed {_MAX_BULK} at a time"}), 400
 
     def _create_session(entry: dict):
-        patient_name = str(entry.get("patientName") or "").strip() or "Patient"
-        doctor_name  = str(entry.get("doctorName")  or "").strip() or "Doctor"
+        patient_name = str(entry.get("patientName") or "").strip() or "Client"
+        doctor_name  = str(entry.get("doctorName")  or "").strip() or "Agent"
         room_id      = _create_room()  # raises RuntimeError on failure
         return {
             "meetingId":   room_id,
-            "doctorLink":  _embed_url("doctor",  room_id, doctor_name,  "Doctor"),
-            "patientLink": _embed_url("patient", room_id, patient_name, "Patient"),
+            "doctorLink":  _embed_url("doctor",  room_id, doctor_name,  "Agent"),
+            "patientLink": _embed_url("patient", room_id, patient_name, "Client"),
         }
 
     results  = [None] * len(sessions_input)

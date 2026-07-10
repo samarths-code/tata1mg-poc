@@ -55,8 +55,10 @@ const App = () => {
   // show the join form with the meeting ID pre-filled & locked (name stays editable).
   const isAutoJoin = !!(urlMeetingId && urlMode);
 
-  const defaultName = urlMode
-    ? urlMode.charAt(0).toUpperCase() + urlMode.slice(1).toLowerCase()
+  // Friendly default display name derived from role — never exposes the raw
+  // mode value (Doctor/Patient) as the participant's name.
+  const defaultName = rawMode
+    ? (rawMode === "DOCTOR" ? "Agent" : "Client")
     : "";
 
   // Pre-populate token and participantId from URL when present (pre-auth flow).
