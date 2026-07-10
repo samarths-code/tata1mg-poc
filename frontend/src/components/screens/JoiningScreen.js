@@ -21,7 +21,6 @@ import PermissionSetup from "../PermissionSetup";
 import { participantModes } from "../../utils/common";
 import DeviceEnableModal from "../DeviceEnableModal";
 import { ShieldCheckIcon, ChevronRightIcon, MicrophoneIcon, VideoCameraIcon, VideoCameraSlashIcon, SpeakerWaveIcon, SpeakerXMarkIcon } from "@heroicons/react/24/outline";
-import { CheckCircleIcon } from "@heroicons/react/24/solid";
 
 export function JoiningScreen({
   setSpekerOn,
@@ -345,15 +344,6 @@ export function JoiningScreen({
       style={{ height, width }}
     >
       <div className="absolute right-4 top-4 z-10"><NetworkStats /></div>
-      {/* Face-detected badge — translucent dark box, square corners (per Figma).
-          Static placeholder shown while the camera is on; wire to real
-          face-detection state later. */}
-      {webcamOn && (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1.5 bg-[rgba(0,0,0,0.5)] rounded-[6px] px-3 py-1.5">
-          <CheckCircleIcon className="w-4 h-4 shrink-0 text-[#4bd559]" />
-          <span className="text-white text-sm font-medium leading-none whitespace-nowrap">Face detected</span>
-        </div>
-      )}
       <audio playsInline muted ref={audioPlayerRef} controls={false} />
       <video
         autoPlay playsInline muted ref={videoPlayerRef} controls={false}
