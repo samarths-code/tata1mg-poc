@@ -176,7 +176,9 @@ const App = () => {
               >
                 <MeetingContainer
                   onMeetingLeave={() => {
-                    window.history.replaceState(null, "", "/thank-you");
+                    // Keep the original query params (meetingId/mode/token/…) so the
+                    // leave screen can offer a Rejoin back into the same session.
+                    window.history.replaceState(null, "", "/thank-you" + window.location.search);
                     setLeaveScreenName(participantName);
                     setToken("");
                     setParticipantId("");
