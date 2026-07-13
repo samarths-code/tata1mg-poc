@@ -54,6 +54,9 @@ const App = () => {
   // When a token is supplied directly via the URL, skip the credentials API and
   // show the join form with the meeting ID pre-filled & locked (name stays editable).
   const isAutoJoin = !!(urlMeetingId && urlMode);
+  // Set by the leave screen's REJOIN button — skip the join screen and drop
+  // straight back into the meeting.
+  const isRejoin = searchParams.get("rejoin") === "1";
 
   // Friendly default display name derived from role — never exposes the raw
   // mode value (Doctor/Patient) as the participant's name.
@@ -96,6 +99,14 @@ const App = () => {
         setCredentialError("Unable to set up your session. Please check the link and try again.");
       });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    // Rejoin flow: as soon as the token is ready, start the meeting directly
+    // instead of showing the pre-call join screen.
+    if (isRejoin && token && !isMeetingStarted) {
+      setMeetingStarted(true);
+    }
+  }, [isRejoin, token, isMeetingStarted]);
 
   const handleStartMeeting = async () => {
     try {

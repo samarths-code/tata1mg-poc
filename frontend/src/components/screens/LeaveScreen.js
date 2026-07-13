@@ -59,8 +59,10 @@ export function LeaveScreen({ participantName }) {
   // Rejoin the same session — the join params (meetingId/mode/token/participantId)
   // were preserved in the URL when leaving, so re-entering "/" with them rejoins.
   const rejoinUrl = (() => {
-    const search = window.location.search;
-    return new URLSearchParams(search).get("meetingId") ? "/" + search : null;
+    const params = new URLSearchParams(window.location.search);
+    if (!params.get("meetingId")) return null;
+    params.set("rejoin", "1"); // tells App to auto-start straight into the meeting
+    return "/?" + params.toString();
   })();
 
   return (
