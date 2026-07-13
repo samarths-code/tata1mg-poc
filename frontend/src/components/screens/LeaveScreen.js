@@ -52,21 +52,29 @@ function StarRating() {
   );
 }
 
-export function LeaveScreen({ participantName }) {
+export function LeaveScreen({ participantName, onRejoin, asBackground = false }) {
   const isDoctor = useMeetingStore((s) => s.isDoctor);
   const displayName = participantName || (isDoctor ? "Agent" : "Guest");
 
-  // Rejoin the same session — the join params (meetingId/mode/token/participantId)
-  // were preserved in the URL when leaving, so re-entering "/" with them rejoins.
+  // Rejoin the same session. Prefer an in-app callback (no page reload, so no
+  // "Leave site?" prompt). Fall back to a full navigation with the preserved
+  // params + rejoin=1 (used when the thank-you page was loaded/reloaded directly).
   const rejoinUrl = (() => {
     const params = new URLSearchParams(window.location.search);
     if (!params.get("meetingId")) return null;
-    params.set("rejoin", "1"); // tells App to auto-start straight into the meeting
+    params.set("rejoin", "1");
     return "/?" + params.toString();
   })();
+  const canRejoin = !!(onRejoin || rejoinUrl);
+
+  const handleRejoinClick = () => {
+    if (onRejoin) { onRejoin(); return; }
+    window.onbeforeunload = null; // avoid the browser "Leave site?" prompt on navigation
+    window.location.href = rejoinUrl;
+  };
 
   return (
-    <div className="fixed inset-0 z-50 bg-white overflow-y-auto">
+    <div className={`fixed inset-0 ${asBackground ? "" : "z-50"} bg-white overflow-y-auto`}>
 
       {/* Centred content — stacks naturally so nothing clips on small screens */}
       <div className="min-h-full flex flex-col items-center justify-center gap-8 px-6 pt-[80px] pb-10">
@@ -87,9 +95,9 @@ export function LeaveScreen({ participantName }) {
             Thank you for your time and care.
           </p>
 
-          {rejoinUrl && (
+          {canRejoin && !asBackground && (
             <button
-              onClick={() => { window.location.href = rejoinUrl; }}
+              onClick={handleRejoinClick}
               className="mt-4 bg-orange-450 hover:bg-orange-500 text-white px-6 py-2.5 rounded-xl text-sm font-semibold transition-colors"
             >
               REJOIN

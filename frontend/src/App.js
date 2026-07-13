@@ -78,6 +78,7 @@ const App = () => {
   const [isMeetingLeft, setIsMeetingLeft]         = useState(false);
   const [speakerOn, setSpekerOn]        = useState(true);
   const [credentialError, setCredentialError]     = useState("");
+  const [isRejoining, setIsRejoining]             = useState(isRejoin);
 
   const isMobile = window.matchMedia("only screen and (max-width: 768px)").matches;
 
@@ -126,6 +127,42 @@ const App = () => {
     }
   };
 
+  // In-app rejoin (no page reload): restore the session from the preserved URL
+  // params and go straight into the meeting, keeping the Thank You page as the
+  // blurred backdrop behind the joining splash.
+  const handleRejoin = () => {
+    const sp = new URLSearchParams(window.location.search);
+    const mId = sp.get("meetingId");
+    if (!mId) return;
+    setIsRejoining(true);
+    setIsMeetingLeft(false);
+    setMeetingId(mId);
+    setParticipantName((prev) => prev || leaveScreenName || defaultName);
+    setMicOn(true);
+    setWebcamOn(true);
+    setSpekerOn(true);
+
+    const urlTok = sp.get("token") || "";
+    const urlPid = sp.get("participantId") || "";
+    if (urlTok) {
+      setToken(urlTok);
+      setParticipantId(urlPid);
+      setMeetingStarted(true);
+    } else {
+      // mode-only link — mint fresh credentials, then start.
+      getSessionCredentials({ meetingId: mId, mode: (sp.get("mode") || "").toUpperCase() })
+        .then(({ token: tok, participantId: pid }) => {
+          setToken(tok);
+          setParticipantId(pid);
+          setMeetingStarted(true);
+        })
+        .catch((err) => {
+          console.error("Rejoin failed:", err);
+          setCredentialError("Unable to rejoin. Please try again.");
+        });
+    }
+  };
+
   return (
     <MeetingAppProvider
       initialMicOn={micOn}
@@ -135,12 +172,17 @@ const App = () => {
       caseId={caseId}
     >
       {isMeetingLeft ? (
-        <LeaveScreen participantName={leaveScreenName} />
+        <LeaveScreen participantName={leaveScreenName} onRejoin={handleRejoin} />
       ) : (
         <>
           {/* JoiningScreen stays mounted so WaitingToJoinScreen's backdrop-blur
               has the full white page to blur — wrapped non-interactive when meeting starts */}
           <div className={isMeetingStarted ? "fixed inset-0 pointer-events-none overflow-hidden" : ""}>
+            {isRejoining ? (
+              /* During rejoin the Thank You page is the blurred backdrop behind
+                 the joining splash — not the pre-call join screen. */
+              <LeaveScreen participantName={leaveScreenName} asBackground />
+            ) : (
             <JoiningScreen
               participantName={participantName}
               setParticipantName={setParticipantName}
@@ -166,6 +208,7 @@ const App = () => {
               credentialError={credentialError}
               meetingTitle={urlMeetingTitle}
             />
+            )}
           </div>
 
           {isMeetingStarted && (
