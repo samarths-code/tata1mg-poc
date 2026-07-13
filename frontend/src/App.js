@@ -134,6 +134,8 @@ const App = () => {
     const sp = new URLSearchParams(window.location.search);
     const mId = sp.get("meetingId");
     if (!mId) return;
+    // Drop /thank-you from the URL now that we're back in the session.
+    window.history.replaceState(null, "", "/" + window.location.search);
     setIsRejoining(true);
     setIsMeetingLeft(false);
     setMeetingId(mId);
