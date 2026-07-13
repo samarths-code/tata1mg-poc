@@ -141,6 +141,10 @@ const App = () => {
     setMicOn(true);
     setWebcamOn(true);
     setSpekerOn(true);
+    // The previous session's custom tracks are now ended — drop them so the SDK
+    // acquires fresh camera/mic tracks on rejoin (otherwise: error 3031).
+    setCustomVideoStream(null);
+    setCustomAudioStream(null);
 
     const urlTok = sp.get("token") || "";
     const urlPid = sp.get("participantId") || "";
