@@ -15,6 +15,7 @@ load_dotenv()
 app = Flask(__name__)
 
 from . import sheet_sync    # noqa: E402 — imported after app so sheet_sync can reference it
+from . import qc_webhook    # noqa: E402 — forwards finished recordings to the QC Lambda
 from . import ppmc_routes   # noqa: E402 — frontend-URL bulk flow + disable endpoint
 from . import ppmc_embed    # noqa: E402 — prebuilt embed bulk flow
 app.register_blueprint(ppmc_routes.bp)
@@ -382,11 +383,17 @@ def _process_webhook(event: str, room_id: Optional[str], data: dict) -> None:
 
         elif event == "recording-stopped":
             if room_id:
-                file_url = _fetch_recording_url(room_id)
-                if file_url is None:
-                    # fall back to whatever the webhook payload carries
-                    file_url = (data.get("file") or {}).get("fileUrl") or data.get("fileUrl")
+                # A room can produce several recordings. This payload names the
+                # file that just finished, so trust it first — _fetch_recording_url
+                # asks for the room's *latest* recording, which on a second
+                # recording can still be the first one if VideoSDK has not indexed
+                # the new file yet.
+                file_url = (data.get("file") or {}).get("fileUrl") or data.get("fileUrl")
+                if not file_url:
+                    file_url = _fetch_recording_url(room_id)
                 sheet_sync.update_row(room_id, recording_url=file_url or "")
+                if file_url:
+                    qc_webhook.send(room_id, file_url)
 
         elif event == "recording-failed":
             session_id = data.get("sessionId")

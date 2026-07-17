@@ -119,6 +119,7 @@ function generateLinks() {
 
     rowsToFill.push({
       rowIndex:    i + 1,  // convert to 1-based sheet row
+      policyNo:    policyNo,
       patientName: patientName,
       doctorName:  doctorName,
     });
@@ -142,8 +143,12 @@ function generateLinks() {
 
   for (var start = 0; start < rowsToFill.length; start += BATCH) {
     var batch = rowsToFill.slice(start, start + BATCH);
+    // policyNo is stamped onto the VideoSDK room as customRoomId "PPMC_<policyNo>".
+    // That is the only place it is stored — the backend reads it back off the room
+    // when the recording finishes and forwards it to QC. Rows deleted from this
+    // sheet later cannot break that handoff.
     var sessionsPayload = batch.map(function(r) {
-      return { patientName: r.patientName, doctorName: r.doctorName };
+      return { policyNo: r.policyNo, patientName: r.patientName, doctorName: r.doctorName };
     });
 
     var response;

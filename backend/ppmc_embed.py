@@ -18,7 +18,9 @@ The Apps Script receives the response and appends rows to the sheet itself.
 """
 
 import datetime
+import logging
 import os
+import re
 import secrets
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional
@@ -30,12 +32,19 @@ from flask import Blueprint, jsonify, request
 
 bp = Blueprint("ppmc_embed", __name__)
 
+logger = logging.getLogger(__name__)
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
 _VIDEOSDK_API = "https://api.videosdk.live"
 _MAX_BULK     = 50
+
+# The policy number is stamped onto the room as customRoomId "PPMC_<policyNo>";
+# qc_webhook.TOPIC_PREFIX must match this and doubles as the QC "topic" field.
+_TOPIC_PREFIX        = "PPMC_"
+_UNSAFE_POLICY_CHARS = re.compile(r"[^A-Za-z0-9_-]")
 
 # Base URL of the self-hosted prebuilt embed app (the cloned embed-prebuilt).
 _EMBED_BASE_URL = os.environ.get("PPMC_EMBED_BASE_URL", "http://localhost:3000").rstrip("/")
@@ -92,7 +101,28 @@ def _vsdk_post(path: str, body: Optional[dict] = None):
     )
 
 
-def _create_room() -> str:
+def _custom_room_id(policy_no: str) -> str:
+    """
+    Build the customRoomId that carries the policy number through to the QC
+    webhook, e.g. "PPMC_12345".
+
+    customRoomId is the only place the policy number is stored — qc_webhook reads
+    it back off the room when the recording finishes, which is why nothing here
+    touches a database or the sheet. Characters outside [A-Za-z0-9_-] are replaced
+    so the id stays identifier-safe; a substitution is logged so a mangled policy
+    number is traceable.
+    """
+    cleaned = _UNSAFE_POLICY_CHARS.sub("-", policy_no.strip())
+    custom_room_id = f"{_TOPIC_PREFIX}{cleaned}"[:64]
+    if custom_room_id != f"{_TOPIC_PREFIX}{policy_no.strip()}":
+        logger.warning(
+            "ppmc_embed: policy %r was sanitised to customRoomId %r",
+            policy_no, custom_room_id,
+        )
+    return custom_room_id
+
+
+def _create_room(custom_room_id: Optional[str] = None) -> str:
     webhook_url = os.environ.get("VIDEOSDK_WEBHOOK_URL", "")
     room_config: dict = {
         "autoStartConfig": {
@@ -102,6 +132,8 @@ def _create_room() -> str:
             }
         }
     }
+    if custom_room_id:
+        room_config["customRoomId"] = custom_room_id
     if webhook_url:
         # autoStartConfig webhookUrl delivers recording-* events
         room_config["autoStartConfig"]["recording"]["webhookUrl"] = webhook_url
@@ -150,11 +182,20 @@ def ppmc_embed_bulk():
     """
     Create VideoSDK rooms for each patient row and return SHORT embed links.
     Auth: X-PPMC-Key header (PPMC_SHARED_KEY env var)
-    Body: {"sessions": [{"patientName": "Alka", "doctorName": "Dr. Kumar"}, ...]}
-    Returns: [{"meetingId": "...", "doctorLink": "...", "patientLink": "..."}, ...]
+    Body: {"sessions": [{"policyNo": "12345",
+                         "patientName": "Alka",
+                         "doctorName": "Dr. Kumar"}, ...]}
+    Returns: [{"meetingId", "policyNo", "doctorLink", "patientLink"}, ...]
 
     patientName becomes the display name on the patient link (mode=patient).
     doctorName becomes the display name on the doctor link (mode=doctor).
+
+    policyNo is stamped onto the room as customRoomId "PPMC_<policyNo>" — the only
+    place it is stored. When the recording finishes, qc_webhook reads it back off
+    the room and forwards it to the QC team, so nothing is kept on our side and
+    rows later pruned from the sheet cannot break the handoff. It is optional:
+    entries without one still get a room, but that room's recording is never
+    forwarded to QC.
     """
     err = _require_ppmc_key()
     if err:
@@ -171,9 +212,12 @@ def ppmc_embed_bulk():
     def _create_session(entry: dict):
         patient_name = str(entry.get("patientName") or "").strip() or "Patient"
         doctor_name  = str(entry.get("doctorName")  or "").strip() or "Doctor"
-        room_id      = _create_room()  # raises RuntimeError on failure
+        policy_no    = str(entry.get("policyNo")    or "").strip()
+        custom_room_id = _custom_room_id(policy_no) if policy_no else None
+        room_id      = _create_room(custom_room_id)  # raises RuntimeError on failure
         return {
             "meetingId":   room_id,
+            "policyNo":    policy_no or None,
             "doctorLink":  _embed_url("doctor",  room_id, doctor_name,  "Doctor"),
             "patientLink": _embed_url("patient", room_id, patient_name, "Patient"),
         }
