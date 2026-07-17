@@ -11,7 +11,7 @@ const DEVICE_CONFIG = {
   camera: {
     title: "Enable Camera",
     description:
-      "Allow camera access so others can see you during the consultation. You can turn it off anytime.",
+      "Allow camera access so others can see you during the Application. You can turn it off anytime.",
     buttonLabel: "Enable Camera",
   },
   speaker: {

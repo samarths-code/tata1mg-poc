@@ -2,6 +2,7 @@
   "name": "video-mer",
   "version": "1.0.0",
   "private": true,
+  "homepage": "https://vkyc-demo.videosdk.live",
   "dependencies": {
     "@headlessui/react": "^1.7.7",
     "@heroicons/react": "^2.0.13",

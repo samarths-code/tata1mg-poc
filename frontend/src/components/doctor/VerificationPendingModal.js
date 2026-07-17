@@ -34,7 +34,7 @@ export default function VerificationPendingModal({ completedSteps = [], onLeaveA
             </button>
           </div>
           <p className="text-xs text-neutral-400 leading-4">
-            You cannot leave or end the consultation until all required verification steps are completed successfully.
+            You cannot leave or end the Application until all required verification steps are completed successfully.
           </p>
         </div>
 
@@ -58,7 +58,7 @@ export default function VerificationPendingModal({ completedSteps = [], onLeaveA
               </div>
             ))}
             <p className="text-sm text-white leading-5 mt-1">
-              The consultation can only be completed after all verification steps are verified successfully.
+              The Application can only be completed after all verification steps are verified successfully.
             </p>
           </div>
 

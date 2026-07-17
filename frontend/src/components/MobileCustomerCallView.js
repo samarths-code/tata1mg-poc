@@ -35,7 +35,7 @@ export default function MobileCustomerCallView({ meetingTitle, statusMessage }) 
       {/* ── Title + REC badge ────────────────────────────────────────────── */}
       <div className="flex items-start justify-between px-4 pt-[59px] shrink-0">
         <p className="flex-1 text-white text-sm font-medium leading-5 pr-2 line-clamp-2">
-          {meetingTitle || "Consultation"}
+          {meetingTitle || "Application"}
         </p>
         {isRecording && <RecBadge />}
       </div>

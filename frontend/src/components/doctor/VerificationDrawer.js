@@ -148,8 +148,8 @@ export function ConnectionDetailsPanel({ onClose, deviceInfo, geoData, geoFailed
                 </p>
                 <p className="text-xs text-[#c7c6c9] leading-4">
                   {geoFailed
-                    ? "Please ensure location access is enabled on your device to continue with the consultation verification process."
-                    : "To continue with your consultation verification, please allow location access on your device."
+                    ? "Please ensure location access is enabled on your device to continue with the Application verification process."
+                    : "To continue with your Application verification, please allow location access on your device."
                   }
                 </p>
               </div>
@@ -234,7 +234,7 @@ export function IdentityVerificationPanel({
   return (
     <DrawerShell
       title="Identity Verification"
-      subtitle="Review and verify the captured client document before proceeding with the consultation."
+      subtitle="Review and verify the captured client document before proceeding with the Application."
       onClose={onClose}
       footer={
         !isCompleted && (
@@ -337,7 +337,7 @@ export function FaceVerificationPanel({
   return (
     <DrawerShell
       title="Face Verification"
-      subtitle="Review and verify the captured client photo before starting the consultation."
+      subtitle="Review and verify the captured client photo before starting the Application."
       onClose={onClose}
       footer={
         !isCompleted && (
@@ -402,7 +402,7 @@ export function FaceVerificationPanel({
 
       <Card title="Client Information">
         <MetricRow label="Client Name" value={patientName || "—"} />
-        <MetricRow label="Consultation ID" value={consultationId || "—"} />
+        <MetricRow label="Application ID" value={consultationId || "—"} />
       </Card>
     </DrawerShell>
   );

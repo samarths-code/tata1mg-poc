@@ -463,7 +463,7 @@ export function JoiningScreen({
                     Your agent is ready to meet you
                   </p>
                   <h1 className="text-black text-xl font-medium leading-7 px-2">
-                    {meetingTitle || "Monthly Health Consultation & Online Consultation"}
+                    {meetingTitle || "Online Application"}
                   </h1>
                   <p className="text-[#5e5e61] text-sm font-medium leading-5">
                     Please keep a valid photo ID ready for verification.
@@ -501,7 +501,7 @@ export function JoiningScreen({
                   onClick={onClickStartMeeting}
                   className="flex items-center justify-center gap-1 w-full px-4 py-3 rounded bg-[#ff6f61] text-white text-base font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {tokenReady ? "Start Consultation" : "Setting up…"}
+                  {tokenReady ? "Start Application" : "Setting up…"}
                   <ChevronRightIcon className="w-5 h-5" />
                 </button>
               </>
@@ -560,7 +560,7 @@ export function JoiningScreen({
                   <div className="w-full max-w-sm">
                     <div className="mb-5 text-center">
                       <h2 className="text-xl font-semibold text-black">Ready to join?</h2>
-                      <p className="text-[#919093] text-sm mt-1">Enter your details to join the consultation</p>
+                      <p className="text-[#919093] text-sm mt-1">Enter your details to join the Application</p>
                     </div>
                     <MeetingDetailsScreen
                       participantName={participantName}
@@ -636,7 +636,7 @@ function AutoJoinPanel({
       {/* Meeting info */}
       <div className="flex flex-col gap-2 items-center">
         <p className="text-[#5e5e61] text-sm font-medium leading-5">
-          Join your consultation instantly
+          Join your Application instantly
         </p>
         {credentialError ? (
           <p className="text-sm text-[#dc2626] bg-[#fee2e2] border border-[#fca5a5] rounded-xl px-4 py-3 mt-1">

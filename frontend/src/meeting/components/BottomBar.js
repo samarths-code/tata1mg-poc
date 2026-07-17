@@ -313,7 +313,7 @@ function LeaveBTN({ isDoctor, completedStepsRef, completedSteps, showLeaveModal,
   const performLeave = () => {
     const name = trimSnackBarText(nameTructed(localParticipant.displayName, 15));
     if (isDoctor) {
-      toast(`${name} ended the consultation.`, {
+      toast(`${name} ended the Application.`, {
         position: "bottom-left", autoClose: 4000, hideProgressBar: true, closeButton: false, pauseOnHover: true, draggable: true, theme: "dark",
       });
       end();

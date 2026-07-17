@@ -191,7 +191,7 @@ export default function PermissionSetup({ onDone }) {
             </button>
           </div>
           <p className="text-xs text-[#919093] leading-4">
-            Please allow the following permissions to join your video consultation smoothly.
+            Please allow the following permissions to join your video Application smoothly.
           </p>
         </div>
 
@@ -203,7 +203,7 @@ export default function PermissionSetup({ onDone }) {
           <PermissionRow
             icon={CameraIcon}
             label="Camera"
-            detail="Required for video consultation with the agent."
+            detail="Required for video Application with the agent."
             status={camera}
             onRetry={runChecks}
           />
@@ -217,7 +217,7 @@ export default function PermissionSetup({ onDone }) {
           <PermissionRow
             icon={VolumeIcon}
             label="Speaker / Sound"
-            detail="Required to hear the agent clearly during the consultation."
+            detail="Required to hear the agent clearly during the Application."
             status={speaker}
           />
           <PermissionRow

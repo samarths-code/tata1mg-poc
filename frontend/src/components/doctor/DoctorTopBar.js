@@ -99,7 +99,7 @@ export default function DoctorTopBar({
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const menuRef = useRef(null);
   const isRecording = useIsRecording();
-  const title = meetingTitle || (caseId ? `Case: ${caseId}` : "Monthly Health Consultation & Wellness Checkup");
+  const title = meetingTitle || (caseId ? `Case: ${caseId}` : "VKYC Application");
   const activeStep = STEPS.find((s) => s.id === currentStep) || STEPS[0];
 
   useEffect(() => {

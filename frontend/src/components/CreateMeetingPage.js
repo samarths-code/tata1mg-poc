@@ -71,7 +71,7 @@ export default function CreateMeetingPage() {
                   type="text"
                   value={meetingTitle}
                   onChange={(e) => setMeetingTitle(e.target.value)}
-                  placeholder="e.g. Monthly Health Consultation"
+                  placeholder="e.g. Online Application"
                   className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-450 transition-colors placeholder-gray-400"
                 />
               </div>
