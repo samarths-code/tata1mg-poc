@@ -234,7 +234,7 @@ export function IdentityVerificationPanel({
   return (
     <DrawerShell
       title="Identity Verification"
-      subtitle="Review and verify the captured patient document before proceeding with the consultation."
+      subtitle="Review and verify the captured client document before proceeding with the consultation."
       onClose={onClose}
       footer={
         !isCompleted && (
@@ -337,7 +337,7 @@ export function FaceVerificationPanel({
   return (
     <DrawerShell
       title="Face Verification"
-      subtitle="Review and verify the captured patient photo before starting the consultation."
+      subtitle="Review and verify the captured client photo before starting the consultation."
       onClose={onClose}
       footer={
         !isCompleted && (
@@ -400,8 +400,8 @@ export function FaceVerificationPanel({
         <MetricRow label="Capture Device" value={captureDevice || "—"} />
       </Card>
 
-      <Card title="Patient Information">
-        <MetricRow label="Patient Name" value={patientName || "—"} />
+      <Card title="Client Information">
+        <MetricRow label="Client Name" value={patientName || "—"} />
         <MetricRow label="Consultation ID" value={consultationId || "—"} />
       </Card>
     </DrawerShell>

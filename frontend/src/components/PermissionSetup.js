@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getNetworkStats } from "@videosdk.live/react-sdk";
+import { runNetworkTest } from "../lib/precallTest";
 import { XMarkIcon, ChevronRightIcon } from "@heroicons/react/24/outline";
 
 const STATUS = { IDLE: "idle", CHECKING: "checking", GRANTED: "granted", DENIED: "denied" };
@@ -183,9 +183,15 @@ export default function PermissionSetup({ onDone }) {
 
     setNetwork(STATUS.CHECKING);
     try {
-      const stats = await getNetworkStats({ timeoutDuration: 20000 });
-      setNetworkDetail(`↓ ${stats.downloadSpeed} Mbps  ↑ ${stats.uploadSpeed} Mbps`);
-      setNetwork(STATUS.GRANTED);
+      // VideoSDK 0.12.5: runPreCallTest reports a quality rating, not Mbps.
+      const stats = await runNetworkTest({ samplingDuration: 12000 });
+      if (stats?.rating === "unknown") {
+        setNetwork(STATUS.DENIED);
+      } else {
+        const latency = stats.latencyMs != null ? ` · ${stats.latencyMs} ms` : "";
+        setNetworkDetail(`${stats.label}${latency}`);
+        setNetwork(STATUS.GRANTED);
+      }
     } catch {
       setNetwork(STATUS.DENIED);
     }
@@ -223,7 +229,7 @@ export default function PermissionSetup({ onDone }) {
           <PermissionRow
             icon={CameraIcon}
             label="Camera"
-            detail="Required for video consultation with the doctor."
+            detail="Required for video consultation with the agent."
             status={camera}
             onRetry={runChecks}
           />
@@ -237,7 +243,7 @@ export default function PermissionSetup({ onDone }) {
           <PermissionRow
             icon={VolumeIcon}
             label="Speaker / Sound"
-            detail="Required to hear the doctor clearly during the consultation."
+            detail="Required to hear the agent clearly during the consultation."
             status={speaker}
           />
           <PermissionRow

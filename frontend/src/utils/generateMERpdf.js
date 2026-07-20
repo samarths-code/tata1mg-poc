@@ -90,7 +90,7 @@ export function generateMERpdf({
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
   doc.setTextColor(255, 235, 230);
-  doc.text("Tata 1mg  ·  Video MER System", ML, 23);
+  doc.text("Video MER System", ML, 23);
 
   y = 33;
 
@@ -113,7 +113,7 @@ export function generateMERpdf({
   y += 13 + 7;
 
   // ── 3. PATIENT DETAILS ───────────────────────────────────────────────
-  y = sectionHeader("PATIENT DETAILS", y) + 5;
+  y = sectionHeader("CLIENT DETAILS", y) + 5;
 
   const ocrFields = ocrResult?.fields || {};
 
@@ -218,12 +218,12 @@ export function generateMERpdf({
   doc.setFontSize(7);
   setRgb(160, 160, 160);
   doc.text(
-    "System-generated document. Contains confidential patient information. Handle per applicable data protection laws (DPDP Act, India).",
+    "System-generated document. Contains confidential client information. Handle per applicable data protection laws (DPDP Act, India).",
     ML, footerY + 4.5,
     { maxWidth: CW }
   );
   doc.text(
-    `Tata 1mg Video MER  ·  ${ts} IST  ·  Case: ${caseId || "N/A"}`,
+    `Video MER  ·  ${ts} IST  ·  Case: ${caseId || "N/A"}`,
     ML, footerY + 10
   );
 

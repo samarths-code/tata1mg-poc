@@ -209,7 +209,7 @@ export default function DoctorView() {
 
   // ── Capture orchestration ──────────────────────────────────────────────────
   function startCapture(variant, target) {
-    if (!customerId) { toast.error("Patient not connected yet."); return; }
+    if (!customerId) { toast.error("Client not connected yet."); return; }
     // Already capturing this exact target — ignore repeat clicks so we don't
     // reset captureReady (which would leave the Capture button stuck disabled,
     // since the ready-timer effect only restarts when the variant changes).
@@ -397,7 +397,7 @@ export default function DoctorView() {
                 <div className="w-16 h-16 rounded-full bg-[#303033] flex items-center justify-center">
                   <VideoCameraIcon className="w-8 h-8 text-[#919093]" />
                 </div>
-                <p className="text-[#919093] text-sm">Waiting for patient to join…</p>
+                <p className="text-[#919093] text-sm">Waiting for client to join…</p>
               </div>
             )}
 
@@ -546,7 +546,7 @@ export default function DoctorView() {
       <PhotoEditModal
         open={!!cropImage}
         imageSrc={cropImage}
-        title={cropTargetRef.current === "customerPhoto" ? "Crop Patient Photo" : "Crop Document"}
+        title={cropTargetRef.current === "customerPhoto" ? "Crop Client Photo" : "Crop Document"}
         onClose={() => {
           const target = cropTargetRef.current;
           const fromGallery = cropFromGalleryRef.current;

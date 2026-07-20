@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import { CheckIcon, ClipboardIcon } from "@heroicons/react/24/outline";
 import { createMeetingWithCredentials } from "../api";
-import Tata1mgLogo from "./Tata1mgLogo";
 
 export default function CreateMeetingPage() {
   const [meetingTitle, setMeetingTitle] = useState("");
@@ -55,15 +54,11 @@ export default function CreateMeetingPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-      <header className="px-[30px] py-[22px] flex items-center">
-        <Tata1mgLogo height={36} dark />
-      </header>
-
       <div className="flex flex-1 items-center justify-center px-4 py-10">
         <div className="w-full max-w-md bg-white rounded-2xl shadow-md border border-gray-200 p-8">
           <h2 className="text-2xl font-bold text-gray-800 mb-1">Create a Meeting</h2>
           <p className="text-gray-500 text-sm mb-7">
-            Generate secure, pre-authenticated links for doctor and patient
+            Generate secure, pre-authenticated links for agent and client
           </p>
 
           {!links ? (
@@ -93,13 +88,13 @@ export default function CreateMeetingPage() {
           ) : (
             <div className="flex flex-col gap-5">
               <LinkRow
-                label="Doctor Link"
+                label="Agent Link"
                 link={links.doctorLink}
                 isCopied={copied.doctor}
                 onCopy={() => copyLink(links.doctorLink, "doctor")}
               />
               <LinkRow
-                label="Patient Link"
+                label="Client Link"
                 link={links.patientLink}
                 isCopied={copied.patient}
                 onCopy={() => copyLink(links.patientLink, "patient")}

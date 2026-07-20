@@ -1,12 +1,12 @@
 {
-  "name": "tata1mg-video-mer",
+  "name": "video-mer",
   "version": "1.0.0",
   "private": true,
   "dependencies": {
     "@headlessui/react": "^1.7.7",
     "@heroicons/react": "^2.0.13",
     "@popperjs/core": "^2.11.7",
-    "@videosdk.live/react-sdk": "^0.9.1",
+    "@videosdk.live/react-sdk": "^0.12.5",
     "@videosdk.live/videosdk-media-processor-web": "^0.0.12",
     "jspdf": "^4.2.1",
     "lottie-react": "^2.3.1",

@@ -2,8 +2,8 @@ module.exports = {
   apps: [
     {
       name: "tata1mg-backend",
-      script: "backend/.venv/bin/gunicorn",
-      args: "-b 0.0.0.0:6001 backend.app:app",
+      script: ".venv/bin/gunicorn",
+      args: "--bind 0.0.0.0:6001 --access-logfile - --error-logfile - backend.app:app",
       interpreter: "none",
       cwd: __dirname,
 
@@ -13,9 +13,10 @@ module.exports = {
         FLASK_DEBUG: "0",
       },
 
-      error_file: "logs/err.log",
+      output: "/dev/null",
+      error: "/dev/null",
       log_date_format: "YYYY-MM-DD HH:mm:ss",
-      merge_logs: true,
+      merge_logs: false,
 
       autorestart: true,
       max_restarts: 10,

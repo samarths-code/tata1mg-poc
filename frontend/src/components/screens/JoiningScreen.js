@@ -19,7 +19,6 @@ import useMediaStream from "../../hooks/useMediaStream";
 import useIsMobile from "../../hooks/useIsMobile";
 import PermissionSetup from "../PermissionSetup";
 import { participantModes } from "../../utils/common";
-import Tata1mgLogo from "../Tata1mgLogo";
 import DeviceEnableModal from "../DeviceEnableModal";
 import { ShieldCheckIcon, ChevronRightIcon, MicrophoneIcon, VideoCameraIcon, VideoCameraSlashIcon, SpeakerWaveIcon, SpeakerXMarkIcon } from "@heroicons/react/24/outline";
 
@@ -338,7 +337,7 @@ export function JoiningScreen({
   // ── Render helpers (plain functions, NOT components) ─────────────────────────
   // Defined as functions called with {renderCameraCard(...)} not <CameraCard/>.
   // Defining them as components inside a render body would give React a new type
-  // on every render → unmount+remount → NetworkStats fires getNetworkStats again.
+  // on every render → unmount+remount → NetworkStats re-runs the pre-call test again.
   const renderCameraCard = (height, width, rounded = "rounded-[24px]") => (
     <div
       className={`relative bg-[#303033] ${rounded} overflow-hidden shrink-0 w-full`}
@@ -450,11 +449,6 @@ export function JoiningScreen({
 
       <div className="bg-white min-h-screen relative overflow-x-hidden">
 
-        {/* Logo — top-left */}
-        <div className="absolute left-[16px] md:left-[30px] top-[18px] md:top-[30px] z-10">
-          <Tata1mgLogo dark />
-        </div>
-
         {isMobile ? (
           /* ── MOBILE LAYOUT ─────────────────────────────────────────────────────
              Order matches Figma 437-23578: header → camera → selectors → button  */
@@ -465,7 +459,7 @@ export function JoiningScreen({
               {isAutoJoin ? (
                 <>
                   <p className="text-[#5e5e61] text-sm font-medium leading-5">
-                    Your Tata 1mg doctor is ready to meet you
+                    Your agent is ready to meet you
                   </p>
                   <h1 className="text-black text-xl font-medium leading-7 px-2">
                     {meetingTitle || "Monthly Health Consultation & Online Consultation"}
@@ -633,7 +627,7 @@ function AutoJoinPanel({
   onClickStartMeeting,
   meetingTitle,
 }) {
-  const roleLabel = participantMode === participantModes.DOCTOR ? "Doctor" : "Patient";
+  const roleLabel = participantMode === participantModes.DOCTOR ? "Agent" : "Client";
   const canJoin = participantName.length >= 3 && tokenReady && !credentialError;
 
   return (
@@ -641,7 +635,7 @@ function AutoJoinPanel({
       {/* Meeting info */}
       <div className="flex flex-col gap-2 items-center">
         <p className="text-[#5e5e61] text-sm font-medium leading-5">
-          Join your Tata 1mg consultation instantly
+          Join your consultation instantly
         </p>
         {credentialError ? (
           <p className="text-sm text-[#dc2626] bg-[#fee2e2] border border-[#fca5a5] rounded-xl px-4 py-3 mt-1">

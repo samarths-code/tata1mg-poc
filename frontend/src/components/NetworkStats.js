@@ -1,29 +1,20 @@
-import { getNetworkStats } from "@videosdk.live/react-sdk";
 import { useEffect, useState } from "react";
-
-// Quality derived from the slower of the two directions
-function quality(dl, ul) {
-  const min = Math.min(dl ?? 0, ul ?? 0);
-  if (min >= 15) return { label: "Good", color: "text-green-400" };
-  if (min >= 5)  return { label: "Fair", color: "text-yellow-300" };
-  return           { label: "Poor",  color: "text-red-400" };
-}
+import { runNetworkTest } from "../lib/precallTest";
 
 export default function NetworkStats() {
-  // Keep the original state machine — it's been proven to work
+  // Keep the original state machine — it's been proven to work.
   const [error, setError] = useState("no-error-loading");
-  const [downloadSpeed, setDownloadSpeed] = useState(null);
-  const [uploadSpeed, setUploadSpeed] = useState(null);
+  // VideoSDK 0.12.5 reports a 0–10 quality score (not Mbps); see lib/precallTest.js.
+  const [result, setResult] = useState(null);
 
   useEffect(() => { getNetworkStatistics(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const getNetworkStatistics = async () => {
     setError("no-error-loading");
     try {
-      const networkStats = await getNetworkStats({ timeoutDuration: 45000 });
-      if (networkStats) setError("no-error");
-      setDownloadSpeed(networkStats?.downloadSpeed ?? networkStats?.["downloadSpeed"]);
-      setUploadSpeed(networkStats?.uploadSpeed ?? networkStats?.["uploadSpeed"]);
+      const stats = await runNetworkTest({ samplingDuration: 12000 });
+      setResult(stats);
+      setError(stats?.rating === "unknown" ? "timeout" : "no-error");
     } catch (ex) {
       console.log("NetworkStats error:", ex);
       const msg = String(ex?.message ?? ex);
@@ -32,7 +23,7 @@ export default function NetworkStats() {
     }
   };
 
-  const q = quality(downloadSpeed, uploadSpeed);
+  const q = result ?? { label: "Unknown", color: "text-white/70" };
 
   const pill = "flex items-center gap-1.5 bg-[rgba(0,0,0,0.1)] backdrop-blur-sm border border-[rgba(255,255,255,0.1)] rounded-lg px-2 py-1.5 text-white text-xs select-none";
 
@@ -51,12 +42,12 @@ export default function NetworkStats() {
             <RefreshSvg className="w-3.5 h-3.5 text-white/70" />
             <span className={`font-medium ${q.color}`}>{q.label}</span>
           </button>
-          <Divider />
-          <ArrowUp className="w-3.5 h-3.5 text-green-400 shrink-0" />
-          <span className="font-normal">{uploadSpeed} Mbps</span>
-          <Divider />
-          <ArrowDown className="w-3.5 h-3.5 text-red-400 shrink-0" />
-          <span className="font-normal">{downloadSpeed} Mbps</span>
+          {result?.latencyMs != null && (
+            <>
+              <Divider />
+              <span className="font-normal text-white/80">{result.latencyMs} ms</span>
+            </>
+          )}
         </>
       )}
 
@@ -93,18 +84,3 @@ function RefreshSvg({ className }) {
   );
 }
 
-function ArrowUp({ className }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <line x1="12" y1="19" x2="12" y2="5" /><polyline points="5 12 12 5 19 12" />
-    </svg>
-  );
-}
-
-function ArrowDown({ className }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <line x1="12" y1="5" x2="12" y2="19" /><polyline points="19 12 12 19 5 12" />
-    </svg>
-  );
-}

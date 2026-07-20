@@ -15,3 +15,5 @@ graphify-out/
 .env
 .env.local
 figmaDesign
+
+logs/
