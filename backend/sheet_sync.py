@@ -25,7 +25,7 @@ def update_row(meeting_id: str, *, status: str = None, recording_url: str = None
         logger.warning("sheet_sync: APPSCRIPT_WEBAPP_URL not set — skipping update for %s", meeting_id)
         return
 
-    payload = {"secret": _WEBAPP_SECRET, "meetingId": meeting_id}
+    payload = {"secret": _WEBAPP_SECRET, "meetingId": meeting_id}    
     if status is not None:
         payload["status"] = status
     if recording_url is not None:

@@ -12,6 +12,12 @@ from flask import Flask, Response, jsonify, request
 
 load_dotenv()
 
+import logging
+import sys
+
+# Ensure INFO-level logs are routed to stdout so PM2 / Gunicorn capture them.
+logging.basicConfig(stream=sys.stdout, level=logging.INFO, format="%(asctime)s: %(levelname)s: %(message)s")
+
 app = Flask(__name__)
 
 from . import sheet_sync    # noqa: E402 — imported after app so sheet_sync can reference it
@@ -391,9 +397,10 @@ def _process_webhook(event: str, room_id: Optional[str], data: dict) -> None:
                 file_url = (data.get("file") or {}).get("fileUrl") or data.get("fileUrl")
                 if not file_url:
                     file_url = _fetch_recording_url(room_id)
+                
+                qc_webhook.send(room_id, file_url)
                 sheet_sync.update_row(room_id, recording_url=file_url or "")
-                if file_url:
-                    qc_webhook.send(room_id, file_url)
+       
 
         elif event == "recording-failed":
             session_id = data.get("sessionId")

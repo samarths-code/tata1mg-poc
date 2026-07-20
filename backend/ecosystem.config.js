@@ -14,9 +14,10 @@ module.exports = {
         PORT: "5001",
       },
 
-      error_file: "logs/err.log",
+      output: "/dev/null",
+      error: "/dev/null",
       log_date_format: "YYYY-MM-DD HH:mm:ss",
-      merge_logs: true,
+      merge_logs: false,
 
       autorestart: true,
       max_restarts: 10,
