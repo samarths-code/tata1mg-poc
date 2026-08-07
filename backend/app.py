@@ -347,6 +347,20 @@ def identity_liveness():
     return jsonify(res.json()), res.status_code
 
 
+@app.route("/api/v1/identity/body-type", methods=["POST"])
+def identity_body_type():
+    body = request.get_json(silent=True) or {}
+    # The AI endpoints are split between "img" and "image" keys; send both.
+    image = body.get("img") or body.get("image")
+    payload = {"image": image, "img": image}
+    try:
+        res = ai_post("/body-type/detect", payload)
+    except requests.RequestException as exc:
+        app.logger.error("AI /body-type/detect unreachable: %s", exc)
+        return jsonify({"message": "AI service unavailable"}), 502
+    return jsonify(res.json()), res.status_code
+
+
 @app.route("/api/v1/identity/aadhaar-mask", methods=["POST"])
 def identity_aadhaar_mask():
     body = request.get_json(silent=True) or {}
