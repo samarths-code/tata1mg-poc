@@ -51,12 +51,21 @@ function RedBadge({ children }) {
   );
 }
 
-function MetricRow({ label, value, badge, error }) {
+function AmberBadge({ children }) {
+  return (
+    <span className="px-[6px] py-[2px] rounded-[12px] text-xs font-normal text-[#fde68a] bg-[rgba(146,64,14,0.1)] border border-[rgba(146,64,14,0.5)]">
+      {children}
+    </span>
+  );
+}
+
+function MetricRow({ label, value, badge, error, warn }) {
   return (
     <div className="flex items-start justify-between gap-6 py-2 border-b border-[#303033] last:border-0">
       <span className="text-[#919093] text-sm shrink-0">{label}</span>
       {badge ? <GreenBadge>{value}</GreenBadge>
         : error ? <RedBadge>{value}</RedBadge>
+        : warn ? <AmberBadge>{value}</AmberBadge>
         : <span className="text-white text-sm text-right break-words min-w-0 max-w-[60%]">{value}</span>}
     </div>
   );
@@ -394,6 +403,102 @@ export function FaceVerificationPanel({
           />
           <MetricRow label="Verification Time" value={verifiedAt || "—"} />
         </div>
+      </Card>
+
+      <Card title="Capture Details">
+        <MetricRow label="Capture Device" value={captureDevice || "—"} />
+      </Card>
+
+      <Card title="Client Information">
+        <MetricRow label="Client Name" value={patientName || "—"} />
+        <MetricRow label="Application ID" value={consultationId || "—"} />
+      </Card>
+    </DrawerShell>
+  );
+}
+
+/* ───────────────────────── BMI / Body Type Detection ───────────────────────── */
+
+const capitalize = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+
+export function BodyTypePanel({
+  onClose, photo, bodyTypeResult, captureDevice, verifiedAt,
+  patientName, consultationId, onRetake, onApprove, onCropPhoto, isCompleted = false,
+}) {
+  const loading = bodyTypeResult?.loading;
+  const failed = bodyTypeResult?.error;
+  const r = bodyTypeResult && !loading && !failed ? bodyTypeResult : null;
+
+  const category = r?.category ? capitalize(r.category) : null;
+  const isNormal = r?.category && !["overweight", "underweight"].includes(r.category.toLowerCase());
+  const confPct = r?.confidence_pct != null
+    ? Math.round(r.confidence_pct <= 1 ? r.confidence_pct * 100 : r.confidence_pct)
+    : null;
+  const confLabel = r?.confidence ? capitalize(r.confidence) : null;
+
+  return (
+    <DrawerShell
+      title="BMI Detection"
+      subtitle="AI-based visual body-type estimate from the client photo. Review the result before completing the Application."
+      onClose={onClose}
+      footer={
+        !isCompleted && (
+          <>
+            <button
+              onClick={onRetake}
+              className="px-4 py-2.5 rounded-lg text-sm font-medium text-white bg-[#303033] hover:bg-[#3a3a3d] transition-colors"
+            >
+              Retake Photo
+            </button>
+            <button
+              onClick={onApprove}
+              disabled={loading}
+              className="ml-auto px-5 py-2.5 rounded-lg text-sm font-semibold text-white bg-[#ff6f61] hover:bg-[#e85e51] disabled:opacity-40 transition-colors"
+            >
+              Approve Result
+            </button>
+          </>
+        )
+      }
+    >
+      <Card title="Body Type Analysis">
+        {photo ? (
+          <HoverableImage
+            src={photo} alt="Body analysis" className="max-h-40"
+            onRetake={onRetake}
+            onCrop={() => onCropPhoto?.(photo)}
+            isCompleted={isCompleted}
+          />
+        ) : (
+          <p className="text-[#77777a] text-xs italic">No photo captured yet</p>
+        )}
+        <div className="mt-3">
+          <MetricRow
+            label="Category"
+            value={
+              loading ? "Analyzing…"
+              : category ? category
+              : failed ? "Detection failed"
+              : "—"
+            }
+            badge={!!category && isNormal}
+            warn={!!category && !isNormal}
+            error={!!failed}
+          />
+          <MetricRow
+            label="Confidence"
+            value={
+              loading ? "Analyzing…"
+              : confPct != null ? `${confPct}%${confLabel ? ` · ${confLabel}` : ""}`
+              : confLabel || "—"
+            }
+          />
+          {r?.reason && <MetricRow label="Observation" value={r.reason} />}
+          <MetricRow label="Verification Time" value={verifiedAt || "—"} />
+        </div>
+        {r?.disclaimer && (
+          <p className="mt-3 text-[#77777a] text-[11px] italic leading-4">{r.disclaimer}</p>
+        )}
       </Card>
 
       <Card title="Capture Details">

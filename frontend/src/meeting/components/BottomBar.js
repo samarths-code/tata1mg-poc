@@ -308,7 +308,7 @@ const STEP_LABELS = {
 function LeaveBTN({ isDoctor, completedStepsRef, completedSteps, showLeaveModal, setShowLeaveModal }) {
   const { leave, end, localParticipant } = useMeeting();
 
-  const allVerified = !isDoctor || [1, 2, 3].every((s) => completedStepsRef.current.includes(s));
+  const allVerified = !isDoctor || [1, 2, 3, 4].every((s) => completedStepsRef.current.includes(s));
 
   const performLeave = () => {
     const name = trimSnackBarText(nameTructed(localParticipant.displayName, 15));

@@ -4,7 +4,7 @@ import { toast } from "react-toastify";
 import { useMeetingStore } from "../../store/meetingStore";
 import { MemoizedParticipant } from "../ParticipantView";
 import { BottomBar } from "../../meeting/components/BottomBar";
-import { runOCR, runFaceMatch, runAntiSpoof, isAiReady, maskAadhaarImage } from "../../api";
+import { runOCR, runFaceMatch, runAntiSpoof, runBodyTypeDetect, isAiReady, maskAadhaarImage } from "../../api";
 import DoctorTopBar, { DoctorStepBar } from "./DoctorTopBar";
 import useIsMobile from "../../hooks/useIsMobile";
 import CaptureOverlay from "./CaptureOverlay";
@@ -13,6 +13,7 @@ import {
   ConnectionDetailsPanel,
   IdentityVerificationPanel,
   FaceVerificationPanel,
+  BodyTypePanel,
 } from "./VerificationDrawer";
 import { VideoCameraIcon } from "@heroicons/react/24/outline";
 
@@ -47,7 +48,7 @@ export default function DoctorView() {
   // ── Step + drawer state ────────────────────────────────────────────────────
   const [currentStep, setCurrentStep] = useState(1);
   const [completedSteps, setCompletedSteps] = useState([]);
-  const [drawer, setDrawer] = useState({ open: false, type: null }); // 'connection' | 'identity' | 'face'
+  const [drawer, setDrawer] = useState({ open: false, type: null }); // 'connection' | 'identity' | 'face' | 'bmi'
 
   // ── Capture state ──────────────────────────────────────────────────────────
   const [capture, setCapture] = useState({ active: false, variant: "document-front" });
@@ -65,6 +66,9 @@ export default function DoctorView() {
   const [spoofResult, setSpoofResult] = useState(null);
   const [identityTime, setIdentityTime] = useState(null);
   const [faceTime, setFaceTime] = useState(null);
+  const [bodyPhoto, setBodyPhoto] = useState(null);
+  const [bodyTypeResult, setBodyTypeResult] = useState(null);
+  const [bmiTime, setBmiTime] = useState(null);
 
   // ── Crop modal ─────────────────────────────────────────────────────────────
   const [cropImage, setCropImage] = useState(null);
@@ -194,6 +198,17 @@ export default function DoctorView() {
     }
   }, [setCustomerSpoofStatus]);
 
+  const runBodyTypeCheck = useCallback(async (imageBase64) => {
+    setBodyTypeResult({ loading: true });
+    try {
+      if (!isAiReady()) throw new Error("AI not ready");
+      const raw = await runBodyTypeDetect({ imageBase64 });
+      setBodyTypeResult(raw?.data || raw);
+    } catch {
+      setBodyTypeResult({ error: true });
+    }
+  }, []);
+
   const runFaceMatchCheck = useCallback(async (refBase64, targetBase64) => {
     setFaceMatchResult({ loading: true });
     try {
@@ -307,6 +322,11 @@ export default function DoctorView() {
       // Always run — face match is forced to success for now (see runFaceMatchCheck).
       runFaceMatchCheck(docFront, cropped);
       setDrawer({ open: true, type: "face" });
+    } else if (target === "bodyPhoto") {
+      setBodyPhoto(cropped);
+      setBmiTime(t);
+      runBodyTypeCheck(cropped);
+      setDrawer({ open: true, type: "bmi" });
     }
   }
 
@@ -325,15 +345,16 @@ export default function DoctorView() {
 
   // Advance to a new step: update currentStep + open drawer or start capture
   function openStep(step) {
-    if (step > 3) { setDrawer({ open: false, type: null }); return; }
+    if (step > 4) { setDrawer({ open: false, type: null }); return; }
     setCurrentStep(step);
     if (step === 1) setDrawer({ open: true, type: "connection" });
     else if (step === 2) docFront ? setDrawer({ open: true, type: "identity" }) : startCapture("document-front", "aadhaarFront");
     else if (step === 3) customerPhoto ? setDrawer({ open: true, type: "face" }) : startCapture("face", "customerPhoto");
+    else if (step === 4) bodyPhoto ? setDrawer({ open: true, type: "bmi" }) : startCapture("face", "bodyPhoto");
   }
 
   // Review a completed step: open its drawer WITHOUT moving currentStep backward
-  const STEP_DRAWER = { 1: "connection", 2: "identity", 3: "face" };
+  const STEP_DRAWER = { 1: "connection", 2: "identity", 3: "face", 4: "bmi" };
   function reviewStep(step) {
     setDrawer({ open: true, type: STEP_DRAWER[step] });
   }
@@ -371,7 +392,7 @@ export default function DoctorView() {
         caseId={caseId}
         currentStep={currentStep}
         completedSteps={completedSteps}
-        visibleSteps={[1, 2, 3]}
+        visibleSteps={[1, 2, 3, 4]}
         onStepClick={handleStepClick}
         onMenuClick={() => setDrawer({ open: true, type: "connection" })}
       />
@@ -472,6 +493,21 @@ export default function DoctorView() {
                   isCompleted={completedSteps.includes(3)}
                 />
               )}
+              {drawer.type === "bmi" && (
+                <BodyTypePanel
+                  photo={bodyPhoto}
+                  bodyTypeResult={bodyTypeResult}
+                  captureDevice={captureDeviceLabel}
+                  verifiedAt={bmiTime}
+                  patientName={participants.get(customerId)?.displayName}
+                  consultationId={caseId}
+                  onClose={() => setDrawer({ open: false, type: null })}
+                  onRetake={() => startCapture("face", "bodyPhoto")}
+                  onApprove={() => approveStep(4)}
+                  onCropPhoto={(img) => openCropFromGallery(img, "bodyPhoto")}
+                  isCompleted={completedSteps.includes(4)}
+                />
+              )}
             </div>
           ) : (
             <div className="shrink-0 h-full" style={{ paddingBottom: bottomBarHeight }}>
@@ -517,6 +553,21 @@ export default function DoctorView() {
                   isCompleted={completedSteps.includes(3)}
                 />
               )}
+              {drawer.type === "bmi" && (
+                <BodyTypePanel
+                  photo={bodyPhoto}
+                  bodyTypeResult={bodyTypeResult}
+                  captureDevice={captureDeviceLabel}
+                  verifiedAt={bmiTime}
+                  patientName={participants.get(customerId)?.displayName}
+                  consultationId={caseId}
+                  onClose={() => setDrawer({ open: false, type: null })}
+                  onRetake={() => startCapture("face", "bodyPhoto")}
+                  onApprove={() => approveStep(4)}
+                  onCropPhoto={(img) => openCropFromGallery(img, "bodyPhoto")}
+                  isCompleted={completedSteps.includes(4)}
+                />
+              )}
             </div>
           )
         )}
@@ -546,7 +597,11 @@ export default function DoctorView() {
       <PhotoEditModal
         open={!!cropImage}
         imageSrc={cropImage}
-        title={cropTargetRef.current === "customerPhoto" ? "Crop Client Photo" : "Crop Document"}
+        title={
+          cropTargetRef.current === "customerPhoto" ? "Crop Client Photo"
+          : cropTargetRef.current === "bodyPhoto" ? "Crop Body Photo"
+          : "Crop Document"
+        }
         onClose={() => {
           const target = cropTargetRef.current;
           const fromGallery = cropFromGalleryRef.current;
@@ -554,7 +609,7 @@ export default function DoctorView() {
           setCropImage(null);
           // Re-open the appropriate drawer when closing without saving
           if (target === "aadhaarBack" || fromGallery) {
-            const type = target === "customerPhoto" ? "face" : "identity";
+            const type = target === "customerPhoto" ? "face" : target === "bodyPhoto" ? "bmi" : "identity";
             setDrawer({ open: true, type });
           }
         }}
@@ -566,6 +621,7 @@ export default function DoctorView() {
           if (target === "aadhaarFront") startCapture("document-front", "aadhaarFront");
           else if (target === "aadhaarBack") startCapture("document-back", "aadhaarBack");
           else if (target === "customerPhoto") startCapture("face", "customerPhoto");
+          else if (target === "bodyPhoto") startCapture("face", "bodyPhoto");
         }}
       />
     </div>

@@ -172,6 +172,16 @@ export const runAntiSpoof = async ({ imageBase64 }) => {
   return res.json();
 };
 
+export const runBodyTypeDetect = async ({ imageBase64 }) => {
+  const res = await fetch(`${BACKEND_URL}/api/v1/identity/body-type`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ img: ensureDataUrl(imageBase64) }),
+  });
+  if (!res.ok) throw new Error(`Body-type detect failed: ${res.status}`);
+  return res.json();
+};
+
 export const maskAadhaarImage = async ({ imageBase64 }) => {
   const res = await fetch(`${BACKEND_URL}/api/v1/identity/aadhaar-mask`, {
     method: "POST",

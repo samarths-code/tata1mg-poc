@@ -98,6 +98,12 @@ export function CustomerVerificationOverlay() {
               <br />
               ready for verification.
             </>
+          ) : step === 4 ? (
+            <>
+              Please get ready for
+              <br />
+              body type analysis.
+            </>
           ) : (
             <>
               Please get ready for

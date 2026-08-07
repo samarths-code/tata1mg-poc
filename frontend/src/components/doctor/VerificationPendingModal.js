@@ -4,6 +4,7 @@ const STEPS = [
   { id: 1, label: "Connection Verification" },
   { id: 2, label: "Identity Verification" },
   { id: 3, label: "Face Match" },
+  { id: 4, label: "BMI Detection" },
 ];
 
 export default function VerificationPendingModal({ completedSteps = [], onLeaveAnyway, onClose }) {
