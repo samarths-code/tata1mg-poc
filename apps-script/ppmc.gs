@@ -24,7 +24,10 @@
  *   T=20  Phlebo Contact
  *   U=21  Doctor            ← doctor name (used in patient link as meetingTitle)
  *   V=22  Doctors Contact
- *   W=23  Zoom Link
+ *   W=23  Zoom Link         ← REPURPOSED: after-5PM switch. Dropdown ACTIVE/DEACTIVE
+ *                             (one-time setup: select column W → Data → Data validation
+ *                              → Dropdown with values ACTIVE, DEACTIVE). Rows set to
+ *                              ACTIVE keep working after the daily 5PM link cutoff.
  *   X=24  Status of the call
  *   Y=25  Vedio Recoding
  *   Z=26  MER Status
@@ -63,6 +66,7 @@
 
 // Column indices (1-based, for getRange)
 var COL_POLICY_NO   = 3;   // C — Policy No. (must be present; rows without it are skipped)
+var COL_AFTER5      = 23;  // W — after-5PM switch (ACTIVE/DEACTIVE dropdown)
 var COL_NAME        = 4;   // D — patient name
 var COL_DOCTOR      = 21;  // U — doctor name
 var COL_MEETING_ID  = 39;  // AM
@@ -401,6 +405,11 @@ function doPost(e) {
     return _json({ error: "forbidden" });
   }
 
+  // Backend pulls the meetingIds whose after-5PM switch (col W) is ACTIVE.
+  if (data.action === "listActive") {
+    return _json({ meetingIds: listActiveMeetingIds() });
+  }
+
   if (!data.meetingId) {
     return _json({ error: "meetingId required" });
   }
@@ -433,6 +442,22 @@ function doPost(e) {
   }
 
   return _json({ ok: true, updated: updated });
+}
+
+/** Rows (any tab) with a Meeting ID whose col-W switch reads ACTIVE. */
+function listActiveMeetingIds() {
+  var ids    = [];
+  var sheets = SpreadsheetApp.getActiveSpreadsheet().getSheets();
+
+  for (var s = 0; s < sheets.length; s++) {
+    var values = sheets[s].getDataRange().getValues();
+    for (var i = 1; i < values.length; i++) {  // skip header
+      var flag      = String(values[i][COL_AFTER5     - 1] || "").trim().toUpperCase();
+      var meetingId = String(values[i][COL_MEETING_ID - 1] || "").trim();
+      if (flag === "ACTIVE" && meetingId) ids.push(meetingId);
+    }
+  }
+  return ids;
 }
 
 function _json(obj) {

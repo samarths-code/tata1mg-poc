@@ -25,7 +25,10 @@ import jwt
 import requests
 from flask import Blueprint, jsonify, request
 
-from . import sheet_sync
+try:
+    from . import sheet_sync  # package context
+except ImportError:
+    import sheet_sync         # script context (`python3 app.py`)
 
 bp = Blueprint("ppmc_routes", __name__)
 

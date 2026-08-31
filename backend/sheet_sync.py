@@ -11,6 +11,8 @@ If APPSCRIPT_WEBAPP_URL is not set, calls are silently skipped (safe for local d
 
 import logging
 import os
+import threading
+import time
 
 import requests
 
@@ -18,6 +20,46 @@ logger = logging.getLogger(__name__)
 
 _WEBAPP_URL    = os.environ.get("APPSCRIPT_WEBAPP_URL", "")
 _WEBAPP_SECRET = os.environ.get("APPSCRIPT_SECRET", "")
+
+# after-5PM override list (sheet column W = ACTIVE), cached so post-cutoff join
+# attempts are bounded to at most one Apps Script call per TTL window.
+_ACTIVE_TTL_SECONDS = 30
+_active_lock  = threading.Lock()
+_active_cache = {"ids": frozenset(), "at": 0.0}
+
+
+def list_active_meeting_ids() -> frozenset:
+    """meetingIds whose after-5PM switch (column W dropdown) is ACTIVE.
+
+    The sheet is the source of truth; this cache is only a rate limiter. Fails
+    closed: on any error the last fetched list (initially empty) is returned,
+    so an unreachable sheet means expired links stay expired.
+    """
+    if not _WEBAPP_URL:
+        return frozenset()
+
+    with _active_lock:
+        if time.monotonic() - _active_cache["at"] < _ACTIVE_TTL_SECONDS:
+            return _active_cache["ids"]
+
+    try:
+        res = requests.post(
+            _WEBAPP_URL,
+            json={"secret": _WEBAPP_SECRET, "action": "listActive"},
+            timeout=(3, 8),
+        )
+        if res.ok:
+            ids = frozenset(
+                str(m).strip() for m in res.json().get("meetingIds", []) if str(m).strip()
+            )
+            with _active_lock:
+                _active_cache["ids"] = ids
+                _active_cache["at"]  = time.monotonic()
+            return ids
+        logger.warning("sheet_sync: listActive returned %s: %s", res.status_code, res.text)
+    except (requests.RequestException, ValueError) as exc:
+        logger.warning("sheet_sync: listActive failed: %s", exc)
+    return _active_cache["ids"]
 
 
 def update_row(meeting_id: str, *, status: str = None, recording_url: str = None) -> None:

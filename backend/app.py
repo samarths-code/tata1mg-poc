@@ -14,11 +14,16 @@ load_dotenv()
 
 app = Flask(__name__)
 
-# from . import sheet_sync    # noqa: E402 — imported after app so sheet_sync can reference it
-# from . import ppmc_routes   # noqa: E402 — frontend-URL bulk flow + disable endpoint
-# from . import ppmc_embed    # noqa: E402 — prebuilt embed bulk flow
-# app.register_blueprint(ppmc_routes.bp)
-# app.register_blueprint(ppmc_embed.bp)
+try:
+    from . import sheet_sync  # package context (e.g. gunicorn backend.app)
+except ImportError:
+    import sheet_sync         # script context (start.sh runs `python3 app.py`)
+try:
+    from . import ppmc_routes, ppmc_embed  # noqa: E402
+except ImportError:
+    import ppmc_routes, ppmc_embed         # noqa: E402
+app.register_blueprint(ppmc_routes.bp)  # frontend-URL bulk flow + recordings endpoints
+app.register_blueprint(ppmc_embed.bp)   # prebuilt embed bulk flow
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -52,6 +57,38 @@ def get_secret() -> str:
 
 def get_webhook_url() -> Optional[str]:
     return os.environ.get("VIDEOSDK_WEBHOOK_URL") or None
+
+
+# After this time of day (IST, "HH:MM") links stop issuing tokens unless the
+# room still has an ongoing session (rejoin) or the sheet's after-5PM switch
+# (column W dropdown) is ACTIVE. Empty string disables the cutoff entirely.
+LINK_EXPIRY_TIME_IST = os.environ.get("LINK_EXPIRY_TIME_IST", "17:00")
+LINK_EXPIRED_MESSAGE = (
+    "This meeting link has expired. Please use a valid meeting link to join the meeting."
+)
+_IST = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
+
+
+def is_past_link_expiry() -> bool:
+    if not LINK_EXPIRY_TIME_IST:
+        return False
+    try:
+        hour, minute = (int(part) for part in LINK_EXPIRY_TIME_IST.split(":"))
+    except ValueError:
+        return False
+    return datetime.datetime.now(_IST).time() >= datetime.time(hour, minute)
+
+
+def has_ongoing_session(room_id: str) -> bool:
+    """True when the room has a live session — lets a doctor or patient who
+    dropped mid-call rejoin after the cutoff without any ops action."""
+    try:
+        res = vsdk_get(f"/v2/sessions/?roomId={room_id}&page=1&perPage=5")
+        if not res.ok:
+            return False
+        return any(s.get("status") == "ongoing" for s in res.json().get("data") or [])
+    except (requests.RequestException, ValueError):
+        return False
 
 
 
@@ -295,12 +332,20 @@ def session_credentials():
     each other. The patient is a single participant, so its id stays deterministic
     (preserves identity across re-joins).
     """
+    
     body = request.get_json(silent=True) or {}
     role = "doctor" if str(body.get("role", "")).upper() == "DOCTOR" else "patient"
 
     room_id = sanitize_id(body.get("meetingId"))
     if not room_id:
         return jsonify({"message": "meetingId is required"}), 400
+
+    if (
+        is_past_link_expiry()
+        and not has_ongoing_session(room_id)
+        and room_id not in sheet_sync.list_active_meeting_ids()
+    ):
+        return jsonify({"code": "LINK_EXPIRED", "message": LINK_EXPIRED_MESSAGE}), 410
 
     if role == "doctor":
         participant_id = f"agent-{room_id}-{secrets.token_hex(4)}"[:64]
