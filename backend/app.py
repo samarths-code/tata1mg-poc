@@ -58,9 +58,10 @@ def get_webhook_url() -> Optional[str]:
     return os.environ.get("VIDEOSDK_WEBHOOK_URL") or None
 
 
-# After this time of day (IST, "HH:MM") links stop issuing tokens unless the
-# room still has an ongoing session (rejoin) or the sheet's after-5PM switch
-# (column W dropdown) is ACTIVE. Empty string disables the cutoff entirely.
+# Daily cutoff (IST, "HH:MM"). A link works only on the day its room was
+# created, until this time; after that no token is issued unless the room still
+# has an ongoing session (rejoin) or the sheet's after-5PM switch (column W
+# dropdown) is ACTIVE. Empty string disables the cutoff entirely.
 LINK_EXPIRY_TIME_IST = os.environ.get("LINK_EXPIRY_TIME_IST", "17:00")
 LINK_EXPIRED_MESSAGE = (
     "This meeting link has expired. Please use a valid meeting link to join the meeting."
@@ -68,14 +69,69 @@ LINK_EXPIRED_MESSAGE = (
 _IST = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
 
 
-def is_past_link_expiry() -> bool:
+def _cutoff_time() -> Optional[datetime.time]:
     if not LINK_EXPIRY_TIME_IST:
-        return False
+        return None
     try:
         hour, minute = (int(part) for part in LINK_EXPIRY_TIME_IST.split(":"))
+        return datetime.time(hour, minute)
     except ValueError:
+        return None
+
+
+def link_expiry_at(created_at: datetime.datetime) -> Optional[datetime.datetime]:
+    """The instant a link stops working: the cutoff on the IST day its room was
+    created. A room created after the cutoff (e.g. an evening batch for
+    tomorrow) counts as the next day's link."""
+    cutoff = _cutoff_time()
+    if cutoff is None:
+        return None
+    created_ist = created_at.astimezone(_IST)
+    day = created_ist.date()
+    if created_ist.time() >= cutoff:
+        day += datetime.timedelta(days=1)
+    return datetime.datetime.combine(day, cutoff, tzinfo=_IST)
+
+
+# roomId -> createdAt. A cache only (VideoSDK is the source of truth); it just
+# avoids re-fetching the room on every join. Safe to lose on restart.
+_room_created_cache: dict = {}
+_room_created_lock = threading.Lock()
+
+
+def room_created_at(room_id: str) -> Optional[datetime.datetime]:
+    with _room_created_lock:
+        if room_id in _room_created_cache:
+            return _room_created_cache[room_id]
+    try:
+        res = vsdk_get(f"/v2/rooms/{room_id}")
+        if not res.ok:
+            return None
+        raw = str(res.json().get("createdAt") or "")
+        created = datetime.datetime.strptime(raw, "%Y-%m-%dT%H:%M:%S.%fZ").replace(
+            tzinfo=datetime.timezone.utc
+        )
+    except (requests.RequestException, ValueError):
+        return None
+    with _room_created_lock:
+        if len(_room_created_cache) > 5000:
+            _room_created_cache.clear()
+        _room_created_cache[room_id] = created
+    return created
+
+
+def is_link_expired(room_id: str) -> bool:
+    """Same-day rule: expired once the cutoff on the link's creation day has
+    passed. If the creation date cannot be determined, fall back to the plain
+    time-of-day rule so a VideoSDK hiccup never blocks daytime joins."""
+    cutoff = _cutoff_time()
+    if cutoff is None:
         return False
-    return datetime.datetime.now(_IST).time() >= datetime.time(hour, minute)
+    now = datetime.datetime.now(_IST)
+    created = room_created_at(room_id)
+    if created is None:
+        return now.time() >= cutoff
+    return now >= link_expiry_at(created)
 
 
 def has_ongoing_session(room_id: str) -> bool:
@@ -321,7 +377,7 @@ def session_credentials():
         return jsonify({"message": "meetingId is required"}), 400
 
     if (
-        is_past_link_expiry()
+        is_link_expired(room_id)
         and not has_ongoing_session(room_id)
         and room_id not in sheet_sync.list_active_meeting_ids()
     ):
