@@ -36,10 +36,13 @@ def list_active_meeting_ids() -> frozenset:
     so an unreachable sheet means expired links stay expired.
     """
     if not _WEBAPP_URL:
+        print("[link-gate] listActive: APPSCRIPT_WEBAPP_URL not set -> empty list", flush=True)
         return frozenset()
 
     with _active_lock:
-        if time.monotonic() - _active_cache["at"] < _ACTIVE_TTL_SECONDS:
+        age = time.monotonic() - _active_cache["at"]
+        if age < _ACTIVE_TTL_SECONDS:
+            print(f"[link-gate] listActive: cache hit ({age:.0f}s old) -> {sorted(_active_cache['ids'])}", flush=True)
             return _active_cache["ids"]
 
     try:
@@ -48,6 +51,7 @@ def list_active_meeting_ids() -> frozenset:
             json={"secret": _WEBAPP_SECRET, "action": "listActive"},
             timeout=(3, 8),
         )
+        print(f"[link-gate] listActive: sheet HTTP {res.status_code} body={res.text[:200]}", flush=True)
         if res.ok:
             ids = frozenset(
                 str(m).strip() for m in res.json().get("meetingIds", []) if str(m).strip()
@@ -59,6 +63,7 @@ def list_active_meeting_ids() -> frozenset:
         logger.warning("sheet_sync: listActive returned %s: %s", res.status_code, res.text)
     except (requests.RequestException, ValueError) as exc:
         logger.warning("sheet_sync: listActive failed: %s", exc)
+        print(f"[link-gate] listActive: FAILED {exc!r} -> using last list {sorted(_active_cache['ids'])}", flush=True)
     return _active_cache["ids"]
 
 
