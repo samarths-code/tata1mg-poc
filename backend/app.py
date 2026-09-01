@@ -132,7 +132,8 @@ def link_day(room_id: str) -> Optional[datetime.date]:
 def link_gate(room_id: str):
     """Returns a 410 response when the link may not be used, else None.
 
-    - Previous-day link: dead, unless the sheet's column W is ACTIVE.
+    - Previous-day or future-day link (e.g. an evening batch for tomorrow,
+      opened tonight): dead, unless the sheet's column W is ACTIVE.
     - Today's link after the cutoff: allowed if the call is still live (someone
       dropped and is rejoining) or column W is ACTIVE.
     - Otherwise: allowed.
@@ -143,9 +144,9 @@ def link_gate(room_id: str):
         return None
     now = datetime.datetime.now(_IST)
     day = link_day(room_id) or now.date()
-    stale        = day < now.date()
+    wrong_day    = day != now.date()
     past_cutoff  = day == now.date() and now.time() >= cutoff
-    if not (stale or past_cutoff):
+    if not (wrong_day or past_cutoff):
         return None
     if past_cutoff and has_ongoing_session(room_id):
         return None
