@@ -25,7 +25,7 @@ _WEBAPP_SECRET = os.environ.get("APPSCRIPT_SECRET", "")
 # attempts are bounded to at most one Apps Script call per TTL window.
 _ACTIVE_TTL_SECONDS = 30
 _active_lock  = threading.Lock()
-_active_cache = {"ids": frozenset(), "at": 0.0}
+_active_cache = {"ids": frozenset(), "at": float("-inf")}  # -inf: never fetched
 
 
 def list_active_meeting_ids() -> frozenset:
