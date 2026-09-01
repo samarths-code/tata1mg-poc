@@ -107,12 +107,15 @@ def room_created_at(room_id: str) -> Optional[datetime.datetime]:
     try:
         res = vsdk_get(f"/v2/rooms/{room_id}")
         if not res.ok:
+            print(f"[link-gate] room_created_at {room_id}: VideoSDK HTTP {res.status_code} {res.text[:120]}", flush=True)
             return None
         raw = str(res.json().get("createdAt") or "")
         created = datetime.datetime.strptime(raw, "%Y-%m-%dT%H:%M:%S.%fZ").replace(
             tzinfo=datetime.timezone.utc
         )
-    except (requests.RequestException, ValueError):
+        print(f"[link-gate] room_created_at {room_id}: createdAt={raw} -> {created.astimezone(_IST):%Y-%m-%d %H:%M} IST", flush=True)
+    except (requests.RequestException, ValueError) as exc:
+        print(f"[link-gate] room_created_at {room_id}: FAILED {exc!r}", flush=True)
         return None
     with _room_created_lock:
         if len(_room_created_cache) > 5000:
@@ -142,17 +145,27 @@ def link_gate(room_id: str):
     """
     cutoff = _cutoff_time()
     if cutoff is None:
+        print(f"[link-gate] {room_id}: cutoff disabled (LINK_EXPIRY_TIME_IST={LINK_EXPIRY_TIME_IST!r}) -> ALLOW", flush=True)
         return None
     now = datetime.datetime.now(_IST)
-    day = link_day(room_id) or now.date()
+    resolved_day = link_day(room_id)
+    day = resolved_day or now.date()
     wrong_day    = day != now.date()
     past_cutoff  = day == now.date() and now.time() >= cutoff
+    print(f"[link-gate] {room_id}: now={now:%Y-%m-%d %H:%M:%S} IST cutoff={cutoff:%H:%M} "
+          f"link_day={resolved_day or 'unknown->today'} wrong_day={wrong_day} past_cutoff={past_cutoff}", flush=True)
     if not (wrong_day or past_cutoff):
+        print(f"[link-gate] {room_id}: within valid window -> ALLOW", flush=True)
         return None
     if past_cutoff and has_ongoing_session(room_id):
+        print(f"[link-gate] {room_id}: call still live -> ALLOW", flush=True)
         return None
-    if room_id in sheet_sync.list_active_meeting_ids():
+    active = sheet_sync.list_active_meeting_ids()
+    print(f"[link-gate] {room_id}: sheet ACTIVE list={sorted(active)} contains={room_id in active}", flush=True)
+    if room_id in active:
+        print(f"[link-gate] {room_id}: ACTIVE in sheet -> ALLOW", flush=True)
         return None
+    print(f"[link-gate] {room_id}: -> BLOCK 410 LINK_EXPIRED", flush=True)
     return jsonify({"code": "LINK_EXPIRED", "message": LINK_EXPIRED_MESSAGE}), 410
 
 
@@ -162,9 +175,13 @@ def has_ongoing_session(room_id: str) -> bool:
     try:
         res = vsdk_get(f"/v2/sessions/?roomId={room_id}&page=1&perPage=5")
         if not res.ok:
+            print(f"[link-gate] has_ongoing_session {room_id}: VideoSDK HTTP {res.status_code}", flush=True)
             return False
-        return any(s.get("status") == "ongoing" for s in res.json().get("data") or [])
-    except (requests.RequestException, ValueError):
+        statuses = [s.get("status") for s in res.json().get("data") or []]
+        print(f"[link-gate] has_ongoing_session {room_id}: session statuses={statuses}", flush=True)
+        return "ongoing" in statuses
+    except (requests.RequestException, ValueError) as exc:
+        print(f"[link-gate] has_ongoing_session {room_id}: FAILED {exc!r}", flush=True)
         return False
 
 
