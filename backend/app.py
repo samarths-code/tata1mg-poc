@@ -120,18 +120,38 @@ def room_created_at(room_id: str) -> Optional[datetime.datetime]:
     return created
 
 
-def is_link_expired(room_id: str) -> bool:
-    """Same-day rule: expired once the cutoff on the link's creation day has
-    passed. If the creation date cannot be determined, fall back to the plain
-    time-of-day rule so a VideoSDK hiccup never blocks daytime joins."""
-    cutoff = _cutoff_time()
-    if cutoff is None:
-        return False
-    now = datetime.datetime.now(_IST)
+def link_day(room_id: str) -> Optional[datetime.date]:
+    """The IST day a link belongs to (see link_expiry_at). None if unknown."""
     created = room_created_at(room_id)
     if created is None:
-        return now.time() >= cutoff
-    return now >= link_expiry_at(created)
+        return None
+    expiry = link_expiry_at(created)
+    return expiry.date() if expiry else None
+
+
+def link_gate(room_id: str):
+    """Returns a 410 response when the link may not be used, else None.
+
+    - Previous-day link: dead, unless the sheet's column W is ACTIVE.
+    - Today's link after the cutoff: allowed if the call is still live (someone
+      dropped and is rejoining) or column W is ACTIVE.
+    - Otherwise: allowed.
+    If the creation date is unknown the link is treated as today's.
+    """
+    cutoff = _cutoff_time()
+    if cutoff is None:
+        return None
+    now = datetime.datetime.now(_IST)
+    day = link_day(room_id) or now.date()
+    stale        = day < now.date()
+    past_cutoff  = day == now.date() and now.time() >= cutoff
+    if not (stale or past_cutoff):
+        return None
+    if past_cutoff and has_ongoing_session(room_id):
+        return None
+    if room_id in sheet_sync.list_active_meeting_ids():
+        return None
+    return jsonify({"code": "LINK_EXPIRED", "message": LINK_EXPIRED_MESSAGE}), 410
 
 
 def has_ongoing_session(room_id: str) -> bool:
@@ -376,12 +396,9 @@ def session_credentials():
     if not room_id:
         return jsonify({"message": "meetingId is required"}), 400
 
-    if (
-        is_link_expired(room_id)
-        and not has_ongoing_session(room_id)
-        and room_id not in sheet_sync.list_active_meeting_ids()
-    ):
-        return jsonify({"code": "LINK_EXPIRED", "message": LINK_EXPIRED_MESSAGE}), 410
+    blocked = link_gate(room_id)
+    if blocked:
+        return blocked
 
     if role == "doctor":
         participant_id = f"doctor-{room_id}-{secrets.token_hex(4)}"[:64]
