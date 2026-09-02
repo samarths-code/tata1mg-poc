@@ -449,17 +449,23 @@ function doPost(e) {
   return _json({ ok: true, updated: updated });
 }
 
-/** Rows (any tab) with a Meeting ID whose col-W switch reads ACTIVE. */
+/** Rows (any tab) with a Meeting ID whose col-W switch reads ACTIVE.
+ * Reads ONLY columns W and AM (not the whole sheet) so the web app answers
+ * fast — a full getDataRange() scan can exceed the backend's read timeout. */
 function listActiveMeetingIds() {
   var ids    = [];
   var sheets = SpreadsheetApp.getActiveSpreadsheet().getSheets();
 
   for (var s = 0; s < sheets.length; s++) {
-    var values = sheets[s].getDataRange().getValues();
-    for (var i = 1; i < values.length; i++) {  // skip header
-      var flag      = String(values[i][COL_AFTER5     - 1] || "").trim().toUpperCase();
-      var meetingId = String(values[i][COL_MEETING_ID - 1] || "").trim();
-      if (flag === "ACTIVE" && meetingId) ids.push(meetingId);
+    var sh      = sheets[s];
+    var lastRow = sh.getLastRow();
+    if (lastRow < 2) continue;
+    var flags = sh.getRange(2, COL_AFTER5,     lastRow - 1, 1).getValues();
+    var mids  = sh.getRange(2, COL_MEETING_ID, lastRow - 1, 1).getValues();
+    for (var i = 0; i < flags.length; i++) {
+      if (String(flags[i][0] || "").trim().toUpperCase() !== "ACTIVE") continue;
+      var meetingId = String(mids[i][0] || "").trim();
+      if (meetingId) ids.push(meetingId);
     }
   }
   return ids;
