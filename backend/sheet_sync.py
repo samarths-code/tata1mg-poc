@@ -23,9 +23,10 @@ _WEBAPP_SECRET = os.environ.get("APPSCRIPT_SECRET", "")
 
 # after-5PM override list (sheet column W = ACTIVE), cached so post-cutoff join
 # attempts are bounded to at most one Apps Script call per TTL window.
-_ACTIVE_TTL_SECONDS = 30
+_ACTIVE_TTL_SECONDS  = 30   # serve a successful fetch for this long
+_FAIL_COOLDOWN_SECONDS = 20  # after a failed fetch, don't retry for this long
 _active_lock  = threading.Lock()
-_active_cache = {"ids": frozenset(), "at": float("-inf")}  # -inf: never fetched
+_active_cache = {"ids": frozenset(), "at": float("-inf"), "failed_at": float("-inf")}  # -inf: never
 
 
 def list_active_meeting_ids() -> frozenset:
@@ -40,16 +41,21 @@ def list_active_meeting_ids() -> frozenset:
         return frozenset()
 
     with _active_lock:
-        age = time.monotonic() - _active_cache["at"]
+        now = time.monotonic()
+        age = now - _active_cache["at"]
         if age < _ACTIVE_TTL_SECONDS:
             print(f"[link-gate] listActive: cache hit ({age:.0f}s old) -> {sorted(_active_cache['ids'])}", flush=True)
+            return _active_cache["ids"]
+        since_fail = now - _active_cache["failed_at"]
+        if since_fail < _FAIL_COOLDOWN_SECONDS:
+            print(f"[link-gate] listActive: fetch failed {since_fail:.0f}s ago, cooling down -> {sorted(_active_cache['ids'])}", flush=True)
             return _active_cache["ids"]
 
     try:
         res = requests.post(
             _WEBAPP_URL,
             json={"secret": _WEBAPP_SECRET, "action": "listActive"},
-            timeout=(3, 8),
+            timeout=(3, 25),
         )
         print(f"[link-gate] listActive: sheet HTTP {res.status_code} body={res.text[:200]}", flush=True)
         if res.ok:
@@ -64,6 +70,8 @@ def list_active_meeting_ids() -> frozenset:
     except (requests.RequestException, ValueError) as exc:
         logger.warning("sheet_sync: listActive failed: %s", exc)
         print(f"[link-gate] listActive: FAILED {exc!r} -> using last list {sorted(_active_cache['ids'])}", flush=True)
+    with _active_lock:
+        _active_cache["failed_at"] = time.monotonic()
     return _active_cache["ids"]
 
 
