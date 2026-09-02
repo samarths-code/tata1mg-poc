@@ -26,36 +26,45 @@ _WEBAPP_SECRET = os.environ.get("APPSCRIPT_SECRET", "")
 _ACTIVE_TTL_SECONDS  = 30   # serve a successful fetch for this long
 _FAIL_COOLDOWN_SECONDS = 20  # after a failed fetch, don't retry for this long
 _active_lock  = threading.Lock()
-_active_cache = {"ids": frozenset(), "at": float("-inf"), "failed_at": float("-inf")}  # -inf: never
+_active_cache = {"ids": frozenset(), "at": float("-inf"), "failed_at": float("-inf"), "refreshing": False}
 
 
 def list_active_meeting_ids() -> frozenset:
     """meetingIds whose after-5PM switch (column W dropdown) is ACTIVE.
 
-    The sheet is the source of truth; this cache is only a rate limiter. Fails
-    closed: on any error the last fetched list (initially empty) is returned,
-    so an unreachable sheet means expired links stay expired.
+    NEVER blocks the caller: always returns the cached list immediately and,
+    when the cache is stale, refreshes it on a background thread. A slow or
+    unreachable sheet therefore only delays how quickly a new ACTIVE tick is
+    noticed — it never delays a join request. Fails closed: until a fetch has
+    succeeded the list is empty, so expired links stay expired.
     """
     if not _WEBAPP_URL:
         print("[link-gate] listActive: APPSCRIPT_WEBAPP_URL not set -> empty list", flush=True)
         return frozenset()
 
     with _active_lock:
-        now = time.monotonic()
-        age = now - _active_cache["at"]
-        if age < _ACTIVE_TTL_SECONDS:
-            print(f"[link-gate] listActive: cache hit ({age:.0f}s old) -> {sorted(_active_cache['ids'])}", flush=True)
-            return _active_cache["ids"]
-        since_fail = now - _active_cache["failed_at"]
-        if since_fail < _FAIL_COOLDOWN_SECONDS:
-            print(f"[link-gate] listActive: fetch failed {since_fail:.0f}s ago, cooling down -> {sorted(_active_cache['ids'])}", flush=True)
-            return _active_cache["ids"]
+        now      = time.monotonic()
+        fresh    = now - _active_cache["at"] < _ACTIVE_TTL_SECONDS
+        cooling  = now - _active_cache["failed_at"] < _FAIL_COOLDOWN_SECONDS
+        kick     = not fresh and not cooling and not _active_cache["refreshing"]
+        if kick:
+            _active_cache["refreshing"] = True
+        ids = _active_cache["ids"]
 
+    if kick:
+        threading.Thread(target=_refresh_active, daemon=True).start()
+        print(f"[link-gate] listActive: cache stale -> background refresh kicked, serving {sorted(ids)}", flush=True)
+    return ids
+
+
+def _refresh_active() -> None:
+    """Background fetch of the ACTIVE list from the Apps Script web app."""
+    ok = False
     try:
         res = requests.post(
             _WEBAPP_URL,
             json={"secret": _WEBAPP_SECRET, "action": "listActive"},
-            timeout=(3, 25),
+            timeout=(5, 30),
         )
         print(f"[link-gate] listActive: sheet HTTP {res.status_code} body={res.text[:200]}", flush=True)
         if res.ok:
@@ -65,14 +74,17 @@ def list_active_meeting_ids() -> frozenset:
             with _active_lock:
                 _active_cache["ids"] = ids
                 _active_cache["at"]  = time.monotonic()
-            return ids
-        logger.warning("sheet_sync: listActive returned %s: %s", res.status_code, res.text)
+            ok = True
+        else:
+            logger.warning("sheet_sync: listActive returned %s: %s", res.status_code, res.text)
     except (requests.RequestException, ValueError) as exc:
         logger.warning("sheet_sync: listActive failed: %s", exc)
-        print(f"[link-gate] listActive: FAILED {exc!r} -> using last list {sorted(_active_cache['ids'])}", flush=True)
-    with _active_lock:
-        _active_cache["failed_at"] = time.monotonic()
-    return _active_cache["ids"]
+        print(f"[link-gate] listActive: refresh FAILED {exc!r} -> keeping last list", flush=True)
+    finally:
+        with _active_lock:
+            if not ok:
+                _active_cache["failed_at"] = time.monotonic()
+            _active_cache["refreshing"] = False
 
 
 def update_row(meeting_id: str, *, status: str = None, recording_url: str = None) -> None:
