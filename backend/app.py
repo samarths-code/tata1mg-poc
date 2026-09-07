@@ -60,111 +60,88 @@ def get_webhook_url() -> Optional[str]:
 
 # Daily cutoff (IST, "HH:MM"). A link works only on the day its room was
 # created, until this time; after that no token is issued unless the room still
-# has an ongoing session (rejoin) or the sheet's after-5PM switch (column W
-# dropdown) is ACTIVE. Empty string disables the cutoff entirely.
-LINK_EXPIRY_TIME_IST = os.environ.get("LINK_EXPIRY_TIME_IST", "17:00")
+# has an ongoing session (rejoin). Rooms whose customRoomId ends in "_EXT"
+# (ops "Generate extended link" action) use the extended cutoff instead.
+# Empty LINK_EXPIRY_TIME_IST disables the gate entirely.
+LINK_EXPIRY_TIME_IST          = os.environ.get("LINK_EXPIRY_TIME_IST", "17:00")
+LINK_EXTENDED_EXPIRY_TIME_IST = os.environ.get("LINK_EXTENDED_EXPIRY_TIME_IST", "20:00")
 LINK_EXPIRED_MESSAGE = (
     "This meeting link has expired. Please use a valid meeting link to join the meeting."
 )
 _IST = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
 
 
-def _cutoff_time() -> Optional[datetime.time]:
-    if not LINK_EXPIRY_TIME_IST:
-        return None
+def _parse_hhmm(value: str) -> Optional[datetime.time]:
     try:
-        hour, minute = (int(part) for part in LINK_EXPIRY_TIME_IST.split(":"))
+        hour, minute = (int(part) for part in value.split(":"))
         return datetime.time(hour, minute)
-    except ValueError:
+    except (ValueError, AttributeError):
         return None
 
 
-def link_expiry_at(created_at: datetime.datetime) -> Optional[datetime.datetime]:
-    """The instant a link stops working: the cutoff on the IST day its room was
-    created. A room created after the cutoff (e.g. an evening batch for
-    tomorrow) counts as the next day's link."""
-    cutoff = _cutoff_time()
-    if cutoff is None:
-        return None
-    created_ist = created_at.astimezone(_IST)
-    day = created_ist.date()
-    if created_ist.time() >= cutoff:
-        day += datetime.timedelta(days=1)
-    return datetime.datetime.combine(day, cutoff, tzinfo=_IST)
+# roomId -> {"created": datetime, "custom": str}. A cache only (VideoSDK is the
+# source of truth); it avoids re-fetching the room on every join. Safe to lose.
+_room_cache: dict = {}
+_room_lock = threading.Lock()
 
 
-# roomId -> createdAt. A cache only (VideoSDK is the source of truth); it just
-# avoids re-fetching the room on every join. Safe to lose on restart.
-_room_created_cache: dict = {}
-_room_created_lock = threading.Lock()
-
-
-def room_created_at(room_id: str) -> Optional[datetime.datetime]:
-    with _room_created_lock:
-        if room_id in _room_created_cache:
-            return _room_created_cache[room_id]
+def room_info(room_id: str) -> Optional[dict]:
+    with _room_lock:
+        if room_id in _room_cache:
+            return _room_cache[room_id]
     try:
         res = vsdk_get(f"/v2/rooms/{room_id}")
         if not res.ok:
-            print(f"[link-gate] room_created_at {room_id}: VideoSDK HTTP {res.status_code} {res.text[:120]}", flush=True)
+            print(f"[link-gate] room_info {room_id}: VideoSDK HTTP {res.status_code} {res.text[:120]}", flush=True)
             return None
-        raw = str(res.json().get("createdAt") or "")
+        data    = res.json()
+        raw     = str(data.get("createdAt") or "")
         created = datetime.datetime.strptime(raw, "%Y-%m-%dT%H:%M:%S.%fZ").replace(
             tzinfo=datetime.timezone.utc
         )
-        print(f"[link-gate] room_created_at {room_id}: createdAt={raw} -> {created.astimezone(_IST):%Y-%m-%d %H:%M} IST", flush=True)
-    except (requests.RequestException, ValueError) as exc:
-        print(f"[link-gate] room_created_at {room_id}: FAILED {exc!r}", flush=True)
+        info = {"created": created, "custom": str(data.get("customRoomId") or "")}
+    except (requests.RequestException, ValueError):
+        print(f"[link-gate] room_info {room_id}: FAILED", flush=True)
         return None
-    with _room_created_lock:
-        if len(_room_created_cache) > 5000:
-            _room_created_cache.clear()
-        _room_created_cache[room_id] = created
-    return created
-
-
-def link_day(room_id: str) -> Optional[datetime.date]:
-    """The IST day a link belongs to (see link_expiry_at). None if unknown."""
-    created = room_created_at(room_id)
-    if created is None:
-        return None
-    expiry = link_expiry_at(created)
-    return expiry.date() if expiry else None
+    with _room_lock:
+        if len(_room_cache) > 5000:
+            _room_cache.clear()
+        _room_cache[room_id] = info
+    return info
 
 
 def link_gate(room_id: str):
     """Returns a 410 response when the link may not be used, else None.
 
-    - Previous-day or future-day link (e.g. an evening batch for tomorrow,
-      opened tonight): dead, unless the sheet's column W is ACTIVE.
-    - Today's link after the cutoff: allowed if the call is still live (someone
-      dropped and is rejoining) or column W is ACTIVE.
-    - Otherwise: allowed.
-    If the creation date is unknown the link is treated as today's.
+    A link belongs to the IST day its room was created and works until its
+    tier's cutoff (17:00 normal, 20:00 for "_EXT" extended links). After the
+    cutoff a join is allowed only while the call is still live (rejoin).
+    A link from any other day is dead — ops regenerate instead (extended
+    link action). Unknown creation date falls back to today's normal tier.
     """
-    cutoff = _cutoff_time()
+    cutoff = _parse_hhmm(LINK_EXPIRY_TIME_IST)
     if cutoff is None:
-        print(f"[link-gate] {room_id}: cutoff disabled (LINK_EXPIRY_TIME_IST={LINK_EXPIRY_TIME_IST!r}) -> ALLOW", flush=True)
-        return None
+        return None  # gate disabled via empty LINK_EXPIRY_TIME_IST
+    info = room_info(room_id)
+    extended = bool(info and info["custom"].endswith("_EXT"))
+    if extended:
+        cutoff = _parse_hhmm(LINK_EXTENDED_EXPIRY_TIME_IST) or cutoff
     now = datetime.datetime.now(_IST)
-    resolved_day = link_day(room_id)
-    day = resolved_day or now.date()
-    wrong_day    = day != now.date()
-    past_cutoff  = day == now.date() and now.time() >= cutoff
-    print(f"[link-gate] {room_id}: now={now:%Y-%m-%d %H:%M:%S} IST cutoff={cutoff:%H:%M} "
-          f"link_day={resolved_day or 'unknown->today'} wrong_day={wrong_day} past_cutoff={past_cutoff}", flush=True)
+    day = info["created"].astimezone(_IST).date() if info else now.date()
+    wrong_day   = day != now.date()
+    past_cutoff = day == now.date() and now.time() >= cutoff
+
+    def _log(outcome: str) -> None:
+        print(f"[link-gate] {room_id}: {outcome} | tier={'EXT' if extended else 'normal'} "
+              f"cutoff={cutoff:%H:%M} link_day={day} now={now:%Y-%m-%d %H:%M:%S} IST", flush=True)
+
     if not (wrong_day or past_cutoff):
-        print(f"[link-gate] {room_id}: within valid window -> ALLOW", flush=True)
+        _log("ALLOW (valid window)")
         return None
     if past_cutoff and has_ongoing_session(room_id):
-        print(f"[link-gate] {room_id}: call still live -> ALLOW", flush=True)
+        _log("ALLOW (call still live)")
         return None
-    active = sheet_sync.list_active_meeting_ids()
-    print(f"[link-gate] {room_id}: sheet ACTIVE list={sorted(active)} contains={room_id in active}", flush=True)
-    if room_id in active:
-        print(f"[link-gate] {room_id}: ACTIVE in sheet -> ALLOW", flush=True)
-        return None
-    print(f"[link-gate] {room_id}: -> BLOCK 410 LINK_EXPIRED", flush=True)
+    _log("BLOCK 410 (link from another day)" if wrong_day else "BLOCK 410 (past cutoff)")
     return jsonify({"code": "LINK_EXPIRED", "message": LINK_EXPIRED_MESSAGE}), 410
 
 
@@ -176,9 +153,7 @@ def has_ongoing_session(room_id: str) -> bool:
         if not res.ok:
             print(f"[link-gate] has_ongoing_session {room_id}: VideoSDK HTTP {res.status_code}", flush=True)
             return False
-        statuses = [s.get("status") for s in res.json().get("data") or []]
-        print(f"[link-gate] has_ongoing_session {room_id}: session statuses={statuses}", flush=True)
-        return "ongoing" in statuses
+        return any(s.get("status") == "ongoing" for s in res.json().get("data") or [])
     except (requests.RequestException, ValueError) as exc:
         print(f"[link-gate] has_ongoing_session {room_id}: FAILED {exc!r}", flush=True)
         return False

@@ -101,20 +101,32 @@ def _vsdk_post(path: str, body: Optional[dict] = None):
     )
 
 
-def _custom_room_id(policy_no: str) -> str:
-    """
-    Build the customRoomId that carries the policy number through to the QC
-    webhook, e.g. "PPMC_12345".
+_IST = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
 
-    customRoomId is the only place the policy number is stored — qc_webhook reads
-    it back off the room when the recording finishes, which is why nothing here
-    touches a database or the sheet. Characters outside [A-Za-z0-9_-] are replaced
-    so the id stays identifier-safe; a substitution is logged so a mangled policy
-    number is traceable.
+
+def _custom_room_id(policy_no: str, extended: bool = False) -> str:
+    """
+    Build the customRoomId that carries the policy number AND the link tier
+    through to the gate and the QC webhook:
+
+        normal:   PPMC_<policyNo>_D070926        (expires at the 5 PM cutoff)
+        extended: PPMC_<policyNo>_D070926_EXT    (expires at the 8 PM cutoff)
+
+    The _D<ddmmyy> date makes the id unique per day, so a rescheduled
+    appointment (same policy, new day) gets a NEW room instead of VideoSDK
+    returning the previous day's expired one. _EXT marks the extended tier;
+    app.link_gate reads it off the room fetch, and qc_webhook strips both
+    suffixes before forwarding so QC always sees plain "PPMC_<policyNo>".
+
+    customRoomId is the only place any of this is stored — no database, no
+    sheet reads. Characters outside [A-Za-z0-9_-] are replaced; a substitution
+    is logged so a mangled policy number is traceable.
     """
     cleaned = _UNSAFE_POLICY_CHARS.sub("-", policy_no.strip())
-    custom_room_id = f"{_TOPIC_PREFIX}{cleaned}"[:64]
-    if custom_room_id != f"{_TOPIC_PREFIX}{policy_no.strip()}":
+    suffix  = datetime.datetime.now(_IST).strftime("_D%d%m%y") + ("_EXT" if extended else "")
+    base    = f"{_TOPIC_PREFIX}{cleaned}"[: 64 - len(suffix)]
+    custom_room_id = base + suffix
+    if base != f"{_TOPIC_PREFIX}{policy_no.strip()}":
         logger.warning(
             "ppmc_embed: policy %r was sanitised to customRoomId %r",
             policy_no, custom_room_id,
@@ -203,6 +215,7 @@ def ppmc_embed_bulk():
 
     body           = request.get_json(silent=True) or {}
     sessions_input = body.get("sessions")
+    extended       = bool(body.get("extended"))  # extended links expire at the later cutoff
 
     if not isinstance(sessions_input, list) or len(sessions_input) == 0:
         return jsonify({"message": "sessions must be a non-empty array"}), 400
@@ -213,7 +226,7 @@ def ppmc_embed_bulk():
         patient_name = str(entry.get("patientName") or "").strip() or "Patient"
         doctor_name  = str(entry.get("doctorName")  or "").strip() or "Doctor"
         policy_no    = str(entry.get("policyNo")    or "").strip()
-        custom_room_id = _custom_room_id(policy_no) if policy_no else None
+        custom_room_id = _custom_room_id(policy_no, extended=extended) if policy_no else None
         room_id      = _create_room(custom_room_id)  # raises RuntimeError on failure
         return {
             "meetingId":   room_id,

@@ -29,6 +29,7 @@ If QC_WEBHOOK_URL is unset every send is skipped, mirroring sheet_sync's
 """
 
 import logging
+import re
 import os
 
 import requests
@@ -72,6 +73,10 @@ def _resolve_topic(room_id: str):
         return None
 
     custom_room_id = (res.json() or {}).get("customRoomId") or ""
+    # Strip the link-tier suffixes added by ppmc_embed._custom_room_id
+    # ("_D<ddmmyy>" and "_EXT") so QC always receives plain "PPMC_<policyNo>",
+    # identical for a normal room and its extended regeneration.
+    custom_room_id = re.sub(r"_D\d{6}(_EXT)?$", "", custom_room_id)
     if not custom_room_id.startswith(TOPIC_PREFIX):
         logger.info(
             "qc_webhook: room %s has customRoomId %r — not a PPMC session, skipping",

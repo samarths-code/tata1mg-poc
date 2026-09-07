@@ -24,10 +24,7 @@
  *   T=20  Phlebo Contact
  *   U=21  Doctor            ← doctor name (used in patient link as meetingTitle)
  *   V=22  Doctors Contact
- *   W=23  Zoom Link         ← REPURPOSED: after-5PM switch. Dropdown ACTIVE/DEACTIVE
- *                             (one-time setup: select column W → Data → Data validation
- *                              → Dropdown with values ACTIVE, DEACTIVE). Rows set to
- *                              ACTIVE keep working after the daily 5PM link cutoff.
+ *   W=23  Zoom Link
  *   X=24  Status of the call
  *   Y=25  Vedio Recoding
  *   Z=26  MER Status
@@ -64,9 +61,12 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
+// Version marker returned by doPost (ping) so deployments are identifiable.
+// Bump when editing this file.
+var SCRIPT_VERSION = "v3-extended-2026-09-07";
+
 // Column indices (1-based, for getRange)
 var COL_POLICY_NO   = 3;   // C — Policy No. (must be present; rows without it are skipped)
-var COL_AFTER5      = 23;  // W — after-5PM switch (ACTIVE/DEACTIVE dropdown)
 var COL_NAME        = 4;   // D — patient name
 var COL_DOCTOR      = 21;  // U — doctor name
 var COL_MEETING_ID  = 39;  // AM
@@ -81,6 +81,7 @@ function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu("PPMC")
     .addItem("Generate links for this sheet", "generateLinks")
+    .addItem("Generate extended link (till 8 PM)", "generateExtendedLinks")
     .addItem("Refresh recording status", "refreshStatus")
     .addItem("Fetch recording for a Meeting ID", "fetchRecordingById")
     .addToUi();
@@ -197,6 +198,120 @@ function generateLinks() {
   }
 
   ui.alert("Done! " + allResults.length + " link(s) generated and written to the sheet.");
+}
+
+// ── 1b. Generate EXTENDED link (till 8 PM) for selected appointment rows ─────
+
+/**
+ * Ops flow when an appointment's link has expired after 5 PM:
+ * click the appointment's row (or select several) → PPMC menu → "Generate
+ * extended link (till 8 PM)". For each selected row this:
+ *   - creates a NEW room whose link stays valid until the 8 PM cutoff
+ *     (customRoomId "PPMC_<policyNo>_D<ddmmyy>_EXT" — the backend gate reads
+ *      the tier off the room, nothing is stored anywhere else)
+ *   - inserts a duplicate row below the original (same appointment data)
+ *   - writes the new Meeting ID + links there with STATUS "EXTENDED"
+ * The original row and its recording bookkeeping are never touched.
+ * Re-running it for the same appointment returns the SAME extended room
+ * (deterministic id), so no accidental third links.
+ */
+function generateExtendedLinks() {
+  var ui    = SpreadsheetApp.getUi();
+  var sheet = SpreadsheetApp.getActiveSheet();
+  var props = PropertiesService.getScriptProperties();
+
+  var backendUrl = props.getProperty("BACKEND_URL");
+  var ppmcKey    = props.getProperty("PPMC_SHARED_KEY");
+  if (!backendUrl || !ppmcKey) {
+    ui.alert("Script Properties not configured. Set BACKEND_URL and PPMC_SHARED_KEY.");
+    return;
+  }
+
+  var rangeList = sheet.getActiveRangeList();
+  if (!rangeList) {
+    ui.alert("Click the appointment's row first, then run this again.");
+    return;
+  }
+  var rowSet = {};
+  rangeList.getRanges().forEach(function (r) {
+    for (var i = 0; i < r.getNumRows(); i++) rowSet[r.getRow() + i] = true;
+  });
+  // bottom-up so row inserts don't shift rows still to be processed
+  var rows = Object.keys(rowSet).map(Number)
+    .filter(function (r) { return r > 1; })
+    .sort(function (a, b) { return b - a; });
+
+  var jobs = [], skipped = [];
+  rows.forEach(function (rowIdx) {
+    var policyNo  = String(sheet.getRange(rowIdx, COL_POLICY_NO).getValue()  || "").trim();
+    var meetingId = String(sheet.getRange(rowIdx, COL_MEETING_ID).getValue() || "").trim();
+    var patient   = String(sheet.getRange(rowIdx, COL_NAME).getValue()   || "").trim() || "Patient";
+    var doctor    = String(sheet.getRange(rowIdx, COL_DOCTOR).getValue() || "").trim() || "Doctor";
+    if (!policyNo)  { skipped.push("row " + rowIdx + ": no Policy No."); return; }
+    if (!meetingId) { skipped.push("row " + rowIdx + ": no Meeting ID yet — use \"Generate links\" instead"); return; }
+    jobs.push({ rowIdx: rowIdx, policyNo: policyNo, patientName: patient, doctorName: doctor });
+  });
+  if (jobs.length === 0) {
+    ui.alert("Nothing to generate." + (skipped.length ? "\n\n" + skipped.join("\n") : ""));
+    return;
+  }
+
+  var confirm = ui.alert(
+    "Generate extended links",
+    jobs.length + " extended link(s) will be created, valid until 8 PM today.\n" +
+    "A duplicate row is added below each selected appointment.",
+    ui.ButtonSet.YES_NO
+  );
+  if (confirm !== ui.Button.YES) return;
+
+  var response;
+  try {
+    response = UrlFetchApp.fetch(backendUrl + "/api/v1/ppmc/embed/bulk", {
+      method:      "post",
+      contentType: "application/json",
+      headers:     { "X-PPMC-Key": ppmcKey },
+      payload: JSON.stringify({
+        extended: true,
+        sessions: jobs.map(function (j) {
+          return { policyNo: j.policyNo, patientName: j.patientName, doctorName: j.doctorName };
+        }),
+      }),
+      muteHttpExceptions: true,
+    });
+  } catch (e) {
+    ui.alert("Network error calling backend:\n" + e.message);
+    return;
+  }
+  if (response.getResponseCode() !== 200) {
+    ui.alert("Backend error " + response.getResponseCode() + ":\n" + response.getContentText());
+    return;
+  }
+  var results;
+  try {
+    results = JSON.parse(response.getContentText());
+  } catch (e) {
+    ui.alert("Could not parse backend response.");
+    return;
+  }
+
+  var lastCol = sheet.getLastColumn();
+  for (var i = 0; i < jobs.length; i++) {
+    var rowIdx = jobs[i].rowIdx;
+    var result = results[i];
+    sheet.insertRowAfter(rowIdx);
+    var newRow = rowIdx + 1;
+    sheet.getRange(rowIdx, 1, 1, lastCol).copyTo(sheet.getRange(newRow, 1, 1, lastCol));
+    sheet.getRange(newRow, COL_MEETING_ID).setValue(result.meetingId);
+    sheet.getRange(newRow, COL_DOCTOR_LINK).setValue(result.doctorLink);
+    sheet.getRange(newRow, COL_PATIENT_LINK).setValue(result.patientLink);
+    sheet.getRange(newRow, COL_STATUS).setValue("EXTENDED");
+    sheet.getRange(newRow, COL_RECORDING).setValue("");
+  }
+  SpreadsheetApp.flush();
+
+  var msg = jobs.length + " extended link(s) generated — valid until 8 PM today.";
+  if (skipped.length) msg += "\n\nSkipped:\n" + skipped.join("\n");
+  ui.alert(msg);
 }
 
 // ── 2. Refresh recording status (PULL model — no web app deployment needed) ───
@@ -410,9 +525,9 @@ function doPost(e) {
     return _json({ error: "forbidden" });
   }
 
-  // Backend pulls the meetingIds whose after-5PM switch (col W) is ACTIVE.
-  if (data.action === "listActive") {
-    return _json({ meetingIds: listActiveMeetingIds() });
+  // Deployment check: answers instantly, no sheet access at all.
+  if (data.action === "ping") {
+    return _json({ pong: true, version: SCRIPT_VERSION, at: new Date().toISOString() });
   }
 
   if (!data.meetingId) {
@@ -447,28 +562,6 @@ function doPost(e) {
   }
 
   return _json({ ok: true, updated: updated });
-}
-
-/** Rows (any tab) with a Meeting ID whose col-W switch reads ACTIVE.
- * Reads ONLY columns W and AM (not the whole sheet) so the web app answers
- * fast — a full getDataRange() scan can exceed the backend's read timeout. */
-function listActiveMeetingIds() {
-  var ids    = [];
-  var sheets = SpreadsheetApp.getActiveSpreadsheet().getSheets();
-
-  for (var s = 0; s < sheets.length; s++) {
-    var sh      = sheets[s];
-    var lastRow = sh.getLastRow();
-    if (lastRow < 2) continue;
-    var flags = sh.getRange(2, COL_AFTER5,     lastRow - 1, 1).getValues();
-    var mids  = sh.getRange(2, COL_MEETING_ID, lastRow - 1, 1).getValues();
-    for (var i = 0; i < flags.length; i++) {
-      if (String(flags[i][0] || "").trim().toUpperCase() !== "ACTIVE") continue;
-      var meetingId = String(mids[i][0] || "").trim();
-      if (meetingId) ids.push(meetingId);
-    }
-  }
-  return ids;
 }
 
 function _json(obj) {
