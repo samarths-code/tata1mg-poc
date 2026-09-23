@@ -1,16 +1,16 @@
 import React, { useState } from "react";
 import { useMeeting, VideoPlayer } from "@videosdk.live/react-sdk";
-import { EllipsisVerticalIcon } from "@heroicons/react/24/outline";
 import useIsRecording from "../hooks/useIsRecording";
 import { RecBadge } from "./doctor/DoctorTopBar";
 import MemorizedParticipantView from "../meeting/components/ParticipantView";
+import { UNMIRROR } from "./ParticipantView";
 import {
   MicBTN,
   OutputMicBTN,
   WebCamBTN,
   useCallTimer,
 } from "../meeting/components/BottomBar";
-import { CustomerVerificationOverlay } from "./CustomerVerificationOverlay";
+import { useMeetingAppContext } from "../context/MeetingAppContext";
 import { ParticipantDetailsPanel } from "./ParticipantDetailsPanel";
 import ConnectionStatusOverlay from "./screens/ConnectionStatusOverlay";
 
@@ -19,6 +19,7 @@ export default function MobileCustomerCallView({ meetingTitle, statusMessage }) 
   const isRecording = useIsRecording();
   const timer = useCallTimer();
   const [showPanel, setShowPanel] = useState(false);
+  const isAudioOnly = useMeetingAppContext((s) => s.isAudioOnly);
 
   const handleLeave = () => { leave(); };
 
@@ -56,12 +57,20 @@ export default function MobileCustomerCallView({ meetingTitle, statusMessage }) 
             {/* Local camera PiP — bottom-right, coral border */}
             {localParticipant?.id && (
               <div className="absolute bottom-[10px] right-[10px] w-[130px] h-[170px] rounded-[16px] border border-[#ff6f61] overflow-hidden">
-                <VideoPlayer
-                  participantId={localParticipant.id}
-                  type="video"
-                  containerStyle={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
-                  videoStyle={{ height: "100%", width: "100%", objectFit: "cover" }}
-                />
+                {isAudioOnly ? (
+                  <div className="absolute inset-0 bg-[#1b1b1e] flex items-center justify-center">
+                    <span className="text-white text-2xl">
+                      {String(localParticipant.displayName || "?").charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                ) : (
+                  <VideoPlayer
+                    participantId={localParticipant.id}
+                    type="video"
+                    containerStyle={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, ...UNMIRROR }}
+                    videoStyle={{ height: "100%", width: "100%", objectFit: "cover" }}
+                  />
+                )}
                 {/* Subtle gradient at bottom for name legibility */}
                 <div className="absolute inset-0 bg-gradient-to-b from-transparent from-[68%] to-[rgba(0,0,0,0.35)]" />
                 <p
@@ -76,14 +85,12 @@ export default function MobileCustomerCallView({ meetingTitle, statusMessage }) 
         ) : (
           /* ── Active call ───────────────────────────────────────────────── */
           <div className="absolute inset-0 flex flex-row">
-            <MemorizedParticipantView isPresenting={false} sideBarMode={null} />
+            <MemorizedParticipantView />
           </div>
         )}
 
         {/* Reconnecting overlay — only for transient errors, not the normal waiting state */}
         {!isWaiting && <ConnectionStatusOverlay message={statusMessage} />}
-        {/* Doctor-triggered verification overlays */}
-        <CustomerVerificationOverlay />
       </div>
 
       {/* ── Status row: "Verification is Pending" + "⋮" menu ────────────── */}

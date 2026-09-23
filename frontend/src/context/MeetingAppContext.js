@@ -18,6 +18,7 @@ export const MeetingAppProvider = ({
   initialSpeakerOn,
   participantMode,
   caseId,
+  isAudioOnly,
 }) => {
   // Seed the store once, synchronously, before children first render.
   const seeded = useRef(false);
@@ -28,6 +29,7 @@ export const MeetingAppProvider = ({
       initialSpeakerOn,
       participantMode,
       caseId,
+      isAudioOnly,
     });
     seeded.current = true;
   }

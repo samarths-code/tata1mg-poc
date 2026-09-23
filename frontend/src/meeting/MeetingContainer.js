@@ -1,34 +1,27 @@
 import React, { useState, useEffect, useRef, createRef, useCallback } from "react";
 import {
   Constants,
-  createMicrophoneAudioTrack,
   useMeeting,
   usePubSub,
 } from "@videosdk.live/react-sdk";
 import { BottomBar } from "./components/BottomBar";
-import { SidebarConatiner } from "../components/sidebar/SidebarContainer";
 import MemorizedParticipantView from "./components/ParticipantView";
-import { PresenterView } from "../components/PresenterView";
 import DoctorView from "../components/doctor/DoctorView";
 import WaitingToJoinScreen from "../components/screens/WaitingToJoinScreen";
 import ConfirmBox from "../components/ConfirmBox";
 import useIsMobile from "../hooks/useIsMobile";
-import useIsTab from "../hooks/useIsTab";
-import { useMediaQuery } from "react-responsive";
 import { toast } from "react-toastify";
 import { useMeetingAppContext } from "../context/MeetingAppContext";
-import useMediaStream from "../hooks/useMediaStream";
+import { createAudioTrack, createVideoTrack } from "../hooks/useMediaStream";
 import { meetingLeftReasons, participantModes } from "../utils/common";
-import ResolutionListner from "../components/ResolutionListner";
-import SwitchCameraListner from "../components/SwitchCameraListner";
 import ImageUploadListner from "../components/ImageUploadListner";
 import { TopBar } from "./components/TopBar";
 import { ParticipantDetailsPanel } from "../components/ParticipantDetailsPanel";
-import { CustomerVerificationOverlay } from "../components/CustomerVerificationOverlay";
 import MobileCustomerCallView from "../components/MobileCustomerCallView";
 import NetworkQualityPopup from "../components/NetworkQualityPopup";
 import useGeolocation from "../hooks/useGeolocation";
 import { getIPGeoInfo } from "../api";
+import { releaseAllMedia } from "../lib/mediaTracks";
 
 async function reverseGeocode(lat, lng) {
   try {
@@ -42,6 +35,8 @@ async function reverseGeocode(lat, lng) {
     return null;
   }
 }
+
+const GEO_PUBLISH_INTERVAL_MS = 30000;
 
 function _avg(arr) {
   const nums = arr.filter((n) => typeof n === "number" && !Number.isNaN(n));
@@ -79,22 +74,21 @@ async function readStreamStats(participant) {
   }
 }
 
-export function MeetingContainer({ onMeetingLeave }) {
+export function MeetingContainer({ onMeetingLeave, precallTracks = { video: false, audio: false } }) {
   const bottomBarHeight = 60;
 
   const [containerHeight, setContainerHeight] = useState(0);
   const [containerWidth, setContainerWidth] = useState(0);
   const {
-    sideBarMode,
     initialMicOn,
     initialWebcamOn,
     selectedWebcam,
     selectedMicrophone,
-    participantLeftReason,
     setParticipantLeftReason,
     participantMode,
     caseId,
     setGeoData,
+    isAudioOnly,
   } = useMeetingAppContext();
 
   const [showParticipantPanel, setShowParticipantPanel] = useState(false);
@@ -117,11 +111,6 @@ export function MeetingContainer({ onMeetingLeave }) {
   }, [containerHeight, containerWidth]);
 
   const isMobile = useIsMobile();
-  const isTab = useIsTab();
-  const isLGDesktop = useMediaQuery({ minWidth: 1024, maxWidth: 1439 });
-  const isXLDesktop = useMediaQuery({ minWidth: 1440 });
-
-  const sideBarContainerWidth = isXLDesktop ? 400 : isLGDesktop ? 360 : isTab ? 320 : isMobile ? 280 : 240;
 
   useEffect(() => {
     containerRef.current?.offsetHeight &&
@@ -156,43 +145,20 @@ export function MeetingContainer({ onMeetingLeave }) {
     participant && participant.setQuality("high");
   }
 
-  const { getVideoTrack } = useMediaStream();
-
+  // The pre-call tracks are handed to MeetingProvider as custom tracks and
+  // published as-is — no re-creation on join (that used to open a second
+  // camera/mic and briefly drop media). Only when a track wasn't provided
+  // (e.g. rejoin from the Thank You page) do we create one, with the same config.
   async function onMeetingJoined() {
     try {
-      const { muteMic, changeMic, changeWebcam, disableWebcam } = mMeetingRef.current;
-
-      if (initialWebcamOn) {
-        await new Promise((resolve) => {
-          setTimeout(async () => {
-            try {
-              disableWebcam();
-              const track = await getVideoTrack({ webcamId: selectedWebcam.id });
-              changeWebcam(track);
-            } catch (e) {
-              console.warn("Webcam setup failed:", e);
-            }
-            resolve();
-          }, 500);
-        });
+      const meeting = mMeetingRef.current;
+      if (initialWebcamOn && !isAudioOnly && !precallTracks.video) {
+        const track = await createVideoTrack(selectedWebcam?.id);
+        if (track) meeting.changeWebcam(track);
       }
-
-      if (initialMicOn && selectedMicrophone.id) {
-        await new Promise((resolve) => {
-          muteMic();
-          setTimeout(async () => {
-            try {
-              const audioTrack = await createMicrophoneAudioTrack({
-                encoderConfig: "speech_standard",
-                microphoneId: selectedMicrophone.id,
-              });
-              changeMic(audioTrack);
-            } catch (e) {
-              console.warn("Mic setup failed:", e);
-            }
-            resolve();
-          }, 500);
-        });
+      if (initialMicOn && !precallTracks.audio) {
+        const track = await createAudioTrack(selectedMicrophone?.id);
+        if (track) meeting.changeMic(track);
       }
     } catch (e) {
       console.warn("onMeetingJoined error:", e);
@@ -201,7 +167,12 @@ export function MeetingContainer({ onMeetingLeave }) {
     }
   }
 
-  function onMeetingLeft() {
+  async function onMeetingLeft() {
+    // Release camera/mic: whatever the SDK is still publishing plus every track
+    // we opened ourselves (preview, swapped-out, virtual background).
+    const published = [];
+    mMeetingRef.current?.localParticipant?.streams?.forEach((st) => st?.track && published.push(st.track));
+    await releaseAllMedia(published);
     onMeetingLeave();
   }
 
@@ -247,7 +218,7 @@ export function MeetingContainer({ onMeetingLeave }) {
       if (!isDoctor || senderId === mMeetingRef.current?.localParticipant?.id) return;
       if (payload.state === "detected") {
         toast.warn(
-          `Client's mic is silent${payload.devicelabel ? ` — ${payload.devicelabel}` : ""}. They may have an incoming call.`,
+          `Patient's mic is silent${payload.devicelabel ? ` — ${payload.devicelabel}` : ""}. They may have an incoming call.`,
           { toastId: "patient-mic-silent", position: "bottom-left", autoClose: false, hideProgressBar: true, closeButton: true, theme: "dark" }
         );
       } else {
@@ -296,8 +267,6 @@ export function MeetingContainer({ onMeetingLeave }) {
     onQualityLimitation: _handleOnQualityLimitation,
   });
 
-  const isPresenting = mMeeting.presenterId ? true : false;
-
   // Transient connection-status message shown over the patient's video.
   const remoteParticipantCount = [...mMeeting.participants.keys()].filter(
     (id) =>
@@ -326,7 +295,8 @@ export function MeetingContainer({ onMeetingLeave }) {
       let selectedCameraLabel = null, selectedMicLabel = null;
       try {
         const devices = await navigator.mediaDevices.enumerateDevices();
-        const videoDevices  = devices.filter(d => d.kind === "videoinput");
+        // Audio-only calls don't report (or touch) cameras.
+        const videoDevices  = isAudioOnly ? [] : devices.filter(d => d.kind === "videoinput");
         const audioDevices  = devices.filter(d => d.kind === "audioinput");
         const outputDevices = devices.filter(d => d.kind === "audiooutput");
         cameras      = videoDevices.map((d, i) => ({ deviceId: d.deviceId, label: d.label || `Camera ${i + 1}` }));
@@ -472,7 +442,9 @@ export function MeetingContainer({ onMeetingLeave }) {
     const key = `${lat},${lng}`;
     const now = Date.now();
 
-    if (lastGeoKeyRef.current === key || now - lastGeoPublishAtRef.current < 5000) return;
+    // GPS jitters constantly; each publish is a persisted message plus a
+    // reverse-geocode request, so throttle hard on slow networks.
+    if (lastGeoKeyRef.current === key || now - lastGeoPublishAtRef.current < GEO_PUBLISH_INTERVAL_MS) return;
 
     lastGeoPublishAtRef.current = now;
     lastGeoKeyRef.current = key;
@@ -505,12 +477,16 @@ export function MeetingContainer({ onMeetingLeave }) {
     });
   }, [geoError, localParticipantAllowedJoin]);
 
+  // "Leave site?" guard only while in the call — removed on unmount so the
+  // Thank You page can be reloaded/closed without a prompt.
   useEffect(() => {
-    window.addEventListener("beforeunload", (event) => {
+    const onBeforeUnload = (event) => {
       setParticipantLeftReason(meetingLeftReasons.TAB_BROWSER_CLOSED);
       event.preventDefault();
       event.returnValue = "";
-    });
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, []);
 
   // Attach mute/unmute/ended listeners directly on the local audio track so the
@@ -582,11 +558,8 @@ export function MeetingContainer({ onMeetingLeave }) {
 
       if (meeting.localMicOn) {
         try {
-          const audioTrack = await createMicrophoneAudioTrack({
-            encoderConfig: "speech_standard",
-            microphoneId: selectedMicrophone?.id,
-          });
-          meeting.changeMic(audioTrack);
+          const audioTrack = await createAudioTrack(selectedMicrophone?.id);
+          if (audioTrack) meeting.changeMic(audioTrack);
         } catch (e) {
           console.warn("Mic restart after interruption failed:", e);
         }
@@ -596,7 +569,7 @@ export function MeetingContainer({ onMeetingLeave }) {
         try {
           meeting.disableWebcam();
           await new Promise((r) => setTimeout(r, 300));
-          const videoTrack = await getVideoTrack({ webcamId: selectedWebcam?.id });
+          const videoTrack = await createVideoTrack(selectedWebcam?.id);
           if (videoTrack) meeting.changeWebcam(videoTrack);
         } catch (e) {
           console.warn("Webcam restart after interruption failed:", e);
@@ -606,7 +579,7 @@ export function MeetingContainer({ onMeetingLeave }) {
 
     navigator.mediaDevices?.addEventListener("devicechange", restartAfterInterruption);
     return () => navigator.mediaDevices?.removeEventListener("devicechange", restartAfterInterruption);
-  }, [localParticipantAllowedJoin, isCustomer, selectedMicrophone, selectedWebcam, getVideoTrack, publishMicSilence]);
+  }, [localParticipantAllowedJoin, isCustomer, selectedMicrophone, selectedWebcam, publishMicSilence]);
 
   return (
     <div className="fixed inset-0">
@@ -614,9 +587,8 @@ export function MeetingContainer({ onMeetingLeave }) {
         {localParticipantAllowedJoin ? (
             <>
               <NetworkQualityPopup limitation={qualityLimitation} />
-              <ImageUploadListner />
-              <ResolutionListner />
-              <SwitchCameraListner />
+              {/* Client side of the agent's capture button — no camera in audio calls */}
+              {!isAudioOnly && <ImageUploadListner />}
 
               {isDoctor ? (
                 <DoctorView />
@@ -636,21 +608,13 @@ export function MeetingContainer({ onMeetingLeave }) {
                     onToggleParticipantPanel={() => setShowParticipantPanel((s) => !s)}
                   />
 
-                  <div className={`relative flex flex-1 ${isPresenting ? "flex-row" : "flex-row"} bg-[#1b1b1e] overflow-hidden`}>
-                    {isPresenting ? <PresenterView height={containerHeight - bottomBarHeight * 2} /> : null}
-                    <MemorizedParticipantView isPresenting={isPresenting} sideBarMode={sideBarMode} statusMessage={statusMessage} />
-                    <div>
-                      <SidebarConatiner
-                        height={containerHeight - bottomBarHeight * 2}
-                        sideBarContainerWidth={sideBarContainerWidth}
-                      />
-                    </div>
+                  <div className="relative flex flex-1 flex-row bg-[#1b1b1e] overflow-hidden">
+                    <MemorizedParticipantView statusMessage={statusMessage} />
                     {showParticipantPanel && (
                       <div className="shrink-0 h-full">
                         <ParticipantDetailsPanel onClose={() => setShowParticipantPanel(false)} />
                       </div>
                     )}
-                    <CustomerVerificationOverlay />
                   </div>
 
                   <BottomBar bottomBarHeight={bottomBarHeight} />

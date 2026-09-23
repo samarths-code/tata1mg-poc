@@ -1,9 +1,10 @@
 import React, { useState } from "react";
-import { CheckIcon, ClipboardIcon } from "@heroicons/react/24/outline";
+import { CheckIcon, ClipboardIcon, MicrophoneIcon, VideoCameraIcon } from "@heroicons/react/24/outline";
 import { createMeetingWithCredentials } from "../api";
 
 export default function CreateMeetingPage() {
   const [meetingTitle, setMeetingTitle] = useState("");
+  const [callType, setCallType] = useState("video"); // "video" | "audio"
   const [links, setLinks] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -19,17 +20,20 @@ export default function CreateMeetingPage() {
       const titleParam = meetingTitle.trim()
         ? `&meetingTitle=${encodeURIComponent(meetingTitle.trim())}`
         : "";
+      const typeParam = `&callType=${callType}`;
 
       const doctorLink =
         `${base}?meetingId=${roomId}&mode=Doctor` +
         `&participantId=${encodeURIComponent(doctor.participantId)}` +
         `&token=${encodeURIComponent(doctor.token)}` +
+        typeParam +
         titleParam;
 
       const patientLink =
         `${base}?meetingId=${roomId}&mode=Patient` +
         `&participantId=${encodeURIComponent(patient.participantId)}` +
         `&token=${encodeURIComponent(patient.token)}` +
+        typeParam +
         titleParam;
 
       setLinks({ doctorLink, patientLink });
@@ -49,6 +53,7 @@ export default function CreateMeetingPage() {
   const reset = () => {
     setLinks(null);
     setMeetingTitle("");
+    setCallType("video");
     setError("");
   };
 
@@ -58,7 +63,7 @@ export default function CreateMeetingPage() {
         <div className="w-full max-w-md bg-white rounded-2xl shadow-md border border-gray-200 p-8">
           <h2 className="text-2xl font-bold text-gray-800 mb-1">Create a Meeting</h2>
           <p className="text-gray-500 text-sm mb-7">
-            Generate secure, pre-authenticated links for agent and client
+            Generate secure, pre-authenticated links for doctor and patient
           </p>
 
           {!links ? (
@@ -76,6 +81,28 @@ export default function CreateMeetingPage() {
                 />
               </div>
 
+              <div className="mb-6">
+                <p className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                  Call Type
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  <CallTypeOption
+                    selected={callType === "video"}
+                    onClick={() => setCallType("video")}
+                    Icon={VideoCameraIcon}
+                    label="Video Call"
+                    hint="Camera + microphone"
+                  />
+                  <CallTypeOption
+                    selected={callType === "audio"}
+                    onClick={() => setCallType("audio")}
+                    Icon={MicrophoneIcon}
+                    label="Audio Only"
+                    hint="Best for weak networks"
+                  />
+                </div>
+              </div>
+
               <button
                 onClick={handleCreate}
                 disabled={loading}
@@ -87,14 +114,17 @@ export default function CreateMeetingPage() {
             </>
           ) : (
             <div className="flex flex-col gap-5">
+              <p className="text-sm text-gray-600 -mb-2">
+                {callType === "audio" ? "Audio-only call" : "Video call"}
+              </p>
               <LinkRow
-                label="Agent Link"
+                label="Doctor Link"
                 link={links.doctorLink}
                 isCopied={copied.doctor}
                 onCopy={() => copyLink(links.doctorLink, "doctor")}
               />
               <LinkRow
-                label="Client Link"
+                label="Patient Link"
                 link={links.patientLink}
                 isCopied={copied.patient}
                 onCopy={() => copyLink(links.patientLink, "patient")}
@@ -130,5 +160,24 @@ function LinkRow({ label, link, isCopied, onCopy }) {
         </button>
       </div>
     </div>
+  );
+}
+
+function CallTypeOption({ selected, onClick, Icon, label, hint }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={selected}
+      className={`flex flex-col items-start gap-1 px-4 py-3 rounded-xl border text-left transition-colors ${
+        selected
+          ? "border-orange-450 bg-orange-50 ring-2 ring-orange-200"
+          : "border-gray-200 hover:border-gray-300"
+      }`}
+    >
+      <Icon className={`h-5 w-5 ${selected ? "text-orange-450" : "text-gray-400"}`} />
+      <span className="text-sm font-semibold text-gray-800">{label}</span>
+      <span className="text-xs text-gray-500">{hint}</span>
+    </button>
   );
 }

@@ -1,18 +1,18 @@
 import React from "react";
-import { useMediaQuery } from "react-responsive";
-import { useMeetingAppContext } from "../context/MeetingAppContext";
-import { participantModes } from "../utils/common";
+import useMediaQuery from "../hooks/useMediaQuery";
 import { MemoizedParticipant } from "./ParticipantView";
-import { PromoInfographic } from "./PromoInfographic";
 
-function ParticipantGrid({ participantIds, isPresenting, sideBarMode }) {
+// Presenter/sidebar modes were removed; kept as constants so the layout maths is unchanged.
+const isPresenting = false;
+const sideBarMode = null;
+
+function ParticipantGrid({ participantIds }) {
   const isMobile = window.matchMedia(
     "only screen and (max-width: 768px)"
   ).matches;
 
   const gtThanMD = useMediaQuery({ minWidth: 768 });
 
-  const { participantMode } = useMeetingAppContext();
 
   const perRow =
     isMobile || isPresenting
@@ -38,13 +38,6 @@ function ParticipantGrid({ participantIds, isPresenting, sideBarMode }) {
       : participantIds.length < 11
       ? 4
       : 4;
-
-  if (
-    participantIds.length == 1 &&
-    participantMode === participantModes.CUSTOMER
-  ) {
-    participantIds.push("NULL");
-  }
 
   return (
     <div
@@ -109,17 +102,9 @@ function ParticipantGrid({ participantIds, isPresenting, sideBarMode }) {
                             : "md:max-w-lg 2xl:max-w-2xl"
                         } overflow-clip overflow-hidden  p-1`}
                       >
-                        {participantId == "NULL" ? (
-                          <PromoInfographic />
-                        ) : (
+                        {(
                           <MemoizedParticipant
                             participantId={participantId}
-                            showImageCapture={
-                              participantMode == participantModes.DOCTOR
-                            }
-                            showResolution={
-                              true //participantMode == participantModes.AGENT
-                            }
                           />
                         )}
                       </div>
@@ -139,9 +124,7 @@ export const MemoizedParticipantGrid = React.memo(
   (prevProps, nextProps) => {
     return (
       JSON.stringify(prevProps.participantIds) ===
-        JSON.stringify(nextProps.participantIds) &&
-      prevProps.isPresenting === nextProps.isPresenting &&
-      prevProps.sideBarMode === nextProps.sideBarMode
+      JSON.stringify(nextProps.participantIds)
     );
   }
 );

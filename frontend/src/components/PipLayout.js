@@ -3,13 +3,12 @@ import { useMeeting } from "@videosdk.live/react-sdk";
 import { useMeetingAppContext } from "../context/MeetingAppContext";
 import { participantModes } from "../utils/common";
 import { MemoizedParticipant } from "./ParticipantView";
-import { PromoInfographic } from "./PromoInfographic";
 import useIsMobile from "../hooks/useIsMobile";
 import useIsTab from "../hooks/useIsTab";
 
 function PipLayout({ participantIds, statusMessage }) {
   const [switchParticipants, setSwitchParticipants] = useState(false);
-  const { participantMode } = useMeetingAppContext();
+  const participantMode = useMeetingAppContext((s) => s.participantMode);
   const { localParticipant } = useMeeting();
   const isMobile = useIsMobile();
   const isTab = useIsTab();
@@ -19,8 +18,6 @@ function PipLayout({ participantIds, statusMessage }) {
     participantMode === participantModes.DOCTOR ||
     participantMode === participantModes.AGENT;
 
-  // Hide SD/HD controls for patient on mobile — Figma has no resolution picker in patient view
-  const showMainResolution = isDoctor || !isMobile;
 
   const mainId = participantIds.length > 1
     ? participantIds[switchParticipants ? 0 : 1]
@@ -52,8 +49,6 @@ function PipLayout({ participantIds, statusMessage }) {
           <MemoizedParticipant
             participantId={participantIds[0]}
             isPip={true}
-            showImageCapture={false}
-            showResolution={false}
           />
           <p
             className="absolute bottom-[9px] left-[14px] text-white text-xs font-medium pointer-events-none"
@@ -71,16 +66,10 @@ function PipLayout({ participantIds, statusMessage }) {
 
       {/* Main video — inset on desktop so dark background is visible around card */}
       <div className={`absolute rounded-[24px] overflow-hidden ${isSmall ? "inset-0" : "inset-3"}`}>
-        {mainId === "NULL" ? (
-          <PromoInfographic />
-        ) : (
-          <MemoizedParticipant
-            participantId={mainId}
-            key={mainId}
-            showImageCapture={isDoctor}
-            showResolution={showMainResolution}
-          />
-        )}
+        <MemoizedParticipant
+          participantId={mainId}
+          key={mainId}
+        />
         {/* Reconnecting overlay — rendered inside the card on desktop */}
         {!isSmall && statusMessage && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/45">
@@ -92,7 +81,7 @@ function PipLayout({ participantIds, statusMessage }) {
       </div>
 
       {/* PiP — local user, bottom-right, orange border */}
-      {pipId && pipId !== "NULL" && (
+      {pipId && (
         <div
           className={`absolute z-10 border border-[#ff6f61] overflow-hidden cursor-pointer ${
             isSmall
@@ -105,8 +94,6 @@ function PipLayout({ participantIds, statusMessage }) {
             participantId={pipId}
             key={pipId}
             isPip={true}
-            showImageCapture={false}
-            showResolution={false}
           />
         </div>
       )}

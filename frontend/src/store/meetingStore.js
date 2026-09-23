@@ -1,6 +1,5 @@
 import { create } from "zustand";
 import { useShallow } from "zustand/react/shallow";
-import { VirtualBackgroundProcessor } from "@videosdk.live/videosdk-media-processor-web";
 import { participantModes } from "../utils/common";
 
 /**
@@ -14,8 +13,8 @@ import { participantModes } from "../utils/common";
  * compatible with the old `useState`-style setters used across the app.
  */
 
-// Singleton — previously re-created on every Context render (a real bug).
-const videoProcessor = new VirtualBackgroundProcessor();
+const isDesktop = () =>
+  typeof window !== "undefined" && !window.matchMedia("(max-width: 767px)").matches;
 
 // Helper: build a setter that supports value | (prev) => next, like useState.
 const updater = (set, key) => (v) =>
@@ -27,16 +26,16 @@ export const useMeetingStore = create((set) => ({
   initialWebcamOn: true,
   participantMode: undefined,
   caseId: "",
+  // Audio-only call: no camera is ever requested, rendered or published.
+  isAudioOnly: false,
 
   // ── Derived flags (recomputed when session config is seeded) ───────────────
   isDoctor: false,
-  allowedVirtualBackground: false,
   maintainVideoAspectRatio: false,
   maintainLandscapeVideoAspectRatio: true,
   canRemoveOtherParticipant: false,
 
   // ── UI / sidebar ───────────────────────────────────────────────────────────
-  sideBarMode: null,
   meetingMode: null,
   images: [],
   raisedHandsParticipants: [],
@@ -49,26 +48,16 @@ export const useMeetingStore = create((set) => ({
   selectedOutputDevice: { id: null, label: null },
   isCameraPermissionAllowed: null,
   isMicrophonePermissionAllowed: null,
+  // Branded background on the doctor's camera (seeded in setSessionConfig).
   useVirtualBackground: false,
-  webCamResolution: "h480p_w640p",
-  cameraFacingMode: { facingMode: "front" },
   muteSpeaker: true,
   participantLeftReason: null,
 
-  // ── MER captured data ──────────────────────────────────────────────────────
+  // ── Captured data ──────────────────────────────────────────────────────────
   geoData: null,
-  customerPhoto: null,
-  aadhaarPhoto: null,
-  submissionStatus: "idle",
-
-  // ── Vision AI ──────────────────────────────────────────────────────────────
-  referencePhoto: null,
-  customerSpoofStatus: null,
-
-  videoProcessor,
 
   // ── Session seeding ────────────────────────────────────────────────────────
-  setSessionConfig: ({ initialMicOn, initialWebcamOn, initialSpeakerOn, participantMode, caseId }) =>
+  setSessionConfig: ({ initialMicOn, initialWebcamOn, initialSpeakerOn, participantMode, caseId, isAudioOnly }) =>
     set(() => {
       const isDoctor =
         participantMode === participantModes.DOCTOR ||
@@ -78,15 +67,18 @@ export const useMeetingStore = create((set) => ({
         initialWebcamOn,
         participantMode,
         caseId,
+        isAudioOnly: !!isAudioOnly,
         muteSpeaker: initialSpeakerOn,
         isDoctor,
+        // The doctor's camera always carries the Apollo background. The SDK's
+        // processor is desktop-only, so phones stay on the plain camera.
+        useVirtualBackground: isDoctor && !isAudioOnly && isDesktop(),
         maintainVideoAspectRatio: isDoctor,
         canRemoveOtherParticipant: isDoctor,
       };
     }),
 
   // ── Setters (value | updater-fn compatible) ────────────────────────────────
-  setSideBarMode: updater(set, "sideBarMode"),
   setMeetingMode: updater(set, "meetingMode"),
   setImages: updater(set, "images"),
   setRaisedHandsParticipants: updater(set, "raisedHandsParticipants"),
@@ -97,23 +89,15 @@ export const useMeetingStore = create((set) => ({
   setSelectedOutputDevice: updater(set, "selectedOutputDevice"),
   setIsCameraPermissionAllowed: updater(set, "isCameraPermissionAllowed"),
   setIsMicrophonePermissionAllowed: updater(set, "isMicrophonePermissionAllowed"),
-  setUseVirtualBackground: updater(set, "useVirtualBackground"),
-  setWebCamResolution: updater(set, "webCamResolution"),
-  setCameraFacingMode: updater(set, "cameraFacingMode"),
   setMuteSpeaker: updater(set, "muteSpeaker"),
   setParticipantLeftReason: updater(set, "participantLeftReason"),
   setGeoData: updater(set, "geoData"),
-  setCustomerPhoto: updater(set, "customerPhoto"),
-  setAadhaarPhoto: updater(set, "aadhaarPhoto"),
-  setSubmissionStatus: updater(set, "submissionStatus"),
-  setReferencePhoto: updater(set, "referencePhoto"),
-  setCustomerSpoofStatus: updater(set, "customerSpoofStatus"),
 }));
 
 /**
  * Selector-aware access hook (backward compatible with the old Context API).
  *
- *  - `useMeetingAppContext(s => s.customerPhoto)`  → subscribes to ONE slice (no extra re-renders)
+ *  - `useMeetingAppContext(s => s.geoData)`  → subscribes to ONE slice (no extra re-renders)
  *  - `useMeetingAppContext(s => ({ a: s.a, b: s.b }))` → object selector, shallow-compared
  *  - `useMeetingAppContext()` → whole store (legacy; re-renders on any change)
  *

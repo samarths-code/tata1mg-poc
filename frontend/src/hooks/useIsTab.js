@@ -1,4 +1,4 @@
-import { useMediaQuery } from "react-responsive";
+import useMediaQuery from "./useMediaQuery";
 
 const useIsTab = () => {
   const isTablet = useMediaQuery({

@@ -1,68 +1,53 @@
 import { useMeeting, useParticipant, usePubSub } from "@videosdk.live/react-sdk";
-import { useEffect, useRef, useState } from "react";
-import PatientCaptureOverlay from "./PatientCaptureOverlay";
 
 const CHUNK_SIZE = 500;
 
-// Map the doctor's capture target to the patient-facing overlay variant.
-// `reference` is a silent background grab — no overlay.
-function variantForTarget(target) {
-  if (target === "reference") return null;
-  if (target === "customerPhoto") return "face";
-  return "document"; // aadhaarFront / aadhaarBack
-}
+export const IMAGE_TRANSFER_TOPIC = "IMAGE_TRANSFER";
+export const captureTopic = (participantId) => `IMAGE_CAPTURE_${participantId}`;
 
+// Client side of the agent's "capture image" button: grabs a frame from the
+// local camera and streams it back in chunks. Chunks are not persisted — the
+// server doesn't need to store (and replay to rejoiners) a one-off image.
 const ImageUploadListner = () => {
   const mMeeting = useMeeting();
-  const { captureImage, webcamStream } = useParticipant(mMeeting?.localParticipant?.id);
-  const webcamStreamRef = useRef();
-  useEffect(() => { webcamStreamRef.current = webcamStream; }, [webcamStream]);
+  const localId = mMeeting?.localParticipant?.id;
+  const { captureImage } = useParticipant(localId);
 
-  const { publish: publishChunk } = usePubSub("IMAGE_TRANSFER", {});
-
-  const splitIntoChunks = (str, size) => {
-    const chunks = [];
-    let i = 0;
-    while (i < str.length) {
-      chunks.push(str.substring(i, i + size));
-      i += size;
-    }
-    return chunks;
-  };
+  const { publish: publishChunk } = usePubSub(IMAGE_TRANSFER_TOPIC, {});
 
   async function captureAndChunk() {
+    const transferId = Math.random().toString(36).substring(2, 9);
+    let base64Data = null;
     try {
-      const base64Data = await captureImage();
-      const chunks = splitIntoChunks(base64Data, CHUNK_SIZE);
-      const transferId = Math.random().toString(36).substring(2, 9);
-
-      for (let i = 0; i < chunks.length; i++) {
-        try {
-          publishChunk("CHUNK", { persist: true }, {
-            id: transferId,
-            index: i,
-            totalChunk: chunks.length,
-            chunkdata: chunks[i],
-          });
-          await new Promise((r) => setTimeout(r, 5));
-        } catch (err) {
-          console.error(`Error sending chunk ${i}:`, err);
-        }
-      }
+      base64Data = await captureImage();
     } catch (err) {
       console.error("Error capturing image:", err);
     }
+    if (!base64Data) {
+      // Camera off / no frame — tell the agent instead of letting it time out.
+      try { publishChunk("CHUNK", { persist: false }, { id: transferId, error: true }); } catch (e) { /* noop */ }
+      return;
+    }
+
+    const totalChunk = Math.ceil(base64Data.length / CHUNK_SIZE);
+    for (let i = 0; i < totalChunk; i++) {
+      try {
+        publishChunk("CHUNK", { persist: false }, {
+          id: transferId,
+          index: i,
+          totalChunk,
+          chunkdata: base64Data.substring(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE),
+        });
+        await new Promise((r) => setTimeout(r, 5));
+      } catch (err) {
+        console.error(`Error sending chunk ${i}:`, err);
+      }
+    }
   }
 
-  usePubSub(`IMAGE_CAPTURE_${mMeeting?.localParticipant?.id}`, {
+  usePubSub(captureTopic(localId), {
     onMessageReceived: ({ payload }) => {
-      try {
-        if (payload.senderId !== mMeeting?.localParticipant?.id) {
-          captureAndChunk();
-        }
-      } catch (err) {
-        console.error("Error on IMAGE_CAPTURE:", err);
-      }
+      if (payload?.senderId !== localId) captureAndChunk();
     },
   });
 

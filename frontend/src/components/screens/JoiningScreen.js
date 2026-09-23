@@ -2,24 +2,17 @@ import React, { useEffect, useRef, useState } from "react";
 import { MeetingDetailsScreen } from "../MeetingDetailsScreen";
 import { getToken, validateMeeting } from "../../api";
 import ConfirmBox from "../ConfirmBox";
-import WebcamOffIcon from "../../icons/WebcamOffIcon";
-import WebcamOnIcon from "../../icons/Bottombar/WebcamOnIcon";
-import MicOffIcon from "../../icons/MicOffIcon";
-import MicOnIcon from "../../icons/Bottombar/MicOnIcon";
 import { toast } from "react-toastify";
 import { Constants, useMediaDevice } from "@videosdk.live/react-sdk";
-import MicPermissionDenied from "../../icons/MicPermissionDenied";
-import CameraPermissionDenied from "../../icons/CameraPermissionDenied";
-import NetworkStats from "../NetworkStats";
+import usePrecallTest from "../../lib/usePrecallTest";
 import DropDownCam from "../DropDownCam";
 import DropDownSpeaker from "../DropDownSpeaker";
 import DropDownMic from "../DropDownMic";
 import { useMeetingAppContext } from "../../context/MeetingAppContext";
 import useMediaStream from "../../hooks/useMediaStream";
 import useIsMobile from "../../hooks/useIsMobile";
-import PermissionSetup from "../PermissionSetup";
-import { participantModes } from "../../utils/common";
 import DeviceEnableModal from "../DeviceEnableModal";
+import { stopVirtualBackground } from "../../lib/virtualBackground";
 import { ShieldCheckIcon, ChevronRightIcon, MicrophoneIcon, VideoCameraIcon, VideoCameraSlashIcon, SpeakerWaveIcon, SpeakerXMarkIcon } from "@heroicons/react/24/outline";
 
 export function JoiningScreen({
@@ -32,6 +25,7 @@ export function JoiningScreen({
   setWebcamOn,
   onClickStartMeeting,
   customAudioStream,
+  customVideoStream,
   setCustomAudioStream,
   setCustomVideoStream,
   micOn,
@@ -41,6 +35,9 @@ export function JoiningScreen({
   token,
   credentialError,
   meetingTitle,
+  isAudioOnly = false,
+  permissionsReady = false,
+  inCall = false,
 }) {
   const {
     selectedWebcam,
@@ -55,7 +52,6 @@ export function JoiningScreen({
     participantMode,
   } = useMeetingAppContext();
 
-  const [permissionDone, setPermissionDone] = useState(false);
   const isMobile = useIsMobile();
 
   const [{ webcams, mics, speakers }, setDevices] = useState({
@@ -103,6 +99,11 @@ export function JoiningScreen({
   const micRef = useRef();
 
   useEffect(() => { webcamRef.current = webcamOn; }, [webcamOn]);
+  // Once the call starts, the preview tracks belong to the meeting (published
+  // as-is). This screen stays mounted behind the call, so it must never swap
+  // or stop them afterwards — e.g. on a device-change event mid-call.
+  const inCallRef = useRef(inCall);
+  useEffect(() => { inCallRef.current = inCall; }, [inCall]);
   useEffect(() => { micRef.current = micOn; }, [micOn]);
 
   // Audio level analysis — runs in JoiningScreen so AudioContext is created
@@ -110,7 +111,9 @@ export function JoiningScreen({
   useEffect(() => {
     clearInterval(audioAnalyserIntervalRef.current);
     if (audioCtxRef.current) { audioCtxRef.current.close(); audioCtxRef.current = null; }
-    if (!audioTrack || !micOn) { setMicVolume(0); return; }
+    // Stop metering once the call starts — this screen stays mounted (hidden)
+    // behind the meeting and would otherwise re-render every 100 ms all call.
+    if (!audioTrack || !micOn || inCall) { setMicVolume(0); return; }
 
     let cancelled = false;
     const ctx = new AudioContext();
@@ -139,7 +142,7 @@ export function JoiningScreen({
       ctx.close();
       audioCtxRef.current = null;
     };
-  }, [audioTrack, micOn]);
+  }, [audioTrack, micOn, inCall]);
 
   useEffect(() => {
     permissonAvaialble.current = {
@@ -147,19 +150,6 @@ export function JoiningScreen({
       isMicrophonePermissionAllowed,
     };
   }, [isCameraPermissionAllowed, isMicrophonePermissionAllowed]);
-
-  useEffect(() => {
-    if (micOn) { audioTrackRef.current = audioTrack; }
-  }, [micOn, audioTrack]);
-
-  useEffect(() => {
-    if (micOn) {
-      if (audioTrackRef.current && audioTrackRef.current !== audioTrack) {
-        audioTrackRef.current.stop();
-      }
-      audioTrackRef.current = audioTrack;
-    }
-  }, [micOn, audioTrack]);
 
   // Only route the mic to the speaker element when testSpeaker is explicitly on.
   // Never set srcObject otherwise — muted is unreliable and the echo is unavoidable.
@@ -177,8 +167,14 @@ export function JoiningScreen({
   }, [testSpeaker, micOn, audioTrack]);
 
   useEffect(() => {
+    // This screen stays mounted (hidden) behind the call. Decoding the camera
+    // into a second, invisible <video> costs real CPU/GPU on a weak device —
+    // detach once the call owns the track.
+    if (inCall) {
+      if (videoPlayerRef.current) videoPlayerRef.current.srcObject = null;
+      return;
+    }
     if (webcamOn) {
-      videoTrackRef.current = videoTrack;
       const isPlaying =
         videoPlayerRef.current.currentTime > 0 &&
         !videoPlayerRef.current.paused &&
@@ -196,20 +192,45 @@ export function JoiningScreen({
         if (videoPlayerRef.current) videoPlayerRef.current.srcObject = null;
       }
     }
-  }, [webcamOn, videoTrack]);
+  }, [webcamOn, videoTrack, inCall]);
 
-  useEffect(() => { getCameraDevices(); }, [isCameraPermissionAllowed]);
+  useEffect(() => { if (!isAudioOnly) getCameraDevices(); }, [isCameraPermissionAllowed]);
   useEffect(() => { getAudioDevices(); }, [isMicrophonePermissionAllowed]);
 
   useEffect(() => {
-    if (permissionDone) checkMediaPermission();
+    if (permissionsReady) checkMediaPermission();
     return () => {};
-  }, [permissionDone]);
+  }, [permissionsReady]);
+
+  // The preview track IS the track published on join (passed to MeetingProvider
+  // as a custom track), so what the user sees here is exactly what's sent.
+  // Every swap stops the previous track so pre-call never holds two cameras/mics.
+  const replaceVideo = (stream) => {
+    // A track that resolved after Join was clicked is not the published one — drop it.
+    if (inCallRef.current) { stream?.getTracks().forEach((t) => t.stop()); return; }
+    const next = stream?.getVideoTracks()[0] ?? null;
+    const prev = videoTrackRef.current;
+    if (prev && prev !== next) prev.stop();
+    videoTrackRef.current = next;
+    setCustomVideoStream(stream || null);
+    setVideoTrack(next);
+  };
+
+  const replaceAudio = (stream) => {
+    if (inCallRef.current) { stream?.getTracks().forEach((t) => t.stop()); return; }
+    const next = stream?.getAudioTracks()[0] ?? null;
+    const prev = audioTrackRef.current;
+    if (prev && prev !== next) prev.stop();
+    audioTrackRef.current = next;
+    setCustomAudioStream(stream || null);
+    setAudioTrack(next);
+  };
 
   const _toggleWebcam = () => {
-    const track = videoTrackRef.current;
     if (webcamOn) {
-      if (track) { track.stop(); setVideoTrack(null); setCustomVideoStream(null); setWebcamOn(false); }
+      replaceVideo(null);
+      stopVirtualBackground();
+      setWebcamOn(false);
     } else {
       getDefaultMediaTracks({ mic: false, webcam: true });
       setWebcamOn(true);
@@ -217,9 +238,10 @@ export function JoiningScreen({
   };
 
   const _toggleMic = () => {
-    const track = audioTrackRef.current;
     if (micOn) {
-      if (track) { track.stop(); setAudioTrack(null); setCustomAudioStream(null); setMicOn(false); setSpekerOn(false); }
+      replaceAudio(null);
+      setMicOn(false);
+      setSpekerOn(false);
     } else {
       getDefaultMediaTracks({ mic: true, webcam: false });
       setMicOn(true);
@@ -228,41 +250,16 @@ export function JoiningScreen({
   };
 
   const changeWebcam = async (deviceId) => {
-    if (webcamOn) {
-      const cur = videoTrackRef.current;
-      if (cur) cur.stop();
-      const stream = await getVideoTrack({ webcamId: deviceId });
-      setCustomVideoStream(stream);
-      const tracks = stream?.getVideoTracks();
-      setVideoTrack(tracks?.length ? tracks[0] : null);
-    }
+    if (webcamRef.current) replaceVideo(await getVideoTrack({ webcamId: deviceId }));
   };
 
   const changeMic = async (deviceId) => {
-    if (micOn) {
-      const cur = audioTrackRef.current;
-      cur && cur.stop();
-      const stream = await getAudioTrack({ micId: deviceId });
-      setCustomAudioStream(stream);
-      const tracks = stream?.getAudioTracks();
-      clearInterval(audioAnalyserIntervalRef.current);
-      setAudioTrack(tracks?.length ? tracks[0] : null);
-    }
+    if (micRef.current) replaceAudio(await getAudioTrack({ micId: deviceId }));
   };
 
   const getDefaultMediaTracks = async ({ mic, webcam }) => {
-    if (mic) {
-      const stream = await getAudioTrack({ micId: selectedMicrophone?.id });
-      setCustomAudioStream(stream);
-      const tracks = stream?.getAudioTracks();
-      setAudioTrack(tracks?.length ? tracks[0] : null);
-    }
-    if (webcam) {
-      const stream = await getVideoTrack({ webcamId: selectedWebcam?.id });
-      setCustomVideoStream(stream);
-      const tracks = stream?.getVideoTracks();
-      setVideoTrack(tracks?.length ? tracks[0] : null);
-    }
+    if (mic) replaceAudio(await getAudioTrack({ micId: selectedMicrophone?.id }));
+    if (webcam && !isAudioOnly) replaceVideo(await getVideoTrack({ webcamId: selectedWebcam?.id }));
   };
 
   async function requestAudioVideoPermission(mediaType) {
@@ -288,20 +285,23 @@ export function JoiningScreen({
   }
 
   function onDeviceChanged() {
+    if (inCallRef.current) return; // in-call device changes are the meeting's job
     setDidDeviceChange(true);
-    getCameraDevices();
+    if (!isAudioOnly) getCameraDevices();
     getAudioDevices();
-    getDefaultMediaTracks({ mic: micRef.current, webcam: webcamRef.current });
+    getDefaultMediaTracks({ mic: micRef.current, webcam: webcamRef.current && !isAudioOnly });
   }
 
   const checkMediaPermission = async () => {
-    const result = await checkPermissions();
-    const camAllowed = result.get(Constants.permission.VIDEO);
+    // Audio-only calls never check, request or open the camera.
+    const result = await checkPermissions(isAudioOnly ? Constants.permission.AUDIO : undefined);
     const micAllowed = result.get(Constants.permission.AUDIO);
-    setIsCameraPermissionAllowed(camAllowed);
     setIsMicrophonePermissionAllowed(micAllowed);
     if (micAllowed) { setMicOn(true); getDefaultMediaTracks({ mic: true, webcam: false }); }
     else { await requestAudioVideoPermission(Constants.permission.AUDIO); }
+    if (isAudioOnly) return;
+    const camAllowed = result.get(Constants.permission.VIDEO);
+    setIsCameraPermissionAllowed(camAllowed);
     if (camAllowed) { setWebcamOn(true); getDefaultMediaTracks({ mic: false, webcam: true }); }
     else { await requestAudioVideoPermission(Constants.permission.VIDEO); }
   };
@@ -335,23 +335,54 @@ export function JoiningScreen({
     }
   };
 
+  // Pre-call network test runs on the exact tracks being previewed (and later
+  // published). Restarts when they change; stops once the call starts.
+  const precall = usePrecallTest({
+    token,
+    audioStream: micOn ? customAudioStream : null,
+    videoStream: isAudioOnly || !webcamOn ? null : customVideoStream,
+    enabled: !inCall,
+  });
+
+  // Join: stop the test if it's still sampling (12 s), take its result, and
+  // pass the result's tracks — the same MediaStreams it tested — to MeetingProvider.
+  const joiningRef = useRef(false);
+  const startMeeting = async () => {
+    if (joiningRef.current) return;
+    joiningRef.current = true;
+    try {
+      const raw = await precall.finish();
+      const isLive = (st) => !!st && st.getTracks().length > 0 && st.getTracks().every((t) => t.readyState === "live");
+      const mic = raw?.microphone?.track;
+      const cam = raw?.camera?.track;
+      if (micRef.current && isLive(mic)) setCustomAudioStream(mic);
+      if (!isAudioOnly && webcamRef.current && isLive(cam)) setCustomVideoStream(cam);
+      await onClickStartMeeting();
+    } finally {
+      joiningRef.current = false;
+    }
+  };
+
   // ── Render helpers (plain functions, NOT components) ─────────────────────────
   // Defined as functions called with {renderCameraCard(...)} not <CameraCard/>.
   // Defining them as components inside a render body would give React a new type
-  // on every render → unmount+remount → NetworkStats re-runs the pre-call test again.
+  // on every render → unmount+remount → the pre-call test would re-run.
   const renderCameraCard = (height, width, rounded = "rounded-[24px]") => (
     <div
       className={`relative bg-[#303033] ${rounded} overflow-hidden shrink-0 w-full`}
       style={{ height, width }}
     >
-      <div className="absolute right-4 top-4 z-10"><NetworkStats token={token} /></div>
       <audio playsInline muted ref={audioPlayerRef} controls={false} />
+      {isAudioOnly ? (
+        <AudioOnlyPreview name={participantName} micOn={micOn} volume={micVolume} />
+      ) : (
       <video
         autoPlay playsInline muted ref={videoPlayerRef} controls={false}
         className="h-full w-full object-cover flip"
         style={{ backgroundColor: "#303033" }}
       />
-      {!webcamOn && (
+      )}
+      {!webcamOn && !isAudioOnly && (
         <div className="absolute inset-0 flex items-center justify-center">
           <p className="text-white text-2xl font-normal">Camera is off</p>
         </div>
@@ -371,7 +402,7 @@ export function JoiningScreen({
         </div>
 
         {/* Camera button */}
-        <div className="relative">
+        {!isAudioOnly && <div className="relative">
           <button
             onClick={() => isCameraPermissionAllowed ? _toggleWebcam() : setShowDeviceModal('camera')}
             className="bg-[rgba(0,0,0,0.5)] border border-white/80 rounded flex items-center justify-center h-8 w-8"
@@ -383,7 +414,7 @@ export function JoiningScreen({
           {!isCameraPermissionAllowed && (
             <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-[#dc2626] flex items-center justify-center text-white text-[7px] font-bold leading-none">!</span>
           )}
-        </div>
+        </div>}
 
         {/* Speaker button */}
         <div className="relative">
@@ -401,18 +432,17 @@ export function JoiningScreen({
   );
 
   const renderDeviceSelectors = (stacked) => (
-    <div className={stacked ? "flex flex-col gap-2" : "grid grid-cols-3 gap-2"}>
+    <div className={stacked ? "flex flex-col gap-2" : `grid ${isAudioOnly ? "grid-cols-2" : "grid-cols-3"} gap-2`}>
       <DropDownMic mics={mics} changeMic={changeMic} customAudioStream={customAudioStream}
         micOn={micOn} volume={micVolume} didDeviceChange={didDeviceChange}
         setDidDeviceChange={setDidDeviceChange} testSpeaker={testSpeaker} setTestSpeaker={setTestSpeaker} />
       <DropDownSpeaker speakers={speakers} />
-      <DropDownCam changeWebcam={changeWebcam} webcams={webcams} />
+      {!isAudioOnly && <DropDownCam changeWebcam={changeWebcam} webcams={webcams} />}
     </div>
   );
 
   return (
     <>
-      {!permissionDone && <PermissionSetup onDone={() => setPermissionDone(true)} />}
 
       {/* ── Internet disconnect popup ───────────────────────────────────────── */}
       {isOffline && (
@@ -460,14 +490,14 @@ export function JoiningScreen({
               {isAutoJoin ? (
                 <>
                   <p className="text-[#5e5e61] text-sm font-medium leading-5">
-                    Your agent is ready to meet you
+                    Your doctor is ready to meet you
                   </p>
                   <h1 className="text-black text-xl font-medium leading-7 px-2">
                     {meetingTitle || "Online Application"}
                   </h1>
-                  <p className="text-[#5e5e61] text-sm font-medium leading-5">
-                    Please keep a valid photo ID ready for verification.
-                  </p>
+                  {isAudioOnly && (
+                    <p className="text-[#5e5e61] text-sm font-medium leading-5">Audio-only call</p>
+                  )}
                 </>
               ) : (
                 <h2 className="text-black text-xl font-semibold">Ready to join?</h2>
@@ -498,7 +528,7 @@ export function JoiningScreen({
                 )}
                 <button
                   disabled={!(participantName.length >= 3 && tokenReady && !credentialError)}
-                  onClick={onClickStartMeeting}
+                  onClick={startMeeting}
                   className="flex items-center justify-center gap-1 w-full px-4 py-3 rounded bg-[#ff6f61] text-white text-base font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {tokenReady ? "Start Application" : "Setting up…"}
@@ -509,13 +539,13 @@ export function JoiningScreen({
               <MeetingDetailsScreen
                 participantName={participantName}
                 setParticipantName={setParticipantName}
-                onClickStartMeeting={onClickStartMeeting}
+                onClickStartMeeting={startMeeting}
                 onClickJoin={async (id) => {
-                  if (tokenReady) { setMeetingId(id); onClickStartMeeting(); return; }
+                  if (tokenReady) { setMeetingId(id); startMeeting(); return; }
                   const valid = await validateMeeting({ roomId: id });
                   if (valid) {
                     const token = await getToken({ roomId: id });
-                    setToken(token); setMeetingId(id); onClickStartMeeting();
+                    setToken(token); setMeetingId(id); startMeeting();
                   } else {
                     toast("Invalid Meeting ID", { position: "bottom-left", autoClose: 4000, hideProgressBar: true, closeButton: false, theme: "dark" });
                   }
@@ -553,8 +583,9 @@ export function JoiningScreen({
                     participantMode={participantMode}
                     tokenReady={tokenReady}
                     credentialError={credentialError}
-                    onClickStartMeeting={onClickStartMeeting}
+                    onClickStartMeeting={startMeeting}
                     meetingTitle={meetingTitle}
+                    isAudioOnly={isAudioOnly}
                   />
                 ) : (
                   <div className="w-full max-w-sm">
@@ -565,13 +596,13 @@ export function JoiningScreen({
                     <MeetingDetailsScreen
                       participantName={participantName}
                       setParticipantName={setParticipantName}
-                      onClickStartMeeting={onClickStartMeeting}
+                      onClickStartMeeting={startMeeting}
                       onClickJoin={async (id) => {
-                        if (tokenReady) { setMeetingId(id); onClickStartMeeting(); return; }
+                        if (tokenReady) { setMeetingId(id); startMeeting(); return; }
                         const valid = await validateMeeting({ roomId: id });
                         if (valid) {
                           const token = await getToken({ roomId: id });
-                          setToken(token); setMeetingId(id); onClickStartMeeting();
+                          setToken(token); setMeetingId(id); startMeeting();
                         } else {
                           toast("Invalid Meeting ID", { position: "bottom-left", autoClose: 4000, hideProgressBar: true, closeButton: false, theme: "dark" });
                         }
@@ -627,8 +658,8 @@ function AutoJoinPanel({
   credentialError,
   onClickStartMeeting,
   meetingTitle,
+  isAudioOnly,
 }) {
-  const roleLabel = participantMode === participantModes.DOCTOR ? "Agent" : "Client";
   const canJoin = participantName.length >= 3 && tokenReady && !credentialError;
 
   return (
@@ -646,6 +677,9 @@ function AutoJoinPanel({
           <h2 className="text-black text-2xl font-medium leading-8">
             {meetingTitle}
           </h2>
+        )}
+        {isAudioOnly && !credentialError && (
+          <p className="text-[#5e5e61] text-sm font-medium leading-5">Audio-only call</p>
         )}
       </div>
 
@@ -669,6 +703,24 @@ function AutoJoinPanel({
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+// Stand-in for the camera preview in audio-only calls: initial + live mic ring.
+function AudioOnlyPreview({ name, micOn, volume }) {
+  const ring = micOn ? Math.min(24, Math.round(volume / 3)) : 0;
+  return (
+    <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+      <div
+        className="w-20 h-20 rounded-full bg-[#1b1b1e] flex items-center justify-center transition-shadow duration-100"
+        style={{ boxShadow: `0 0 0 ${ring}px rgba(255,111,97,0.35)` }}
+      >
+        <span className="text-white text-3xl font-medium">
+          {(name || "?").charAt(0).toUpperCase()}
+        </span>
+      </div>
+      <p className="text-white/80 text-sm">Audio-only call</p>
     </div>
   );
 }

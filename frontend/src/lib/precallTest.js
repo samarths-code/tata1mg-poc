@@ -1,23 +1,21 @@
-// precallTest.js — VideoSDK 0.12.5 pre-call network check.
+// precallTest.js — VideoSDK pre-call network check.
 //
-// `getNetworkStats()` was REMOVED from @videosdk.live/react-sdk in the 0.12.x
-// line. Its replacement, `runPreCallTest()`, is a different kind of measurement:
+// runPreCallTest() runs against the SAME camera/mic tracks the pre-call screen
+// previews (passed as videoTrack/audioTrack). Its result echoes those streams
+// back as result.camera.track / result.microphone.track, and the join flow
+// hands exactly those into MeetingProvider — so what was tested is what's sent.
 //
 //   • It needs a `token` (it spins up a short, real test connection).
-//   • It reports media-call QUALITY, not a raw speedtest. The resolved shape is
-//       { aborted, testDuration, camera, microphone, networkQuality }
-//     where `networkQuality` (the TS types mislabel this key `network`) is
-//       { audioOnly, uplink, downlink }
-//     and each direction is
-//       { quality /* 0–10 */, factors, audio:{bitrate(kbps),rtt,jitter,packetLoss,…}, video:{…} }
+//   • Resolved shape: { aborted, testDuration, camera, microphone, networkQuality }
+//     where networkQuality (the TS types call it `network`) is
+//     { audioOnly, uplink, downlink }, each { quality /* 0–10 */, audio:{…}, video:{…} }.
+//   • The returned promise has .stop(); stopping early still resolves with the
+//     partial result (aborted: true). Caller-supplied tracks are left running.
 //
-// So there is no `downloadSpeed`/`uploadSpeed` in Mbps any more — the honest
-// signal is the 0–10 quality score, which we map to a label below.
-//
-// This helper is for the PRE-CALL screens only (JoiningScreen / PermissionSetup).
-// For in-call quality use the local participant's getAudioStats()/getVideoStats()
-// instead — see meeting/MeetingContainer.js.
+// For in-call quality use the participant's getAudioStats()/getVideoStats().
 import { runPreCallTest } from "@videosdk.live/react-sdk";
+
+export const PRECALL_SAMPLING_MS = 12000;
 
 // Same thresholds the SDK itself uses internally (scoreToRating).
 const RATINGS = {
@@ -43,31 +41,19 @@ function round(n) {
 }
 
 /**
- * Run the SDK pre-call test and normalise it into a flat, UI-friendly object.
- *
- * @param {object}  opts
- * @param {string}  opts.token             The meeting token (the same one the join
- *                                         flow already holds). Required — runPreCallTest
- *                                         spins up a real test connection with it.
- * @param {number} [opts.samplingDuration] 10000–120000 ms (SDK clamps). Default 12000.
- * @param {boolean}[opts.audioOnly]        Skip the camera test. Default true —
- *                                         a consultation cares about audio first
- *                                         and it works before camera is granted.
- * @returns {Promise<{
- *   raw, aborted, score, rating, label, color,
- *   latencyMs, packetLossPct,
- *   uplink:   { score, rating, label, bitrateKbps, rtt, jitter, packetLossPct },
- *   downlink: { score, rating, label, bitrateKbps, rtt, jitter, packetLossPct },
- * }>}
+ * Start the SDK pre-call test on the given (pre-call) tracks.
+ * Returns the SDK's promise-with-stop() as-is.
  */
-export async function runNetworkTest({
-  token,
-  samplingDuration = 12000,
-  audioOnly = true,
-} = {}) {
-  if (!token) throw new Error("runNetworkTest: token is required");
-  const result = await runPreCallTest({ token, audioOnly, samplingDuration });
-  return normalise(result);
+export function startNetworkTest({ token, audioStream, videoStream, samplingDuration = PRECALL_SAMPLING_MS }) {
+  if (!token) throw new Error("startNetworkTest: token is required");
+  return runPreCallTest({
+    token,
+    samplingDuration,
+    audioTrack: audioStream || undefined,
+    videoTrack: videoStream || undefined,
+    // No camera track (audio-only call / camera off) → don't let the SDK open one.
+    audioOnly: !videoStream,
+  });
 }
 
 function direction(dir) {
@@ -85,19 +71,19 @@ function direction(dir) {
   };
 }
 
-function normalise(result) {
-  // Runtime key is `networkQuality`; fall back to `network` to match the docs’
-  // type in case a future patch aligns them.
+// Flatten the raw SDK result for the pre-call badge. `raw` is kept intact —
+// it carries camera.track / microphone.track for the join.
+export function normaliseResult(result) {
+  // Runtime key is `networkQuality`; fall back to `network` (the docs' name).
   const nq = result?.networkQuality ?? result?.network ?? null;
   const uplink = direction(nq?.uplink);
   const downlink = direction(nq?.downlink);
 
-  // Overall = worst direction (pessimistic, matching the SDK’s own minScore).
+  // Overall = worst direction (pessimistic, matching the SDK's own minScore).
   const scores = [uplink?.score, downlink?.score].filter((s) => s != null);
   const score = scores.length ? Math.min(...scores) : null;
   const rating = ratingFromScore(score);
 
-  // Surface a single round-trip latency (worst direction) for the detail line.
   const rtts = [uplink?.rtt, downlink?.rtt].filter((r) => r != null);
   const losses = [uplink?.packetLossPct, downlink?.packetLossPct].filter((p) => p != null);
 

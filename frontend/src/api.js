@@ -22,12 +22,6 @@ function getParticipantRole() {
   return mode === "DOCTOR" ? "DOCTOR" : "CUSTOMER";
 }
 
-// Ensure image is a data URL before sending to AI APIs.
-function ensureDataUrl(b64) {
-  if (!b64 || b64.startsWith("data:")) return b64;
-  return `data:image/jpeg;base64,${b64}`;
-}
-
 // ── Room / token APIs (proxied through our backend) ───────────────────────────
 
 export const getToken = async ({ roomId, participantId } = {}) => {
@@ -128,66 +122,4 @@ export const getIPGeoInfo = async () => {
   } catch {
     return null;
   }
-};
-
-// ── Identity verification APIs (proxied through our Flask backend) ────────────
-// The backend holds the crawler token required for these VideoSDK AI endpoints.
-
-export const isAiReady = () => true;
-
-export const runOCR = async ({ frontBase64, backBase64 }) => {
-  const res = await fetch(`${BACKEND_URL}/api/v1/identity/ocr`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ frontPart: ensureDataUrl(frontBase64), backPart: ensureDataUrl(backBase64) }),
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    const msg = body?.error?.message || body?.message || `OCR failed: ${res.status}`;
-    throw new Error(msg);
-  }
-  return res.json();
-};
-
-export const runFaceMatch = async ({ referenceBase64, targetBase64 }) => {
-  const res = await fetch(`${BACKEND_URL}/api/v1/identity/face-verify`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      img1: ensureDataUrl(referenceBase64),
-      img2: ensureDataUrl(targetBase64),
-    }),
-  });
-  if (!res.ok) throw new Error(`Face-match failed: ${res.status}`);
-  return res.json();
-};
-
-export const runAntiSpoof = async ({ imageBase64 }) => {
-  const res = await fetch(`${BACKEND_URL}/api/v1/identity/liveness`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ img: ensureDataUrl(imageBase64) }),
-  });
-  if (!res.ok) throw new Error(`Anti-spoof failed: ${res.status}`);
-  return res.json();
-};
-
-export const runBodyTypeDetect = async ({ imageBase64 }) => {
-  const res = await fetch(`${BACKEND_URL}/api/v1/identity/body-type`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ img: ensureDataUrl(imageBase64) }),
-  });
-  if (!res.ok) throw new Error(`Body-type detect failed: ${res.status}`);
-  return res.json();
-};
-
-export const maskAadhaarImage = async ({ imageBase64 }) => {
-  const res = await fetch(`${BACKEND_URL}/api/v1/identity/aadhaar-mask`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ img: ensureDataUrl(imageBase64) }),
-  });
-  if (!res.ok) throw new Error(`Aadhaar mask failed: ${res.status}`);
-  return res.json();
 };

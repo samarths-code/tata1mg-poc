@@ -1,25 +1,17 @@
 {
-  "name": "video-mer",
+  "name": "Appolo-hsptls",
   "version": "1.0.0",
   "private": true,
   "homepage": "https://vkyc-demo.videosdk.live",
   "dependencies": {
-    "@headlessui/react": "^1.7.7",
     "@heroicons/react": "^2.0.13",
-    "@popperjs/core": "^2.11.7",
-    "@videosdk.live/react-sdk": "^0.12.5",
-    "@videosdk.live/videosdk-media-processor-web": "^0.0.12",
-    "jspdf": "^4.2.1",
-    "lottie-react": "^2.3.1",
+    "@videosdk.live/react-sdk": "^0.13.5",
+    "@videosdk.live/videosdk-virtual-background-web": "^0.1.3",
     "react": "^18.2.0",
     "react-cropper": "^2.1.8",
     "react-dom": "^18.2.0",
-    "react-player": "^2.11.0",
-    "react-responsive": "^9.0.2",
     "react-scripts": "^5.0.1",
     "react-toastify": "^9.1.1",
-    "uuid": "^11.1.0",
-    "web-vitals": "^3.1.1",
     "zustand": "^5.0.14"
   },
   "devDependencies": {

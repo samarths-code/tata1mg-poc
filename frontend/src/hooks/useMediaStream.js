@@ -1,85 +1,74 @@
 import { createCameraVideoTrack, createMicrophoneAudioTrack } from "@videosdk.live/react-sdk";
-import { useMeetingAppContext } from "../context/MeetingAppContext";
-import { useEffect, useRef } from "react";
+import { useCallback } from "react";
+import { useMeetingStore } from "../store/meetingStore";
+import {
+  applyVirtualBackground,
+  isVirtualBackgroundRunning,
+  stopVirtualBackground,
+} from "../lib/virtualBackground";
+import { trackMedia } from "../lib/mediaTracks";
 
-const useMediaStream = () => {
-  const {
-    selectedWebcamDevice,
-    selectedWebcam,
-    webCamResolution,
-    videoProcessor,
-    allowedVirtualBackground,
-  } = useMeetingAppContext();
+// Single source of truth for every camera/mic track in the app. The pre-call
+// preview track IS the track published into the meeting, so both use these.
+export const VIDEO_TRACK_CONFIG = {
+  encoderConfig: "h480p_w640p",
+  optimizationMode: "motion",
+  multiStream: false,
+};
+export const AUDIO_TRACK_CONFIG = { encoderConfig: "speech_standard" };
 
-  const webcamResolutionRef = useRef();
+const AUDIO_TIMEOUT_MS = 10000;
 
-  useEffect(() => {
-    webcamResolutionRef.current = webCamResolution;
-  }, [webCamResolution]);
+// Camera track (480p, single layer). For the agent, the chosen virtual
+// background is applied on top, so preview / in-call / re-enable all match.
+export async function createVideoTrack(cameraId) {
+  try {
+    const track = trackMedia(
+      await createCameraVideoTrack({ cameraId: cameraId || undefined, ...VIDEO_TRACK_CONFIG })
+    );
+    if (!track) return null;
 
-  const getVideoTrack = async ({
-    webcamId,
-    useVirtualBackground,
-    encoderConfig,
-    facingMode,
-  }) => {
-    try {
-      const track = await createCameraVideoTrack({
-        cameraId: webcamId ? webcamId : selectedWebcam.id,
-        encoderConfig: encoderConfig
-          ? encoderConfig
-          : webcamResolutionRef.current,
-        facingMode: facingMode,
-        optimizationMode: "motion",
-        multiStream: false,
-      });
-      if (allowedVirtualBackground) {
-        if (useVirtualBackground) {
-          if (!videoProcessor.ready) {
-            await videoProcessor.init();
-          }
-          try {
-            const processedStream = await videoProcessor.start(track, {
-              type: "image",
-              imageUrl:
-                "https://cdn.videosdk.live/virtual-background/wall-with-pot.jpeg",
-            });
-            return processedStream;
-          } catch (error) {
-            console.log(error);
-          }
-        } else {
-          if (videoProcessor.processorRunning) {
-            videoProcessor.stop();
-          }
-        }
+    if (useMeetingStore.getState().useVirtualBackground) {
+      try {
+        return trackMedia(await applyVirtualBackground(track));
+      } catch (error) {
+        console.warn("Virtual background failed, using plain camera:", error);
       }
-
-      return track;
-    } catch (error) {
-      return null;
+    } else if (isVirtualBackgroundRunning()) {
+      await stopVirtualBackground();
     }
-  };
+    return track;
+  } catch (error) {
+    console.error("createVideoTrack error:", error);
+    return null;
+  }
+}
 
-  const getAudioTrack = async ({micId}) => {
-    try {
-      // Some external USB microphones cause createMicrophoneAudioTrack to hang
-      // indefinitely. Race against a 10-second timeout so the joining flow
-      // always completes — worst case with no audio track.
-      const track = await Promise.race([
-        createMicrophoneAudioTrack({ microphoneId: micId }),
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error("audio track timeout")), 10000)
-        ),
-      ]);
-      return track;
-    } catch(error) {
-      console.error("getAudioTrack error:", error);
-      return null;
-    }
-  };
+// Mic track. Some USB mics make createMicrophoneAudioTrack hang forever, so
+// race a timeout — worst case we continue without audio instead of stalling.
+export async function createAudioTrack(micId) {
+  try {
+    return await Promise.race([
+      createMicrophoneAudioTrack({ microphoneId: micId || undefined, ...AUDIO_TRACK_CONFIG }).then(trackMedia),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("audio track timeout")), AUDIO_TIMEOUT_MS)),
+    ]);
+  } catch (error) {
+    console.error("createAudioTrack error:", error);
+    return null;
+  }
+}
 
-  return { getVideoTrack , getAudioTrack };
+// Hook wrapper kept for existing call sites; falls back to the selected devices.
+const useMediaStream = () => {
+  const getVideoTrack = useCallback(
+    ({ webcamId } = {}) => createVideoTrack(webcamId || useMeetingStore.getState().selectedWebcam?.id),
+    []
+  );
+  const getAudioTrack = useCallback(
+    ({ micId } = {}) => createAudioTrack(micId || useMeetingStore.getState().selectedMicrophone?.id),
+    []
+  );
+  return { getVideoTrack, getAudioTrack };
 };
 
 export default useMediaStream;

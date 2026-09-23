@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Dialog, Transition } from "@headlessui/react";
+import { Dialog, Transition } from "../lib/headless";
 import { Fragment } from "react";
 import { Cropper } from "react-cropper";
 import "cropperjs/dist/cropper.css";

@@ -1,11 +1,6 @@
 import { XMarkIcon } from "@heroicons/react/24/outline";
 
-const STEPS = [
-  { id: 1, label: "Connection Verification" },
-  { id: 2, label: "Identity Verification" },
-  { id: 3, label: "Face Match" },
-  { id: 4, label: "BMI Detection" },
-];
+const STEPS = [{ id: 1, label: "Connection Verification" }];
 
 export default function VerificationPendingModal({ completedSteps = [], onLeaveAnyway, onClose }) {
   const pending = STEPS.filter((s) => !completedSteps.includes(s.id));

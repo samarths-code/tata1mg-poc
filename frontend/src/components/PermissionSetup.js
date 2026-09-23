@@ -92,7 +92,7 @@ function permissionErrMsg(errorName, isLocation = false) {
     : "Could not access device. Check it is connected and not blocked.";
 }
 
-export default function PermissionSetup({ onDone }) {
+export default function PermissionSetup({ onDone, audioOnly = false }) {
   const [camera,   setCamera]   = useState(STATUS.IDLE);
   const [mic,      setMic]      = useState(STATUS.IDLE);
   const [speaker,  setSpeaker]  = useState(STATUS.IDLE);
@@ -104,7 +104,7 @@ export default function PermissionSetup({ onDone }) {
 
   // Camera + mic are required; location is requested but non-blocking
   const criticalDone =
-    camera === STATUS.GRANTED &&
+    (audioOnly || camera === STATUS.GRANTED) &&
     mic    === STATUS.GRANTED;
 
   useEffect(() => {
@@ -121,6 +121,7 @@ export default function PermissionSetup({ onDone }) {
       ]);
 
     setCameraError(null);
+    if (!audioOnly) {
     setCamera(STATUS.CHECKING);
     try {
       const stream = await withTimeout(navigator.mediaDevices.getUserMedia({ video: true }));
@@ -129,6 +130,7 @@ export default function PermissionSetup({ onDone }) {
     } catch (err) {
       setCamera(STATUS.DENIED);
       setCameraError(err?.message === "timeout" ? "timeout" : (err?.name || "unknown"));
+    }
     }
 
     setMicError(null);
@@ -191,7 +193,7 @@ export default function PermissionSetup({ onDone }) {
             </button>
           </div>
           <p className="text-xs text-[#919093] leading-4">
-            Please allow the following permissions to join your video Application smoothly.
+            Please allow the following permissions to join your {audioOnly ? "audio" : "video"} Application smoothly.
           </p>
         </div>
 
@@ -200,13 +202,15 @@ export default function PermissionSetup({ onDone }) {
 
         {/* Permission list */}
         <div className="px-5 py-4 space-y-3 overflow-y-auto">
-          <PermissionRow
-            icon={CameraIcon}
-            label="Camera"
-            detail="Required for video Application with the agent."
-            status={camera}
-            onRetry={runChecks}
-          />
+          {!audioOnly && (
+            <PermissionRow
+              icon={CameraIcon}
+              label="Camera"
+              detail="Required for video Application with the doctor."
+              status={camera}
+              onRetry={runChecks}
+            />
+          )}
           <PermissionRow
             icon={MicIcon}
             label="Microphone"
@@ -217,7 +221,7 @@ export default function PermissionSetup({ onDone }) {
           <PermissionRow
             icon={VolumeIcon}
             label="Speaker / Sound"
-            detail="Required to hear the agent clearly during the Application."
+            detail="Required to hear the doctor clearly during the Application."
             status={speaker}
           />
           <PermissionRow
@@ -260,7 +264,7 @@ export default function PermissionSetup({ onDone }) {
             >
               {criticalDone
                 ? "Continue to Call"
-                : camera === STATUS.CHECKING || mic === STATUS.CHECKING || location === STATUS.CHECKING
+                : (!audioOnly && camera === STATUS.CHECKING) || mic === STATUS.CHECKING || location === STATUS.CHECKING
                 ? "Checking…"
                 : "Allow permissions to continue"}
               <ChevronRightIcon className="w-4 h-4" />

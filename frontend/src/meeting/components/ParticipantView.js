@@ -3,19 +3,13 @@ import { useMeeting } from "@videosdk.live/react-sdk";
 import { MemoizedParticipantGrid } from "../../components/ParticipantGrid";
 import PipLayout from "../../components/PipLayout";
 
-function ParticipantsViewer({ isPresenting, sideBarMode, statusMessage }) {
+function ParticipantsViewer({ statusMessage }) {
   const {
     participants,
     pinnedParticipants,
     activeSpeakerId,
     localParticipant,
-    localScreenShareOn,
-    presenterId,
   } = useMeeting();
-
-  const isMobile = window.matchMedia(
-    "only screen and (max-width: 768px)"
-  ).matches;
 
   const participantIds = useMemo(() => {
     const isRecorder = (id) =>
@@ -40,7 +34,7 @@ function ParticipantsViewer({ isPresenting, sideBarMode, statusMessage }) {
       localParticipant.id,
       ...pinnedParticipantId,
       ...regularParticipantIds,
-    ].slice(0, isPresenting ? (isMobile ? 2 : 6) : 16);
+    ].slice(0, 16);
 
     if (activeSpeakerId) {
       if (!ids.includes(activeSpeakerId)) {
@@ -52,17 +46,11 @@ function ParticipantsViewer({ isPresenting, sideBarMode, statusMessage }) {
     participants,
     activeSpeakerId,
     pinnedParticipants,
-    presenterId,
-    localScreenShareOn,
   ]);
 
   if (participantIds.length > 2) {
     return (
-      <MemoizedParticipantGrid
-        participantIds={participantIds}
-        isPresenting={isPresenting}
-        sideBarMode={sideBarMode}
-      />
+      <MemoizedParticipantGrid participantIds={participantIds} />
     );
   }
   return <PipLayout participantIds={participantIds} statusMessage={statusMessage} />;
@@ -71,11 +59,7 @@ function ParticipantsViewer({ isPresenting, sideBarMode, statusMessage }) {
 const MemorizedParticipantView = React.memo(
   ParticipantsViewer,
   (prevProps, nextProps) => {
-    return (
-      prevProps.sideBarMode === nextProps.sideBarMode &&
-      prevProps.isPresenting === nextProps.isPresenting &&
-      prevProps.statusMessage === nextProps.statusMessage
-    );
+    return prevProps.statusMessage === nextProps.statusMessage;
   }
 );
 

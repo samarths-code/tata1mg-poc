@@ -1,4 +1,4 @@
-import { Dialog, Transition } from "@headlessui/react";
+import { Dialog, Transition } from "../lib/headless";
 import { Fragment } from "react";
 
 const ConfirmBox = ({

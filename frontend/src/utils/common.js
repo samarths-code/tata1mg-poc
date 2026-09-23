@@ -46,14 +46,6 @@ export const nameTructed = (name, tructedLength) => {
   }
 };
 
-export const sideBarModes = {
-  PARTICIPANTS: "PARTICIPANTS",
-  CHAT: "CHAT",
-  IMAGE_PANEL: "IMAGE PREVIEW PANEL",
-  DOCUMENT_PANEL: "DOCUMENT PANEL",
-  LAYOUT: "LAYOUT",
-};
-
 export const meetingModes = {
   SCREEN_SHARE: "SCREEN_SHARE",
   SEND_AND_RECV: "SEND_AND_RECV",

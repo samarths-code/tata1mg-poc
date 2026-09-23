@@ -43,29 +43,11 @@ function GreenBadge({ children }) {
   );
 }
 
-function RedBadge({ children }) {
-  return (
-    <span className="px-[6px] py-[2px] rounded-[12px] text-xs font-normal text-[#fecaca] bg-[rgba(153,27,27,0.1)] border border-[rgba(153,27,27,0.5)]">
-      {children}
-    </span>
-  );
-}
-
-function AmberBadge({ children }) {
-  return (
-    <span className="px-[6px] py-[2px] rounded-[12px] text-xs font-normal text-[#fde68a] bg-[rgba(146,64,14,0.1)] border border-[rgba(146,64,14,0.5)]">
-      {children}
-    </span>
-  );
-}
-
-function MetricRow({ label, value, badge, error, warn }) {
+function MetricRow({ label, value, badge }) {
   return (
     <div className="flex items-start justify-between gap-6 py-2 border-b border-[#303033] last:border-0">
       <span className="text-[#919093] text-sm shrink-0">{label}</span>
       {badge ? <GreenBadge>{value}</GreenBadge>
-        : error ? <RedBadge>{value}</RedBadge>
-        : warn ? <AmberBadge>{value}</AmberBadge>
         : <span className="text-white text-sm text-right break-words min-w-0 max-w-[60%]">{value}</span>}
     </div>
   );
@@ -93,7 +75,7 @@ function DeviceList({ devices = [] }) {
 
 /* ───────────────────────── Connection Details ───────────────────────── */
 
-export function ConnectionDetailsPanel({ onClose, deviceInfo, geoData, geoFailed, onRequestLocation, onNextStep }) {
+export function ConnectionDetailsPanel({ onClose, deviceInfo, geoData, geoFailed, onRequestLocation, onNextStep, hideCameras = false }) {
   const [requesting, setRequesting] = useState(false);
 
   const cameras = deviceInfo?.cameras || [];
@@ -123,12 +105,12 @@ export function ConnectionDetailsPanel({ onClose, deviceInfo, geoData, geoFailed
             onClick={onNextStep}
             className="ml-auto px-5 py-2.5 rounded-lg text-sm font-semibold text-white bg-[#ff6f61] hover:bg-[#e85e51] transition-colors"
           >
-            Next Step
+            Mark Verified
           </button>
         )
       }
     >
-      <Card title="Camera Devices"><DeviceList devices={cameras} /></Card>
+      {!hideCameras && <Card title="Camera Devices"><DeviceList devices={cameras} /></Card>}
       <Card title="Microphones"><DeviceList devices={mics} /></Card>
       <Card title="Audio Output"><DeviceList devices={outputs} /></Card>
 
@@ -174,340 +156,6 @@ export function ConnectionDetailsPanel({ onClose, deviceInfo, geoData, geoFailed
             </button>
           </div>
         )}
-      </Card>
-    </DrawerShell>
-  );
-}
-
-/* ───────────────────────── Hoverable photo with Retake/Crop actions ──────── */
-
-function HoverableImage({ src, alt, label, className, onRetake, onCrop, isCompleted = false }) {
-  const [hovered, setHovered] = useState(false);
-  return (
-    <div
-      className={`relative overflow-hidden rounded-lg border border-[#303033] ${isCompleted ? "" : "cursor-pointer"} ${className}`}
-      onMouseEnter={() => !isCompleted && setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-    >
-      <img src={src} alt={alt} className="w-full h-full object-cover" />
-      {label && !hovered && (
-        <span className="absolute bottom-1.5 left-1.5 text-[10px] font-medium text-white bg-black/60 px-1.5 py-0.5 rounded">
-          {label}
-        </span>
-      )}
-      {hovered && !isCompleted && (
-        <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center gap-2">
-          {label && <span className="text-[10px] font-semibold text-[#919093] uppercase tracking-wider">{label}</span>}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={onRetake}
-              className="bg-[rgba(255,255,255,0.02)] border border-[rgba(255,255,255,0.05)] px-2 py-1 rounded-[6px] text-xs font-medium text-white hover:bg-[rgba(255,255,255,0.1)] transition-colors"
-            >
-              Retake
-            </button>
-            <button
-              onClick={onCrop}
-              className="bg-[rgba(255,255,255,0.02)] border border-[rgba(255,255,255,0.05)] px-2 py-1 rounded-[6px] text-xs font-medium text-white hover:bg-[rgba(255,255,255,0.1)] transition-colors"
-            >
-              Crop
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ───────────────────────── Identity Verification ───────────────────────── */
-
-export function IdentityVerificationPanel({
-  onClose, frontImage, backImage, ocrResult, captureDevice, verifiedAt,
-  onRetake, onRetakeBack, onApprove, onCropFront, onCropBack, isCompleted = false,
-}) {
-  const ocrOk = ocrResult && !ocrResult.error && !ocrResult.loading;
-  const f = ocrResult?.fields || {};
-
-  // Confidence: VideoSDK may return 0–1 or 0–100; normalise to percent
-  const rawConf = f.confidence ?? f.accuracy ?? f.score ?? f.confidenceScore;
-  const confPct = rawConf != null ? Math.round(rawConf <= 1 ? rawConf * 100 : rawConf) : null;
-
-  // Extracted personal fields — show whichever the API returned
-  const extracted = [
-    { label: "Name",          value: f.name },
-    { label: "Date of Birth", value: f.dob || f.dateOfBirth || f.date_of_birth },
-    { label: "Gender",        value: f.gender },
-    { label: "ID Number",     value: f.idNumber || f.uid || f.aadhaarNumber },
-    { label: "Address",       value: f.address },
-  ].filter((row) => row.value);
-
-  return (
-    <DrawerShell
-      title="Identity Verification"
-      subtitle="Review and verify the captured client document before proceeding with the Application."
-      onClose={onClose}
-      footer={
-        !isCompleted && (
-          <>
-            <button
-              onClick={onRetake}
-              className="px-4 py-2.5 rounded-lg text-sm font-medium text-white bg-[#303033] hover:bg-[#3a3a3d] transition-colors"
-            >
-              Retake Document
-            </button>
-            <button
-              onClick={onApprove}
-              disabled={ocrResult?.loading}
-              className="ml-auto px-5 py-2.5 rounded-lg text-sm font-semibold text-white bg-[#ff6f61] hover:bg-[#e85e51] disabled:opacity-40 transition-colors"
-            >
-              Approve Document
-            </button>
-          </>
-        )
-      }
-    >
-      <Card title="Verification Summary">
-        <div className="flex flex-col gap-2">
-          {frontImage && (
-            <HoverableImage
-              src={frontImage} alt="Document front" label="Front"
-              className="h-[100px] w-[186px] mx-auto"
-              onRetake={onRetake}
-              onCrop={() => onCropFront?.(frontImage)}
-              isCompleted={isCompleted}
-            />
-          )}
-          {backImage && (
-            <HoverableImage
-              src={backImage} alt="Document back" label="Back"
-              className="h-[100px] w-[186px] mx-auto"
-              onRetake={onRetakeBack ?? onRetake}
-              onCrop={() => onCropBack?.(backImage)}
-              isCompleted={isCompleted}
-            />
-          )}
-          {!frontImage && !backImage && <p className="text-[#77777a] text-xs italic">No document captured yet</p>}
-        </div>
-        <div className="mt-3">
-          <MetricRow
-            label="OCR Detection"
-            value={
-              ocrResult?.loading ? "Running…"
-              : ocrOk ? "Successful"
-              : ocrResult?.error ? (ocrResult.message || "Failed")
-              : "—"
-            }
-            badge={ocrOk}
-            error={!ocrOk && !ocrResult?.loading && !!ocrResult?.error}
-          />
-          {confPct != null && (
-            <MetricRow label="Confidence" value={`${confPct}%`} badge={ocrOk} />
-          )}
-          <MetricRow label="Document Type" value={f.idType || "Aadhaar Card"} />
-          <MetricRow label="Verification Time" value={verifiedAt || "—"} />
-        </div>
-      </Card>
-
-      {ocrOk && extracted.length > 0 && (
-        <Card title="Extracted Information">
-          {extracted.map(({ label, value }) => (
-            <MetricRow key={label} label={label} value={String(value)} />
-          ))}
-        </Card>
-      )}
-
-      <Card title="Capture Details">
-        <MetricRow label="Capture Device" value={captureDevice || "—"} />
-      </Card>
-    </DrawerShell>
-  );
-}
-
-/* ───────────────────────── Face Verification ───────────────────────── */
-
-export function FaceVerificationPanel({
-  onClose, photo, faceMatchResult, spoofResult, captureDevice, verifiedAt,
-  patientName, consultationId, onRetake, onApprove, onCropPhoto, isCompleted = false,
-}) {
-  const matched = faceMatchResult && !faceMatchResult.loading && !faceMatchResult.error &&
-    (faceMatchResult.matched ?? faceMatchResult.match);
-  const live = spoofResult && !spoofResult.loading && !spoofResult.error && spoofResult.isReal;
-
-  // Face match score: 0–1 → percent
-  const rawScore = faceMatchResult?.score ?? faceMatchResult?.similarity ?? faceMatchResult?.confidence;
-  const matchPct = rawScore != null ? Math.round(rawScore <= 1 ? rawScore * 100 : rawScore) : null;
-
-  // Liveness confidence: 0–1 or 0–100 → percent
-  const rawLiveness = spoofResult?.confidence ?? spoofResult?.accuracy;
-  const livenessPct = rawLiveness != null ? Math.round(rawLiveness <= 1 ? rawLiveness * 100 : rawLiveness) : null;
-
-  const faceMatchLoading = faceMatchResult?.loading;
-  const spoofLoading = spoofResult?.loading;
-
-  return (
-    <DrawerShell
-      title="Face Verification"
-      subtitle="Review and verify the captured client photo before starting the Application."
-      onClose={onClose}
-      footer={
-        !isCompleted && (
-          <>
-            <button
-              onClick={onRetake}
-              className="px-4 py-2.5 rounded-lg text-sm font-medium text-white bg-[#303033] hover:bg-[#3a3a3d] transition-colors"
-            >
-              Retake Photo
-            </button>
-            <button
-              onClick={onApprove}
-              disabled={!matched}
-              className="ml-auto px-5 py-2.5 rounded-lg text-sm font-semibold text-white bg-[#ff6f61] hover:bg-[#e85e51] disabled:opacity-40 transition-colors"
-            >
-              Approve Photo
-            </button>
-          </>
-        )
-      }
-    >
-      <Card title="Verification Summary">
-        {photo ? (
-          <HoverableImage
-            src={photo} alt="Captured" className="max-h-40"
-            onRetake={onRetake}
-            onCrop={() => onCropPhoto?.(photo)}
-            isCompleted={isCompleted}
-          />
-        ) : (
-          <p className="text-[#77777a] text-xs italic">No photo captured yet</p>
-        )}
-        <div className="mt-3">
-          <MetricRow
-            label="Face Match Score"
-            value={
-              faceMatchLoading ? "Checking…"
-              : matched && matchPct != null ? `${matchPct}% Match`
-              : matched ? "Matched"
-              : "—"
-            }
-            badge={matched}
-          />
-          <MetricRow
-            label="Liveness Check"
-            value={
-              spoofLoading ? "Checking…"
-              : live && livenessPct != null ? `Passed · ${livenessPct}% confidence`
-              : live ? "Passed"
-              : spoofResult && !spoofLoading ? "Failed"
-              : "—"
-            }
-            badge={live}
-          />
-          <MetricRow label="Verification Time" value={verifiedAt || "—"} />
-        </div>
-      </Card>
-
-      <Card title="Capture Details">
-        <MetricRow label="Capture Device" value={captureDevice || "—"} />
-      </Card>
-
-      <Card title="Client Information">
-        <MetricRow label="Client Name" value={patientName || "—"} />
-        <MetricRow label="Application ID" value={consultationId || "—"} />
-      </Card>
-    </DrawerShell>
-  );
-}
-
-/* ───────────────────────── BMI / Body Type Detection ───────────────────────── */
-
-const capitalize = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
-
-export function BodyTypePanel({
-  onClose, photo, bodyTypeResult, captureDevice, verifiedAt,
-  patientName, consultationId, onRetake, onApprove, onCropPhoto, isCompleted = false,
-}) {
-  const loading = bodyTypeResult?.loading;
-  const failed = bodyTypeResult?.error;
-  const r = bodyTypeResult && !loading && !failed ? bodyTypeResult : null;
-
-  const category = r?.category ? capitalize(r.category) : null;
-  const isNormal = r?.category && !["overweight", "underweight"].includes(r.category.toLowerCase());
-  const confPct = r?.confidence_pct != null
-    ? Math.round(r.confidence_pct <= 1 ? r.confidence_pct * 100 : r.confidence_pct)
-    : null;
-  const confLabel = r?.confidence ? capitalize(r.confidence) : null;
-
-  return (
-    <DrawerShell
-      title="BMI Detection"
-      subtitle="AI-based visual body-type estimate from the client photo. Review the result before completing the Application."
-      onClose={onClose}
-      footer={
-        !isCompleted && (
-          <>
-            <button
-              onClick={onRetake}
-              className="px-4 py-2.5 rounded-lg text-sm font-medium text-white bg-[#303033] hover:bg-[#3a3a3d] transition-colors"
-            >
-              Retake Photo
-            </button>
-            <button
-              onClick={onApprove}
-              disabled={loading}
-              className="ml-auto px-5 py-2.5 rounded-lg text-sm font-semibold text-white bg-[#ff6f61] hover:bg-[#e85e51] disabled:opacity-40 transition-colors"
-            >
-              Approve Result
-            </button>
-          </>
-        )
-      }
-    >
-      <Card title="Body Type Analysis">
-        {photo ? (
-          <HoverableImage
-            src={photo} alt="Body analysis" className="max-h-40"
-            onRetake={onRetake}
-            onCrop={() => onCropPhoto?.(photo)}
-            isCompleted={isCompleted}
-          />
-        ) : (
-          <p className="text-[#77777a] text-xs italic">No photo captured yet</p>
-        )}
-        <div className="mt-3">
-          <MetricRow
-            label="Category"
-            value={
-              loading ? "Analyzing…"
-              : category ? category
-              : failed ? "Detection failed"
-              : "—"
-            }
-            badge={!!category && isNormal}
-            warn={!!category && !isNormal}
-            error={!!failed}
-          />
-          <MetricRow
-            label="Confidence"
-            value={
-              loading ? "Analyzing…"
-              : confPct != null ? `${confPct}%${confLabel ? ` · ${confLabel}` : ""}`
-              : confLabel || "—"
-            }
-          />
-          {r?.reason && <MetricRow label="Observation" value={r.reason} />}
-          <MetricRow label="Verification Time" value={verifiedAt || "—"} />
-        </div>
-        {r?.disclaimer && (
-          <p className="mt-3 text-[#77777a] text-[11px] italic leading-4">{r.disclaimer}</p>
-        )}
-      </Card>
-
-      <Card title="Capture Details">
-        <MetricRow label="Capture Device" value={captureDevice || "—"} />
-      </Card>
-
-      <Card title="Client Information">
-        <MetricRow label="Client Name" value={patientName || "—"} />
-        <MetricRow label="Application ID" value={consultationId || "—"} />
       </Card>
     </DrawerShell>
   );

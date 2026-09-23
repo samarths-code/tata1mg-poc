@@ -1,60 +1,10 @@
-import React, { useState } from "react";
+import React from "react";
 import { CheckCircleIcon } from "@heroicons/react/24/solid";
-import { StarIcon as StarSolid } from "@heroicons/react/24/solid";
-import { StarIcon as StarOutline } from "@heroicons/react/24/outline";
 import { useMeetingStore } from "../../store/meetingStore";
-
-const STAR_LABELS = ["", "Poor", "Fair", "Good", "Very Good", "Excellent"];
-
-function StarRating() {
-  const [rating, setRating] = useState(0);
-  const [hovered, setHovered] = useState(0);
-  const active = hovered || rating;
-
-  return (
-    <div className="bg-[#f5f5f5] border border-[rgba(0,0,0,0.05)] rounded-[24px] w-[400px] max-w-[calc(100vw-48px)] overflow-hidden">
-      <div className="px-5 pt-5 pb-0 flex items-start justify-between">
-        <div>
-          <h3 className="text-black text-lg font-semibold leading-[26px]">
-            How was your experience?
-          </h3>
-          <p className="text-[#919093] text-xs leading-4 mt-2">
-            Your feedback helps us improve.
-          </p>
-        </div>
-      </div>
-
-      <div className="px-5 pt-4 pb-0 flex items-center justify-center gap-2">
-        {[1, 2, 3, 4, 5].map((star) => (
-          <button
-            key={star}
-            onMouseEnter={() => setHovered(star)}
-            onMouseLeave={() => setHovered(0)}
-            onClick={() => setRating(star)}
-            className="w-10 h-10 flex items-center justify-center transition-transform hover:scale-110 focus:outline-none"
-          >
-            {star <= active ? (
-              <StarSolid className="w-8 h-8 text-[#FBBF24]" />
-            ) : (
-              <StarOutline className="w-8 h-8 text-[#C7C6C9]" />
-            )}
-          </button>
-        ))}
-      </div>
-
-      {/* Fixed-height label row prevents layout shift on star click */}
-      <div className="h-8 flex items-center justify-center">
-        {rating > 0 && (
-          <p className="text-xs text-[#919093]">{STAR_LABELS[rating]}</p>
-        )}
-      </div>
-    </div>
-  );
-}
 
 export function LeaveScreen({ participantName, onRejoin, asBackground = false }) {
   const isDoctor = useMeetingStore((s) => s.isDoctor);
-  const displayName = participantName || (isDoctor ? "Agent" : "Guest");
+  const displayName = participantName || (isDoctor ? "Doctor" : "Guest");
 
   // Rejoin the same session. Prefer an in-app callback (no page reload, so no
   // "Leave site?" prompt). Fall back to a full navigation with the preserved
@@ -104,9 +54,6 @@ export function LeaveScreen({ participantName, onRejoin, asBackground = false })
             </button>
           )}
         </div>
-
-        {/* Rating card */}
-        <StarRating />
 
       </div>
     </div>

@@ -4,9 +4,10 @@ import { LeaveScreen } from "./components/screens/LeaveScreen";
 import { JoiningScreen } from "./components/screens/JoiningScreen";
 import { MeetingContainer } from "./meeting/MeetingContainer";
 import { MeetingAppProvider } from "./context/MeetingAppContext";
-import CreateMeetingPage from "./components/CreateMeetingPage";
 import { getToken, getSessionCredentials, getSessionParticipantId } from "./api";
-import { toast } from "react-toastify";
+import { ToastContainer, toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
+import { releaseAllMedia } from "./lib/mediaTracks";
 
 class MeetingErrorBoundary extends React.Component {
   state = { error: null };
@@ -48,6 +49,8 @@ const App = () => {
   const urlToken         = searchParams.get("token")         || "";
   const urlParticipantId = searchParams.get("participantId") || "";
   const urlMeetingTitle  = searchParams.get("meetingTitle")  || "";
+  // Set by the create-meeting page. Audio-only calls never touch the camera.
+  const isAudioOnly      = searchParams.get("callType") === "audio";
 
   const rawMode = urlMode.toUpperCase();
   const participantMode = rawMode === "PATIENT" ? "CUSTOMER" : rawMode || undefined;
@@ -61,7 +64,7 @@ const App = () => {
   // Friendly default display name derived from role — never exposes the raw
   // mode value (Doctor/Patient) as the participant's name.
   const defaultName = rawMode
-    ? (rawMode === "DOCTOR" ? "Agent" : "Client")
+    ? (rawMode === "DOCTOR" ? "Doctor" : "Patient")
     : "";
 
   // Pre-populate token and participantId from URL when present (pre-auth flow).
@@ -71,7 +74,7 @@ const App = () => {
   const [participantName, setParticipantName] = useState(defaultName);
   const [leaveScreenName, setLeaveScreenName] = useState(defaultName);
   const [micOn, setMicOn]               = useState(true);
-  const [webcamOn, setWebcamOn]         = useState(true);
+  const [webcamOn, setWebcamOn]         = useState(!isAudioOnly);
   const [customAudioStream, setCustomAudioStream] = useState(null);
   const [customVideoStream, setCustomVideoStream] = useState(null);
   const [isMeetingStarted, setMeetingStarted]     = useState(false);
@@ -82,9 +85,19 @@ const App = () => {
 
   const isMobile = window.matchMedia("only screen and (max-width: 768px)").matches;
 
+  // Closing/refreshing the tab mid-call: free camera + mic immediately.
   useEffect(() => {
-    if (isMobile) window.onbeforeunload = () => "Are you sure you want to exit?";
-  }, [isMobile]);
+    const onPageHide = () => { releaseAllMedia(); };
+    window.addEventListener("pagehide", onPageHide);
+    return () => window.removeEventListener("pagehide", onPageHide);
+  }, []);
+
+  // Mobile exit confirmation only while the call is live.
+  useEffect(() => {
+    if (!isMobile || !isMeetingStarted) return;
+    window.onbeforeunload = () => "Are you sure you want to exit?";
+    return () => { window.onbeforeunload = null; };
+  }, [isMobile, isMeetingStarted]);
 
   useEffect(() => {
     // Skip backend call when token was embedded in the URL.
@@ -141,7 +154,7 @@ const App = () => {
     setMeetingId(mId);
     setParticipantName((prev) => prev || leaveScreenName || defaultName);
     setMicOn(true);
-    setWebcamOn(true);
+    setWebcamOn(!isAudioOnly);
     setSpekerOn(true);
     // The previous session's custom tracks are now ended — drop them so the SDK
     // acquires fresh camera/mic tracks on rejoin (otherwise: error 3031).
@@ -176,6 +189,7 @@ const App = () => {
       initialSpeakerOn={speakerOn}
       participantMode={participantMode}
       caseId={caseId}
+      isAudioOnly={isAudioOnly}
     >
       {isMeetingLeft ? (
         <LeaveScreen participantName={leaveScreenName} onRejoin={handleRejoin} />
@@ -213,6 +227,9 @@ const App = () => {
               token={token}
               credentialError={credentialError}
               meetingTitle={urlMeetingTitle}
+              isAudioOnly={isAudioOnly}
+              permissionsReady
+              inCall={isMeetingStarted}
             />
             )}
           </div>
@@ -223,11 +240,17 @@ const App = () => {
                 config={{
                   meetingId,
                   micEnabled: micOn,
-                  webcamEnabled: webcamOn,
+                  webcamEnabled: webcamOn && !isAudioOnly,
                   name: participantName || "Guest",
                   participantId: participantId || (urlToken ? undefined : getSessionParticipantId()),
-                  multiStream: true,
-                  customCameraVideoTrack: customVideoStream,
+                  // Single layer, same as the 480p custom tracks — simulcast
+                  // layers waste uplink in a 1:1 call on a weak network.
+                  multiStream: false,
+                  // All our tracks are VP8. With switching on, the SDK may
+                  // replace the published custom track with a fresh camera
+                  // (losing the exact pre-call track / virtual background).
+                  codecSwitchEnabled: false,
+                  customCameraVideoTrack: isAudioOnly ? undefined : customVideoStream,
                   customMicrophoneAudioTrack: customAudioStream,
                 }}
                 token={token}
@@ -235,6 +258,7 @@ const App = () => {
                 joinWithoutUserInteraction={true}
               >
                 <MeetingContainer
+                  precallTracks={{ video: !!customVideoStream && !isAudioOnly, audio: !!customAudioStream }}
                   onMeetingLeave={() => {
                     // Keep the original query params (meetingId/mode/token/…) so the
                     // leave screen can offer a Rejoin back into the same session.
@@ -246,6 +270,9 @@ const App = () => {
                     setParticipantName("");
                     setWebcamOn(false);
                     setMicOn(false);
+                    // Already stopped by MeetingContainer — don't hand ended tracks to a rejoin.
+                    setCustomAudioStream(null);
+                    setCustomVideoStream(null);
                     setSpekerOn(false);
                     setMeetingStarted(false);
                     setIsMeetingLeft(true);
@@ -260,18 +287,33 @@ const App = () => {
   );
 };
 
-const AppRouter = () => {
-  const path = window.location.pathname;
-  if (path === "/create-meeting") return <CreateMeetingPage />;
-  if (path === "/thank-you")
-    return <LeaveScreen setIsMeetingLeft={() => { window.location.href = "/"; }} />;
+const ToastBar = () => (
+  <ToastContainer
+    toastClassName={() =>
+      "relative flex items-center gap-3 py-3 px-4 rounded-xl overflow-hidden cursor-pointer " +
+      "bg-[#1e2026] border border-white/[0.07] shadow-2xl"
+    }
+    bodyClassName={() => "text-white text-sm font-normal leading-5 flex-1"}
+    position="bottom-left"
+    autoClose={4000}
+    hideProgressBar={false}
+    progressClassName="bg-[#ff6f61] opacity-30 h-0.5"
+    newestOnTop={false}
+    closeButton={false}
+    closeOnClick
+    rtl={false}
+    pauseOnFocusLoss
+    draggable
+    pauseOnHover
+    theme="dark"
+  />
+);
 
-  // Only show the joining flow when both meetingId and mode are present in the URL.
-  // Any other visit to "/" (direct, bookmark, no params) shows the create-meeting page.
-  const sp = new URLSearchParams(window.location.search);
-  if (!sp.get("meetingId") || !sp.get("mode")) return <CreateMeetingPage />;
+const AppWithToasts = () => (
+  <>
+    <ToastBar />
+    <App />
+  </>
+);
 
-  return <App />;
-};
-
-export default AppRouter;
+export default AppWithToasts;

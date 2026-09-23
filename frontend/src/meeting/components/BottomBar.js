@@ -1,37 +1,18 @@
-import {
-  createCameraVideoTrack,
-  createScreenShareVideoTrack,
-  useMediaDevice,
-  useMeeting,
-  usePubSub,
-} from "@videosdk.live/react-sdk";
+import { useMediaDevice, useMeeting } from "@videosdk.live/react-sdk";
 import React, { Fragment, useEffect, useRef, useState } from "react";
-import {
-  ClipboardIcon,
-  CheckIcon,
-  ChevronUpIcon,
-  EllipsisHorizontalIcon,
-  EllipsisVerticalIcon,
-  ClipboardDocumentListIcon,
-  ComputerDesktopIcon,
-} from "@heroicons/react/24/outline";
-import WebcamOnIcon from "../../icons/Bottombar/WebcamOnIcon";
-import WebcamOffIcon from "../../icons/Bottombar/WebcamOffIcon";
-import ScreenShareIcon from "../../icons/Bottombar/ScreenShareIcon";
-import ParticipantsIcon from "../../icons/Bottombar/ParticipantsIcon";
-import EndIcon from "../../icons/Bottombar/EndIcon";
+import { ChevronUpIcon, ComputerDesktopIcon } from "@heroicons/react/24/outline";
 import useIsTab from "../../hooks/useIsTab";
 import useIsMobile from "../../hooks/useIsMobile";
-import { MobileIconButton } from "../../components/buttons/MobileIconButton";
-import { participantModes, sideBarModes } from "../../utils/common";
-import { Dialog, Popover, Transition } from "@headlessui/react";
+import { participantModes } from "../../utils/common";
+import { Popover, Transition } from "../../lib/headless";
 import { useMeetingAppContext } from "../../context/MeetingAppContext";
-import useMediaStream from "../../hooks/useMediaStream";
 import { toast } from "react-toastify";
 import { nameTructed, trimSnackBarText } from "../../utils/helper";
 import VerificationPendingModal from "../../components/doctor/VerificationPendingModal";
-import SpeakerIcon from "../../icons/Bottombar/SpeakerIcon";
-import SpeakerOffIcon from "../../icons/Bottombar/SpeakerOffIcon";
+import ImageCaptureButton from "../../components/doctor/ImageCaptureButton";
+import NetworkStatsButton from "../../components/doctor/NetworkStatsButton";
+import { stopVirtualBackground } from "../../lib/virtualBackground";
+import { createAudioTrack, createVideoTrack } from "../../hooks/useMediaStream";
 
 // Dark pill-style device button matching Figma design
 function PillBtn({ onToggle, icon: Icon, iconOn, micActive = true, children, disabled }) {
@@ -131,7 +112,12 @@ export const MicBTN = () => {
                   devices={mics}
                   selectedId={selectedMicrophone?.id}
                   label="Microphone"
-                  onSelect={(id) => { setSelectedMicroPhone({ id }); mMeeting.changeMic(id); close(); }}
+                  onSelect={async (id) => {
+                    close();
+                    setSelectedMicroPhone({ id });
+                    const track = await createAudioTrack(id);
+                    if (track) mMeeting.changeMic(track);
+                  }}
                 />
               </Popover.Panel>
             </Transition>
@@ -208,11 +194,11 @@ export const OutputMicBTN = () => {
 export const WebCamBTN = () => {
   const mMeeting = useMeeting();
   const { getCameras } = useMediaDevice();
-  const { selectedWebcam, setSelectedWebcam, isCameraPermissionAllowed } = useMeetingAppContext();
+  const { selectedWebcam, setSelectedWebcam, isCameraPermissionAllowed, isAudioOnly } = useMeetingAppContext();
   const [webcams, setWebcams] = useState([]);
   const localWebcamOn = mMeeting?.localWebcamOn;
 
-  const { getVideoTrack } = useMediaStream();
+  if (isAudioOnly) return null;
 
   // Video SVG icon — swaps to a slashed/muted icon when the camera is off.
   const VideoIcon = () =>
@@ -235,17 +221,11 @@ export const WebCamBTN = () => {
     >
       <button
         onClick={async () => {
-          let track;
-          if (!localWebcamOn) {
-            track = await createCameraVideoTrack({
-              cameraId: selectedWebcam?.id,
-              optimizationMode: "motion",
-              encoderConfig: "h180p_w320p",
-              facingMode: "environment",
-              multiStream: false,
-            });
-          }
+          // Same 480p track (+ agent background) as pre-call and join.
+          const track = localWebcamOn ? undefined : await createVideoTrack(selectedWebcam?.id);
           mMeeting.toggleWebcam(track);
+          // Camera going off — release the background processor too.
+          if (localWebcamOn) stopVirtualBackground();
         }}
         className="flex items-center justify-center p-1 rounded shrink-0"
         disabled={!isCameraPermissionAllowed}
@@ -269,13 +249,11 @@ export const WebCamBTN = () => {
                   selectedId={selectedWebcam?.id}
                   label="Webcam"
                   onSelect={async (id) => {
-                    setSelectedWebcam({ id });
-                    mMeeting.disableWebcam();
-                    setTimeout(async () => {
-                      const track = await createCameraVideoTrack({ cameraId: id, optimizationMode: "motion", multiStream: false });
-                      mMeeting.enableWebcam(track);
-                    }, 500);
                     close();
+                    setSelectedWebcam({ id });
+                    // Swap in place — no disable/enable gap for the other side.
+                    const track = await createVideoTrack(id);
+                    if (track) mMeeting.changeWebcam(track);
                   }}
                 />
               </Popover.Panel>
@@ -299,16 +277,10 @@ export function useCallTimer() {
   return `${mm}:${ss}`;
 }
 
-const STEP_LABELS = {
-  1: "Step 1: Request Location Access",
-  2: "Step 2: Identity Verification",
-  3: "Step 3: Document Capture",
-};
-
 function LeaveBTN({ isDoctor, completedStepsRef, completedSteps, showLeaveModal, setShowLeaveModal }) {
   const { leave, end, localParticipant } = useMeeting();
 
-  const allVerified = !isDoctor || [1, 2, 3, 4].every((s) => completedStepsRef.current.includes(s));
+  const allVerified = !isDoctor || completedStepsRef.current.includes(1);
 
   const performLeave = () => {
     const name = trimSnackBarText(nameTructed(localParticipant.displayName, 15));
@@ -344,81 +316,11 @@ function LeaveBTN({ isDoctor, completedStepsRef, completedSteps, showLeaveModal,
   );
 }
 
-function ScreenShareBTN({ isMobile, isTab }) {
-  const { localScreenShareOn, toggleScreenShare, presenterId } = useMeeting();
-  return isMobile || isTab ? (
-    <MobileIconButton
-      id="screen-share-btn"
-      tooltipTitle={presenterId ? (localScreenShareOn ? "Stop Presenting" : null) : "Present Screen"}
-      buttonText={presenterId ? (localScreenShareOn ? "Stop Presenting" : null) : "Present Screen"}
-      isFocused={localScreenShareOn}
-      Icon={ScreenShareIcon}
-      onClick={async () => {
-        try {
-          const track = await createScreenShareVideoTrack({ optimizationMode: "text", encoderConfig: "h720p_15fps" });
-          toggleScreenShare(track);
-        } catch (err) { console.error("Screen share error:", err); }
-      }}
-      disabled={presenterId ? !localScreenShareOn : isMobile}
-    />
-  ) : null;
-}
-
-function ParticipantsBTN({ isMobile, isTab }) {
-  const { participants } = useMeeting();
-  const { sideBarMode, setSideBarMode } = useMeetingAppContext();
-  return isMobile || isTab ? (
-    <MobileIconButton
-      tooltipTitle="Participants"
-      isFocused={sideBarMode === sideBarModes.PARTICIPANTS}
-      buttonText="Participants"
-      disabledOpacity={1}
-      Icon={ParticipantsIcon}
-      onClick={() => setSideBarMode((s) => s === sideBarModes.PARTICIPANTS ? null : sideBarModes.PARTICIPANTS)}
-      badge={`${new Map(participants)?.size}`}
-    />
-  ) : null;
-}
-
-function DocumentPanelBTN({ isMobile, isTab }) {
-  const { sideBarMode, setSideBarMode } = useMeetingAppContext();
-  return isMobile || isTab ? (
-    <MobileIconButton
-      tooltipTitle="Documents"
-      buttonText="Documents"
-      Icon={ClipboardDocumentListIcon}
-      isFocused={sideBarMode === sideBarModes.DOCUMENT_PANEL}
-      onClick={() => setSideBarMode((s) => s === sideBarModes.DOCUMENT_PANEL ? null : sideBarModes.DOCUMENT_PANEL)}
-    />
-  ) : null;
-}
-
-function MeetingIdCopyBTN() {
-  const { meetingId } = useMeeting();
-  const [isCopied, setIsCopied] = useState(false);
-  return (
-    <div className="flex items-center justify-center">
-      <div className="flex border border-[#303033] p-2 rounded-md items-center justify-center gap-2 bg-[#1b1b1e]">
-        <span className="text-white text-sm font-mono">{meetingId}</span>
-        <button
-          onClick={() => {
-            navigator.clipboard.writeText(meetingId);
-            setIsCopied(true);
-            setTimeout(() => setIsCopied(false), 3000);
-          }}
-        >
-          {isCopied
-            ? <CheckIcon className="h-4 w-4 text-green-400" />
-            : <ClipboardIcon className="h-4 w-4 text-[#919093]" />
-          }
-        </button>
-      </div>
-    </div>
-  );
-}
-
-export function BottomBar({ bottomBarHeight, onShowConnectionDetails, completedSteps = [] }) {
-  const { sideBarMode, setSideBarMode, participantMode } = useMeetingAppContext();
+export function BottomBar({ bottomBarHeight, onShowConnectionDetails, completedSteps = [], customerId = null }) {
+  const { participantMode, isAudioOnly } = useMeetingAppContext((s) => ({
+    participantMode: s.participantMode,
+    isAudioOnly: s.isAudioOnly,
+  }));
 
   const isDoctor =
     participantMode === participantModes.DOCTOR ||
@@ -426,20 +328,8 @@ export function BottomBar({ bottomBarHeight, onShowConnectionDetails, completedS
 
   const isMobile = useIsMobile();
   const isTab = useIsTab();
-  const [open, setOpen] = useState(false);
   const [showLeaveModal, setShowLeaveModal] = useState(false);
   const timer = useCallTimer();
-
-  const [currentStep, setCurrentStep] = useState(null);
-  usePubSub("VERIFICATION_STEP", {
-    onMessageReceived: ({ payload }) => {
-      if (payload?.step != null) setCurrentStep(payload.step);
-    },
-    onOldMessagesReceived: (messages) => {
-      const last = messages[messages.length - 1];
-      if (last?.payload?.step != null) setCurrentStep(last.payload.step);
-    },
-  });
 
   // Ref so LeaveBTN always reads the latest completedSteps regardless of closure staleness
   const completedStepsRef = useRef(completedSteps);
@@ -457,12 +347,13 @@ export function BottomBar({ bottomBarHeight, onShowConnectionDetails, completedS
   const browserName = getBrowserName(navigator.userAgent);
   const supportsOutputDevice = browserName === "Chrome" || browserName === "Edge" || browserName === "Opera";
 
+  // Agent-only video tools. (Virtual background is chosen on the pre-call
+  // screen only; it stays applied for the whole call.)
+  const showCapture = isDoctor && !isAudioOnly;
 
-  // Screen share and participants removed from mobile hamburger per design.
-  const mobileFeatures = [
-    ...(isDoctor ? ["DOCUMENT_PANEL"] : []),
-    "MEETING_ID_COPY",
-  ];
+  const leaveButton = (
+    <LeaveBTN isDoctor={isDoctor} completedStepsRef={completedStepsRef} completedSteps={completedSteps} showLeaveModal={showLeaveModal} setShowLeaveModal={setShowLeaveModal} />
+  );
 
   // Mobile / tablet layout — Figma floating pill: black bg, rounded-t-[24px]
   if (isMobile || isTab) {
@@ -482,36 +373,10 @@ export function BottomBar({ bottomBarHeight, onShowConnectionDetails, completedS
           <MicBTN />
           <OutputMicBTN />
           <WebCamBTN />
-          <LeaveBTN isDoctor={isDoctor} completedStepsRef={completedStepsRef} completedSteps={completedSteps} showLeaveModal={showLeaveModal} setShowLeaveModal={setShowLeaveModal} />
+          {showCapture && <ImageCaptureButton customerId={customerId} />}
+          {isDoctor && <NetworkStatsButton customerId={customerId} />}
+          {leaveButton}
         </div>
-        <Transition appear show={Boolean(open)} as={Fragment}>
-          <Dialog as="div" className="relative" style={{ zIndex: 9999 }} onClose={() => setOpen(false)}>
-            <Transition.Child as={Fragment} enter="ease-out duration-300" enterFrom="opacity-0" enterTo="opacity-100" leave="ease-in duration-200" leaveFrom="opacity-100" leaveTo="opacity-0">
-              <div className="fixed inset-0 bg-black bg-opacity-50" />
-            </Transition.Child>
-            <Transition.Child as={Fragment} enter="ease-out duration-300" enterFrom="translate-y-full opacity-0" enterTo="translate-y-0 opacity-100" leave="ease-in duration-200" leaveFrom="translate-y-0 opacity-100" leaveTo="translate-y-full opacity-0">
-              <div className="fixed inset-0 overflow-y-hidden">
-                <div className="flex h-full items-end justify-end text-center">
-                  <Dialog.Panel className="w-screen transform overflow-hidden bg-[#1b1b1e] shadow-xl transition-all border-t border-[rgba(255,255,255,0.08)]">
-                    <div className="grid container py-6">
-                      <div className="grid grid-cols-12 gap-2">
-                        {mobileFeatures.map((icon, index) => (
-                          <div key={index} className={`grid items-center justify-center ${icon === "MEETING_ID_COPY" ? "col-span-7 sm:col-span-5" : "col-span-4 sm:col-span-3"}`}>
-                            {icon === "SCREEN_SHARE" ? <ScreenShareBTN isMobile={isMobile} isTab={isTab} />
-                              : icon === "PARTICIPANTS" ? <ParticipantsBTN isMobile={isMobile} isTab={isTab} />
-                              : icon === "DOCUMENT_PANEL" ? <DocumentPanelBTN isMobile={isMobile} isTab={isTab} />
-                              : icon === "MEETING_ID_COPY" ? <MeetingIdCopyBTN />
-                              : null}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </Dialog.Panel>
-                </div>
-              </div>
-            </Transition.Child>
-          </Dialog>
-        </Transition>
       </div>
     );
   }
@@ -534,13 +399,17 @@ export function BottomBar({ bottomBarHeight, onShowConnectionDetails, completedS
           {/* Volume */}
           {supportsOutputDevice && <OutputMicBTN />}
 
-          {/* Webcam */}
+          {/* Webcam (hidden in audio-only calls) */}
           <WebCamBTN />
 
+          {/* Agent: capture client image */}
+          {showCapture && <ImageCaptureButton customerId={customerId} />}
+
+          {/* Agent: transport-level network stats (audio + video calls) */}
+          {isDoctor && <NetworkStatsButton customerId={customerId} />}
+
           {/* End Call */}
-          <div className="ml-1">
-            <LeaveBTN isDoctor={isDoctor} completedStepsRef={completedStepsRef} completedSteps={completedSteps} showLeaveModal={showLeaveModal} setShowLeaveModal={setShowLeaveModal} />
-          </div>
+          <div className="ml-1">{leaveButton}</div>
         </div>
       </div>
 
