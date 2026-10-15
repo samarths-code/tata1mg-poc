@@ -1,0 +1,30 @@
+{
+  "apollo": {
+    "name": "Apollo Hospitals",
+    "apiKey": "your_videosdk_api_key",
+    "secret": "your_videosdk_secret",
+    "webhookUrl": "",
+    "roomConfig": {}
+  },
+  "eureka-forbes": {
+    "name": "Eureka Forbes",
+    "apiKey": "your_videosdk_api_key",
+    "secret": "your_videosdk_secret",
+    "webhookUrl": "",
+    "roomConfig": {
+      "autoStartConfig": {
+        "recording": {
+          "enabled": true,
+          "transcription": {
+            "enabled": true,
+            "summary": {
+              "enabled": true,
+              "prompt": "Write summary in sections like Title, Agenda, Speakers, Action Items, Outlines, Notes and Summary"
+            }
+          },
+          "onFailure": { "waitTime": 60, "action": "close-room" }
+        }
+      }
+    }
+  }
+}

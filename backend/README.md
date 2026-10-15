@@ -39,6 +39,31 @@ cp .env.example .env   # fill in VIDEOSDK_API_KEY and VIDEOSDK_SECRET
 
 **Health:** `GET /health`
 
+## Multiple organisations (clients)
+
+One backend serves every client. Each client's VideoSDK API key, secret and
+create-meeting config live in **`orgs.json`** (gitignored; see
+`orgs.example.json`), managed from the admin page.
+
+1. Set `ADMIN_PATH` (12+ random chars), `ADMIN_USERNAME` and `ADMIN_PASSWORD`
+   in `.env`, restart, and open **`/<ADMIN_PATH>/`**. Without all three the
+   admin page doesn't exist (404).
+2. Add an org: Org ID (e.g. `eureka-forbes`), API key, secret, optional
+   webhook URL, and the create-meeting config. Presets: **Standard** (no
+   recording), **Recording only**, and **Recording + post transcription &
+   summary** (transcript and summary generated after the call). Keys are verified with VideoSDK
+   on save; edits apply to the next request without a restart.
+3. Build that client's frontend with `REACT_APP_ORG_ID=<org id>`.
+
+Every request carries the org (`X-Org-Id` header, or `orgId` in the body or
+query string). Tokens, room creation, validation, AI calls and webhook
+follow-ups all use that org's credentials. Room webhooks are tagged with
+`?orgId=` so recording lookups use the right key. Requests with no org use
+`VIDEOSDK_API_KEY` / `VIDEOSDK_SECRET` from `.env` (the `default` org).
+
+With several gunicorn workers, all of them read the same `orgs.json`, so keep
+it on a disk every worker can see (`ORGS_FILE` to relocate it).
+
 ## Production
 
 ```bash

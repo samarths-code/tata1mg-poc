@@ -1,5 +1,16 @@
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "http://localhost:5001";
 
+// Which client this build belongs to. The backend signs every token and makes
+// every VideoSDK call with this org's API key + secret (see backend/orgs.json).
+// Unset -> the backend's default (.env) credentials.
+const ORG_ID = process.env.REACT_APP_ORG_ID || "";
+
+const backendHeaders = (extra = {}) => ({
+  "Content-Type": "application/json",
+  ...(ORG_ID ? { "X-Org-Id": ORG_ID } : {}),
+  ...extra,
+});
+
 // Stable participant ID for this browser session (used by the manual join flow).
 const _sessionParticipantId = (() => {
   const KEY = "_vsdk_pid";
@@ -35,10 +46,7 @@ export const getToken = async ({ roomId, participantId } = {}) => {
   };
   const res = await fetch(`${BACKEND_URL}/api/v1/video/token`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Participant-Role": role,
-    },
+    headers: backendHeaders({ "X-Participant-Role": role }),
     body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`Token request failed: ${res.status}`);
@@ -50,7 +58,7 @@ export const getSessionCredentials = async ({ meetingId, mode }) => {
   const role = mode?.toUpperCase() === "DOCTOR" ? "DOCTOR" : "PATIENT";
   const res = await fetch(`${BACKEND_URL}/api/v1/video/session`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: backendHeaders(),
     body: JSON.stringify({ meetingId, role }),
   });
   if (!res.ok) throw new Error(`Session credentials request failed: ${res.status}`);
@@ -61,10 +69,7 @@ export const getSessionCredentials = async ({ meetingId, mode }) => {
 export const createMeeting = async () => {
   const res = await fetch(`${BACKEND_URL}/api/v1/video/meetings`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Participant-Role": "DOCTOR",
-    },
+    headers: backendHeaders({ "X-Participant-Role": "DOCTOR" }),
     body: JSON.stringify({}),
   });
   if (!res.ok) {
@@ -94,7 +99,7 @@ export const createMeetingWithCredentials = async () => {
 export const validateMeeting = async ({ roomId }) => {
   const res = await fetch(`${BACKEND_URL}/api/v1/video/meetings/${encodeURIComponent(roomId)}/validate`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: backendHeaders(),
   });
   if (!res.ok) return false;
   const data = await res.json();

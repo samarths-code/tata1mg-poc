@@ -11,3 +11,7 @@ dist/
 # Graphify knowledge graph output (generated, not committed)
 graphify-out/
 logs/
+
+# Org registry — holds every client's VideoSDK secrets
+orgs.json
+.orgs-*.json
