@@ -5,13 +5,18 @@ config per client). Everything is stored in orgs.json via org_store.
     GET  /<ADMIN_PATH>/                       the page
     GET  /<ADMIN_PATH>/api/orgs               list orgs (secrets masked)
     POST /<ADMIN_PATH>/api/orgs               create / update an org
+    GET  /<ADMIN_PATH>/api/builds             each org's frontend domain + last upload
+    POST /<ADMIN_PATH>/api/orgs/<id>/build    upload a .zip build (see builds.py)
 
 Nothing is guessable: the URL path (ADMIN_PATH), the Basic-auth username
 (ADMIN_USERNAME) and password (ADMIN_PASSWORD) all come from .env. Unless all
 three are set (path at least 12 chars) the blueprint is never registered, so
 every admin URL is a plain 404. POSTs must be JSON, which a cross-site form
 cannot send — that, plus no CORS headers on admin routes, keeps other sites
-from using the browser's cached credentials (CSRF).
+from using the browser's cached credentials (CSRF). The build upload is
+multipart, so it needs an X-Admin-Upload header instead: a cross-site form
+can't set one, and a cross-origin fetch with it needs a preflight we never
+answer.
 """
 import datetime
 import hmac
@@ -24,8 +29,9 @@ import requests
 from flask import Blueprint, Response, jsonify, request
 
 try:
-    from . import org_store
+    from . import builds, org_store
 except ImportError:
+    import builds
     import org_store
 
 bp = Blueprint("admin", __name__)
@@ -94,7 +100,9 @@ def require_admin(view):
                 {"WWW-Authenticate": 'Basic realm="Org admin"'},
             )
         if request.method == "POST" and not request.is_json:
-            return jsonify({"message": "Expected application/json"}), 415
+            upload = request.endpoint == "admin.admin_upload_build"
+            if not (upload and request.headers.get("X-Admin-Upload") == "1"):
+                return jsonify({"message": "Expected application/json"}), 415
         return view(*args, **kwargs)
     return wrapper
 
@@ -111,6 +119,7 @@ def _public(org_id: str, org: dict) -> dict:
         "secret": _mask(org.get("secret", "")),
         "webhookUrl": org.get("webhookUrl", ""),
         "frontendOrigins": org.get("frontendOrigins") or [],
+        "frontendDomain": org.get("frontendDomain", ""),
         "roomConfig": org.get("roomConfig") or {},
     }
 
@@ -196,6 +205,11 @@ def admin_save_org():
         if o not in origins:
             origins.append(o)
 
+    domain = str(body.get("frontendDomain", "")).strip().lower()
+    domain = re.sub(r"^https?://", "", domain).rstrip("/")
+    if domain and not org_store.DOMAIN_PATTERN.match(domain):
+        return jsonify({"message": f"Invalid frontend domain: {domain} (just the host, e.g. client.videosdk.live)"}), 400
+
     error = _check_credentials(api_key, secret)
     if error:
         return jsonify({"message": error}), 400
@@ -206,10 +220,49 @@ def admin_save_org():
         "secret": secret,
         "webhookUrl": str(body.get("webhookUrl", "")).strip(),
         "frontendOrigins": origins,
+        "frontendDomain": domain,
         "roomConfig": room_config,
     }
     org_store.save_org(org_id, org)
     return jsonify({"org": _public(org_id, org)}), 200
+
+
+@bp.route("/api/builds", methods=["GET"])
+@require_admin
+def admin_list_builds():
+    sites = []
+    for org_id, org in sorted(org_store.list_orgs().items()):
+        domain = org.get("frontendDomain", "")
+        sites.append({
+            "id": org_id,
+            "name": org.get("name", ""),
+            "domain": domain,
+            "siteExists": bool(domain) and builds.site_exists(domain),
+            "lastBuild": builds.build_info(domain) if domain else None,
+        })
+    return jsonify({"sites": sites, "maxZipBytes": builds.MAX_ZIP_BYTES})
+
+
+@bp.route("/api/orgs/<org_id>/build", methods=["POST"])
+@require_admin
+def admin_upload_build(org_id):
+    org = org_store.list_orgs().get(org_id)
+    if org is None:
+        return jsonify({"message": f"Unknown org: {org_id}"}), 404
+    domain = org.get("frontendDomain", "")
+    if not domain:
+        return jsonify({"message": "Set a frontend domain for this org first"}), 400
+    upload = request.files.get("file")
+    if upload is None or not upload.filename:
+        return jsonify({"message": "Choose a .zip file"}), 400
+    try:
+        info = builds.deploy_zip(
+            org_id, domain, upload.stream, upload.filename,
+            force=request.form.get("force") == "1",
+        )
+    except builds.BuildError as e:
+        return jsonify({"message": str(e)}), 400
+    return jsonify({"build": info, "url": f"https://{domain}/"}), 200
 
 
 ADMIN_HTML = """<!doctype html>
@@ -217,7 +270,7 @@ ADMIN_HTML = """<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Organisations</title>
+<title>Org admin</title>
 <style>
   :root { --bg:#f6f7f9; --card:#fff; --text:#1d2330; --muted:#667085; --line:#e4e7ec;
           --accent:#3b5bdb; --danger:#c92a2a; --ok:#2b8a3e; }
@@ -252,13 +305,29 @@ ADMIN_HTML = """<!doctype html>
   #msg { min-height:20px; }
   #msg.err { color:var(--danger); } #msg.ok { color:var(--ok); }
   .hint { color:var(--muted); font-size:12px; margin-top:4px; }
+  .tabs { display:flex; gap:4px; border-bottom:1px solid var(--line); margin-bottom:16px; }
+  .tabs button { border:none; border-bottom:2px solid transparent; border-radius:0; background:none;
+                 color:var(--muted); padding:8px 12px; }
+  .tabs button[aria-selected="true"] { color:var(--text); border-bottom-color:var(--accent); }
+  .bmsg { font-size:12px; display:block; margin-top:4px; }
+  .bmsg.err { color:var(--danger); } .bmsg.ok { color:var(--ok); }
+  .site td { vertical-align:middle; }
+  .site input[type=file] { width:auto; max-width:220px; padding:4px; font-size:12px; }
+  .site label.inline { display:inline-flex; gap:4px; align-items:center; margin:0; white-space:nowrap; }
+  .site label.inline input { width:auto; }
 </style>
 </head>
 <body>
 <main>
-  <h1>Organisations</h1>
+  <h1>Org admin</h1>
   <p class="sub">Each client build sends its Org ID; the backend signs every token and VideoSDK call with that org's key and secret.</p>
 
+  <nav class="tabs" role="tablist">
+    <button type="button" role="tab" data-tab="orgs" aria-selected="true">Organisations</button>
+    <button type="button" role="tab" data-tab="builds" aria-selected="false">Frontend builds</button>
+  </nav>
+
+  <section id="tab-orgs">
   <div class="card">
     <table>
       <thead><tr><th>Org ID</th><th>Name</th><th class="hide-sm">Origins</th><th class="hide-sm">API key</th><th class="hide-sm">Secret</th><th>Meeting</th><th></th></tr></thead>
@@ -277,6 +346,8 @@ ADMIN_HTML = """<!doctype html>
         <div class="hint" id="secretHint">Required for a new org.</div></div>
       <div class="full"><label for="frontendOrigins">Frontend origins (comma-separated; allowed by CORS)</label>
         <input id="frontendOrigins" placeholder="https://eurekaforbes.videosdk.live, http://localhost:3000"></div>
+      <div class="full"><label for="frontendDomain">Frontend domain (where uploaded builds go live)</label>
+        <input id="frontendDomain" placeholder="eurekaforbes.videosdk.live"></div>
       <div class="full"><label for="webhookUrl">Webhook URL (optional, falls back to VIDEOSDK_WEBHOOK_URL)</label>
         <input id="webhookUrl" placeholder="https://your-backend/webhooks/videosdk"></div>
       <div class="full">
@@ -299,6 +370,17 @@ ADMIN_HTML = """<!doctype html>
       </div>
     </form>
   </div>
+  </section>
+
+  <section id="tab-builds" hidden>
+  <div class="card">
+    <p class="hint" style="margin:0 0 12px">Upload a .zip of a client's build folder (max <span id="maxZip">20</span> MB). It replaces the live site on that org's frontend domain; the previous build is kept on the server as <code>public.prev</code>.</p>
+    <table>
+      <thead><tr><th>Org</th><th>Domain</th><th class="hide-sm">Last upload</th><th>Upload build</th></tr></thead>
+      <tbody id="siteRows"><tr><td colspan="4">Loading…</td></tr></tbody>
+    </table>
+  </div>
+  </section>
 </main>
 <script>
 const BASE = "__BASE__";
@@ -358,6 +440,7 @@ function fill(o) {
   $("secretHint").textContent = "Leave blank to keep the stored secret (" + o.secret + ").";
   $("webhookUrl").value = o.webhookUrl;
   $("frontendOrigins").value = (o.frontendOrigins || []).join(", ");
+  $("frontendDomain").value = o.frontendDomain || "";
   $("roomConfig").value = JSON.stringify(o.roomConfig || {}, null, 2);
   $("preset").value = ""; setMsg("");
   window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
@@ -389,12 +472,95 @@ $("form").onsubmit = async (e) => {
     const d = await api(BASE + "/api/orgs", {
       id: $("id").value.trim(), name: $("name").value, apiKey: $("apiKey").value,
       secret: $("secret").value, webhookUrl: $("webhookUrl").value,
-      frontendOrigins: $("frontendOrigins").value, roomConfig,
+      frontendOrigins: $("frontendOrigins").value, frontendDomain: $("frontendDomain").value, roomConfig,
     });
     reset(); setMsg("Saved " + d.org.id, "ok"); load();
   } catch (err) { setMsg(err.message, "err"); }
 };
 load();
+
+// ---- Tabs ----
+function showTab(name) {
+  document.querySelectorAll(".tabs button").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === name));
+  $("tab-orgs").hidden = name !== "orgs";
+  $("tab-builds").hidden = name !== "builds";
+  if (name === "builds") loadBuilds();
+}
+document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => showTab(b.dataset.tab));
+
+// ---- Frontend builds ----
+let maxZipBytes = 20 * 1024 * 1024;
+const mb = (n) => (n / 1024 / 1024).toFixed(1) + " MB";
+
+function cell(tr, content, cls) {
+  const td = document.createElement("td");
+  if (cls) td.className = cls;
+  if (typeof content === "string") td.textContent = content; else if (content) td.append(...[].concat(content));
+  tr.appendChild(td); return td;
+}
+
+function lastBuildText(b) {
+  if (!b) return "—";
+  return new Date(b.uploadedAt).toLocaleString() + " · " + b.files + " files · " + mb(b.zipBytes) + (b.forced ? " · org check skipped" : "");
+}
+
+async function loadBuilds() {
+  const rows = $("siteRows");
+  let d;
+  try { d = await api(BASE + "/api/builds"); }
+  catch (e) { rows.innerHTML = ""; const tr = document.createElement("tr"); cell(tr, e.message).colSpan = 4; rows.appendChild(tr); return; }
+  maxZipBytes = d.maxZipBytes; $("maxZip").textContent = Math.round(maxZipBytes / 1024 / 1024);
+  rows.textContent = "";
+  if (!d.sites.length) { const tr = document.createElement("tr"); cell(tr, "No organisations yet.").colSpan = 4; rows.appendChild(tr); return; }
+  for (const s of d.sites) {
+    const tr = document.createElement("tr"); tr.className = "site";
+    const name = document.createElement("div"); name.textContent = s.name;
+    const id = document.createElement("code"); id.textContent = s.id;
+    cell(tr, [name, id]);
+    if (s.domain) {
+      const a = document.createElement("a"); a.href = "https://" + s.domain + "/"; a.target = "_blank"; a.rel = "noopener"; a.textContent = s.domain;
+      cell(tr, a);
+    } else cell(tr, "—");
+    const last = cell(tr, lastBuildText(s.lastBuild), "hide-sm");
+    const td = cell(tr, null);
+    if (!s.domain) { td.innerHTML = '<span class="hint">Set a frontend domain in Organisations</span>'; rows.appendChild(tr); continue; }
+    if (!s.siteExists) { td.innerHTML = '<span class="hint">Site not set up on the server yet</span>'; rows.appendChild(tr); continue; }
+    const file = document.createElement("input"); file.type = "file"; file.accept = ".zip,application/zip";
+    const force = document.createElement("input"); force.type = "checkbox";
+    const forceLbl = document.createElement("label"); forceLbl.className = "inline hint"; forceLbl.append(force, "skip org check");
+    const btn = document.createElement("button"); btn.className = "primary"; btn.textContent = "Upload";
+    const msg = document.createElement("span"); msg.className = "bmsg";
+    const row = document.createElement("div"); row.className = "row"; row.append(file, forceLbl, btn);
+    td.append(row, msg);
+    btn.onclick = () => upload(s, file, force, btn, msg, last);
+    rows.appendChild(tr);
+  }
+}
+
+function upload(site, file, force, btn, msg, last) {
+  const f = file.files[0];
+  const say = (t, k) => { msg.textContent = t; msg.className = "bmsg" + (k ? " " + k : ""); };
+  if (!f) return say("Choose a .zip file", "err");
+  if (!f.name.toLowerCase().endsWith(".zip")) return say("Only .zip files", "err");
+  if (f.size > maxZipBytes) return say("Zip is " + mb(f.size) + " — max is " + mb(maxZipBytes), "err");
+  if (!confirm("Replace the live site " + site.domain + " with " + f.name + "?")) return;
+  const fd = new FormData(); fd.append("file", f); if (force.checked) fd.append("force", "1");
+  const xhr = new XMLHttpRequest();
+  xhr.open("POST", BASE + "/api/orgs/" + encodeURIComponent(site.id) + "/build");
+  xhr.setRequestHeader("X-Admin-Upload", "1");
+  xhr.upload.onprogress = (e) => { if (e.lengthComputable) say("Uploading… " + Math.round(e.loaded / e.total * 100) + "%"); };
+  xhr.upload.onload = () => say("Deploying…");
+  xhr.onload = () => {
+    btn.disabled = false;
+    let d = {}; try { d = JSON.parse(xhr.responseText); } catch {}
+    if (xhr.status === 413) return say("Zip is too large for the server", "err");
+    if (xhr.status !== 200) return say(d.message || ("Upload failed: " + xhr.status), "err");
+    say("Live on " + site.domain + " · " + d.build.files + " files", "ok");
+    last.textContent = lastBuildText(d.build); file.value = ""; force.checked = false;
+  };
+  xhr.onerror = () => { btn.disabled = false; say("Network error", "err"); };
+  btn.disabled = true; say("Uploading… 0%"); xhr.send(fd);
+}
 </script>
 </body>
 </html>

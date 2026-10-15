@@ -21,6 +21,8 @@ except ImportError:  # run as a script: python3 app.py
     from admin import admin_url_prefix, bp as admin_bp
 
 app = Flask(__name__)
+# Largest request body: a 20 MB build zip (admin upload) + multipart overhead.
+app.config["MAX_CONTENT_LENGTH"] = 21 * 1024 * 1024
 # Admin lives at a secret path from .env; unset -> not registered at all (404).
 if admin_url_prefix():
     app.register_blueprint(admin_bp, url_prefix=admin_url_prefix())

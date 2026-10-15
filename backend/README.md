@@ -64,6 +64,22 @@ follow-ups all use that org's credentials. Room webhooks are tagged with
 With several gunicorn workers, all of them read the same `orgs.json`, so keep
 it on a disk every worker can see (`ORGS_FILE` to relocate it).
 
+## Frontend builds
+
+The admin page's **Frontend builds** tab uploads a `.zip` of a client's build
+folder (max 20 MB) and makes it the live site for that org's **frontend
+domain** (set on the org). Files land in `BUILDS_ROOT/<domain>/public`
+(`BUILDS_ROOT` defaults to `/var/www`); the build before it is kept as
+`public.prev`, and `build-info.json` records the last upload.
+
+- The site directory and its nginx vhost + certificate must already exist and
+  be writable by the backend user — uploads never create sites.
+- The zip may contain the build files directly or one wrapping folder; it
+  must have `index.html`. Paths escaping the folder and symlinks are rejected.
+- Uploads are refused if no `static/js` file mentions the org id (wrong
+  client's build); tick "skip org check" to override.
+- The proxy in front needs `client_max_body_size 21m;` (nginx default is 1 MB).
+
 ## Production
 
 ```bash

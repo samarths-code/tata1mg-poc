@@ -33,6 +33,9 @@ ORGS_FILE = os.environ.get(
 DEFAULT_ORG_ID = "default"
 ORG_ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 ORIGIN_PATTERN = re.compile(r"^https?://[a-z0-9.-]+(:[0-9]{1,5})?$")
+# Bare hostname (no scheme/port/path) — doubles as a directory name under
+# BUILDS_ROOT, so it must never contain "/" or start with ".".
+DOMAIN_PATTERN = re.compile(r"^(?=.{1,253}$)[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$")
 
 _lock = threading.Lock()
 
