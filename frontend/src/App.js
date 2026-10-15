@@ -250,7 +250,7 @@ const App = () => {
                   multiStream: isDoctorRole,
                   // All our tracks are VP8. With switching on, the SDK may
                   // replace the published custom track with a fresh camera
-                  // (losing the exact pre-call track / virtual background).
+                  // (losing the exact pre-call track).
                   codecSwitchEnabled: false,
                   customCameraVideoTrack: isAudioOnly ? undefined : customVideoStream,
                   customMicrophoneAudioTrack: customAudioStream,

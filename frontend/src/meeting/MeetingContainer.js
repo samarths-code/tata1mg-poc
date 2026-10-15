@@ -188,7 +188,7 @@ export function MeetingContainer({ onMeetingLeave, precallTracks = { video: fals
 
   async function onMeetingLeft() {
     // Release camera/mic: whatever the SDK is still publishing plus every track
-    // we opened ourselves (preview, swapped-out, virtual background).
+    // we opened ourselves (preview, swapped-out).
     const published = [];
     mMeetingRef.current?.localParticipant?.streams?.forEach((st) => st?.track && published.push(st.track));
     await releaseAllMedia(published);

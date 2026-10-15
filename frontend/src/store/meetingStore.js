@@ -13,9 +13,6 @@ import { participantModes } from "../utils/common";
  * compatible with the old `useState`-style setters used across the app.
  */
 
-const isDesktop = () =>
-  typeof window !== "undefined" && !window.matchMedia("(max-width: 767px)").matches;
-
 // Helper: build a setter that supports value | (prev) => next, like useState.
 const updater = (set, key) => (v) =>
   set((s) => ({ [key]: typeof v === "function" ? v(s[key]) : v }));
@@ -48,8 +45,6 @@ export const useMeetingStore = create((set) => ({
   selectedOutputDevice: { id: null, label: null },
   isCameraPermissionAllowed: null,
   isMicrophonePermissionAllowed: null,
-  // Branded background on the doctor's camera (seeded in setSessionConfig).
-  useVirtualBackground: false,
   muteSpeaker: true,
   participantLeftReason: null,
 
@@ -70,9 +65,6 @@ export const useMeetingStore = create((set) => ({
         isAudioOnly: !!isAudioOnly,
         muteSpeaker: initialSpeakerOn,
         isDoctor,
-        // The doctor's camera always carries the Apollo background. The SDK's
-        // processor is desktop-only, so phones stay on the plain camera.
-        useVirtualBackground: isDoctor && !isAudioOnly && isDesktop(),
         maintainVideoAspectRatio: isDoctor,
         canRemoveOtherParticipant: isDoctor,
       };

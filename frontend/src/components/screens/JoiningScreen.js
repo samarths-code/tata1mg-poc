@@ -12,7 +12,6 @@ import { useMeetingAppContext } from "../../context/MeetingAppContext";
 import useMediaStream from "../../hooks/useMediaStream";
 import useIsMobile from "../../hooks/useIsMobile";
 import DeviceEnableModal from "../DeviceEnableModal";
-import { stopVirtualBackground } from "../../lib/virtualBackground";
 import { ShieldCheckIcon, ChevronRightIcon, MicrophoneIcon, VideoCameraIcon, VideoCameraSlashIcon, SpeakerWaveIcon, SpeakerXMarkIcon } from "@heroicons/react/24/outline";
 
 export function JoiningScreen({
@@ -229,7 +228,6 @@ export function JoiningScreen({
   const _toggleWebcam = () => {
     if (webcamOn) {
       replaceVideo(null);
-      stopVirtualBackground();
       setWebcamOn(false);
     } else {
       getDefaultMediaTracks({ mic: false, webcam: true });

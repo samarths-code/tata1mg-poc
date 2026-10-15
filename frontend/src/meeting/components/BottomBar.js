@@ -11,7 +11,6 @@ import { nameTructed, trimSnackBarText } from "../../utils/helper";
 import VerificationPendingModal from "../../components/doctor/VerificationPendingModal";
 import ImageCaptureButton from "../../components/doctor/ImageCaptureButton";
 import NetworkStatsButton from "../../components/doctor/NetworkStatsButton";
-import { stopVirtualBackground } from "../../lib/virtualBackground";
 import { createAudioTrack, createVideoTrack } from "../../hooks/useMediaStream";
 
 // Dark pill-style device button matching Figma design
@@ -221,11 +220,9 @@ export const WebCamBTN = () => {
     >
       <button
         onClick={async () => {
-          // Same 480p track (+ agent background) as pre-call and join.
+          // Same track config as pre-call and join.
           const track = localWebcamOn ? undefined : await createVideoTrack(selectedWebcam?.id);
           mMeeting.toggleWebcam(track);
-          // Camera going off — release the background processor too.
-          if (localWebcamOn) stopVirtualBackground();
         }}
         className="flex items-center justify-center p-1 rounded shrink-0"
         disabled={!isCameraPermissionAllowed}
@@ -347,8 +344,7 @@ export function BottomBar({ bottomBarHeight, onShowConnectionDetails, completedS
   const browserName = getBrowserName(navigator.userAgent);
   const supportsOutputDevice = browserName === "Chrome" || browserName === "Edge" || browserName === "Opera";
 
-  // Agent-only video tools. (Virtual background is chosen on the pre-call
-  // screen only; it stays applied for the whole call.)
+  // Agent-only video tools.
   const showCapture = isDoctor && !isAudioOnly;
 
   const leaveButton = (

@@ -1,51 +1,32 @@
 import { createCameraVideoTrack, createMicrophoneAudioTrack } from "@videosdk.live/react-sdk";
 import { useCallback } from "react";
 import { useMeetingStore } from "../store/meetingStore";
-import {
-  applyVirtualBackground,
-  isVirtualBackgroundRunning,
-  stopVirtualBackground,
-} from "../lib/virtualBackground";
 import { trackMedia } from "../lib/mediaTracks";
 
 // Single source of truth for every camera/mic track in the app. The pre-call
 // preview track IS the track published into the meeting, so both use these.
 export const VIDEO_TRACK_CONFIG = {
-  encoderConfig: "h480p_w640p",
+  encoderConfig: "h540p_w960p",
   optimizationMode: "motion",
-  codec: "H264",
+  codec: "VP8",
 };
 export const AUDIO_TRACK_CONFIG = { encoderConfig: "speech_standard" };
 
 const AUDIO_TIMEOUT_MS = 10000;
 
-// Camera track (480p; simulcast for the doctor, single layer for the patient).
-// For the agent, the chosen virtual
-// background is applied on top, so preview / in-call / re-enable all match.
+// Camera track (simulcast for the doctor, single layer for the patient).
 export async function createVideoTrack(cameraId) {
   try {
     // Simulcast for the doctor only — must match the MeetingProvider config in
     // App.js, or the published track and the provider disagree on layer count.
-    const { isDoctor, useVirtualBackground } = useMeetingStore.getState();
-    const track = trackMedia(
+    const { isDoctor } = useMeetingStore.getState();
+    return trackMedia(
       await createCameraVideoTrack({
         cameraId: cameraId || undefined,
         ...VIDEO_TRACK_CONFIG,
         multiStream: isDoctor,
       })
     );
-    if (!track) return null;
-
-    if (useVirtualBackground) {
-      try {
-        return trackMedia(await applyVirtualBackground(track));
-      } catch (error) {
-        console.warn("Virtual background failed, using plain camera:", error);
-      }
-    } else if (isVirtualBackgroundRunning()) {
-      await stopVirtualBackground();
-    }
-    return track;
   } catch (error) {
     console.error("createVideoTrack error:", error);
     return null;

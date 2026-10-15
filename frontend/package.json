@@ -2,11 +2,10 @@
   "name": "Appolo-hsptls",
   "version": "1.0.0",
   "private": true,
-  "homepage": "https://vkyc-demo.videosdk.live",
+  "homepage": "https://eurekaforbes.videosdk.live",
   "dependencies": {
     "@heroicons/react": "^2.0.13",
     "@videosdk.live/react-sdk": "^0.13.5",
-    "@videosdk.live/videosdk-virtual-background-web": "^0.1.3",
     "react": "^18.2.0",
     "react-cropper": "^2.1.8",
     "react-dom": "^18.2.0",
