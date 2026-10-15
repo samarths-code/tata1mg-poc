@@ -20,8 +20,11 @@ answer.
 """
 import datetime
 import hmac
+import ipaddress
 import os
 import re
+import threading
+import time
 from functools import wraps
 
 import jwt
@@ -80,9 +83,54 @@ PRESETS = {
 }
 
 
+# Failed-login lockout: MAX_FAILURES wrong passwords from one IP within
+# FAILURE_WINDOW seconds -> 429 until the oldest failure ages out. Kept in
+# memory per gunicorn worker (2 workers = at most 2x the attempts), which is
+# plenty to stop guessing without adding a shared store.
+MAX_FAILURES = 10
+FAILURE_WINDOW = 15 * 60
+_failures = {}
+_failures_lock = threading.Lock()
+
+
+def _client_ip() -> str:
+    """nginx overwrites X-Forwarded-For with the peer address, so it can be
+    trusted only when the request came through the local proxy."""
+    remote = request.remote_addr or ""
+    try:
+        local = ipaddress.ip_address(remote).is_loopback
+    except ValueError:
+        local = False
+    if local:
+        forwarded = request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
+        if forwarded:
+            return forwarded
+    return remote
+
+
+def _recent_failures(ip: str, now: float) -> list:
+    recent = [t for t in _failures.get(ip, []) if now - t < FAILURE_WINDOW]
+    if recent:
+        _failures[ip] = recent
+    else:
+        _failures.pop(ip, None)
+    return recent
+
+
 def require_admin(view):
     @wraps(view)
     def wrapper(*args, **kwargs):
+        ip = _client_ip()
+        now = time.time()
+        with _failures_lock:
+            recent = _recent_failures(ip, now)
+        if len(recent) >= MAX_FAILURES:
+            retry = int(FAILURE_WINDOW - (now - recent[0])) + 1
+            return Response(
+                "Too many failed logins — try again later", 429,
+                {"Retry-After": str(retry)},
+            )
+
         username = os.environ.get("ADMIN_USERNAME", "")
         password = os.environ.get("ADMIN_PASSWORD", "")
         auth = request.authorization
@@ -95,16 +143,40 @@ def require_admin(view):
             & hmac.compare_digest(auth.password or "", password)
         )
         if not ok:
+            # A bare request without credentials is the browser asking for
+            # the login prompt — only count actual wrong guesses.
+            if auth is not None:
+                with _failures_lock:
+                    _failures.setdefault(ip, []).append(now)
             return Response(
                 "Authentication required", 401,
                 {"WWW-Authenticate": 'Basic realm="Org admin"'},
             )
+        with _failures_lock:
+            _failures.pop(ip, None)
         if request.method == "POST" and not request.is_json:
             upload = request.endpoint == "admin.admin_upload_build"
             if not (upload and request.headers.get("X-Admin-Upload") == "1"):
                 return jsonify({"message": "Expected application/json"}), 415
         return view(*args, **kwargs)
     return wrapper
+
+
+@bp.after_request
+def security_headers(response: Response) -> Response:
+    # The page is self-contained (inline script + style), never framed, and
+    # its responses carry API keys — don't cache them anywhere.
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; script-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
+        "frame-ancestors 'none'; form-action 'self'; base-uri 'none'"
+    )
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000"
+    return response
 
 
 def _mask(secret: str) -> str:
@@ -518,7 +590,7 @@ async function loadBuilds() {
     const id = document.createElement("code"); id.textContent = s.id;
     cell(tr, [name, id]);
     if (s.domain) {
-      const a = document.createElement("a"); a.href = "https://" + s.domain + "/"; a.target = "_blank"; a.rel = "noopener"; a.textContent = s.domain;
+      const a = document.createElement("a"); a.href = "https://" + s.domain + "/"; a.target = "_blank"; a.rel = "noopener noreferrer"; a.textContent = s.domain;
       cell(tr, a);
     } else cell(tr, "—");
     const last = cell(tr, lastBuildText(s.lastBuild), "hide-sm");
