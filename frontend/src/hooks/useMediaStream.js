@@ -13,22 +13,30 @@ import { trackMedia } from "../lib/mediaTracks";
 export const VIDEO_TRACK_CONFIG = {
   encoderConfig: "h480p_w640p",
   optimizationMode: "motion",
-  multiStream: false,
+  codec: "H264",
 };
 export const AUDIO_TRACK_CONFIG = { encoderConfig: "speech_standard" };
 
 const AUDIO_TIMEOUT_MS = 10000;
 
-// Camera track (480p, single layer). For the agent, the chosen virtual
+// Camera track (480p; simulcast for the doctor, single layer for the patient).
+// For the agent, the chosen virtual
 // background is applied on top, so preview / in-call / re-enable all match.
 export async function createVideoTrack(cameraId) {
   try {
+    // Simulcast for the doctor only — must match the MeetingProvider config in
+    // App.js, or the published track and the provider disagree on layer count.
+    const { isDoctor, useVirtualBackground } = useMeetingStore.getState();
     const track = trackMedia(
-      await createCameraVideoTrack({ cameraId: cameraId || undefined, ...VIDEO_TRACK_CONFIG })
+      await createCameraVideoTrack({
+        cameraId: cameraId || undefined,
+        ...VIDEO_TRACK_CONFIG,
+        multiStream: isDoctor,
+      })
     );
     if (!track) return null;
 
-    if (useMeetingStore.getState().useVirtualBackground) {
+    if (useVirtualBackground) {
       try {
         return trackMedia(await applyVirtualBackground(track));
       } catch (error) {

@@ -54,6 +54,7 @@ const App = () => {
 
   const rawMode = urlMode.toUpperCase();
   const participantMode = rawMode === "PATIENT" ? "CUSTOMER" : rawMode || undefined;
+  const isDoctorRole = rawMode === "DOCTOR";
   // When a token is supplied directly via the URL, skip the credentials API and
   // show the join form with the meeting ID pre-filled & locked (name stays editable).
   const isAutoJoin = !!(urlMeetingId && urlMode);
@@ -243,9 +244,10 @@ const App = () => {
                   webcamEnabled: webcamOn && !isAudioOnly,
                   name: participantName || "Guest",
                   participantId: participantId || (urlToken ? undefined : getSessionParticipantId()),
-                  // Single layer, same as the 480p custom tracks — simulcast
-                  // layers waste uplink in a 1:1 call on a weak network.
-                  multiStream: false,
+                  // Doctor publishes simulcast layers so a patient on a weak
+                  // link can be served a lower one; the patient stays single
+                  // layer to protect their own uplink.
+                  multiStream: isDoctorRole,
                   // All our tracks are VP8. With switching on, the SDK may
                   // replace the published custom track with a fresh camera
                   // (losing the exact pre-call track / virtual background).

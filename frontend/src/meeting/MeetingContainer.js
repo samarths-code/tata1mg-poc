@@ -18,7 +18,8 @@ import ImageUploadListner from "../components/ImageUploadListner";
 import { TopBar } from "./components/TopBar";
 import { ParticipantDetailsPanel } from "../components/ParticipantDetailsPanel";
 import MobileCustomerCallView from "../components/MobileCustomerCallView";
-import NetworkQualityPopup from "../components/NetworkQualityPopup";
+import NetworkAlerts from "../components/NetworkAlerts";
+import useNetworkWatch from "../hooks/useNetworkWatch";
 import useGeolocation from "../hooks/useGeolocation";
 import { getIPGeoInfo } from "../api";
 import { releaseAllMedia } from "../lib/mediaTracks";
@@ -73,6 +74,17 @@ async function readStreamStats(participant) {
     return null;
   }
 }
+
+// Every state the SDK's onMeetingStateChanged emits. "progress" states stay
+// on screen until the connection resolves; the rest auto-dismiss.
+const MEETING_STATE_TOAST = {
+  CONNECTING:   { message: "Connecting to the consultation…", type: "info",    progress: true },
+  RECONNECTING: { message: "Meeting is reconnecting…", type: "warning", progress: true },
+  CONNECTED:    { message: "Meeting is connected", type: "success" },
+  DISCONNECTED: { message: "Disconnected from the meeting", type: "error" },
+  FAILED:       { message: "Meeting connection failed", type: "error" },
+};
+const MEETING_STATE_TOAST_ID = (state) => `meeting-state-${state}`;
 
 export function MeetingContainer({ onMeetingLeave, precallTracks = { video: false, audio: false } }) {
   const bottomBarHeight = 60;
@@ -160,6 +172,13 @@ export function MeetingContainer({ onMeetingLeave, precallTracks = { video: fals
         const track = await createAudioTrack(selectedMicrophone?.id);
         if (track) meeting.changeMic(track);
       }
+      // Let the SDK pause/downgrade incoming video by itself when the link
+      // degrades, instead of every participant always pulling full quality.
+      try {
+        meeting.enableAdaptiveSubscription();
+      } catch (e) {
+        console.warn("enableAdaptiveSubscription failed:", e);
+      }
     } catch (e) {
       console.warn("onMeetingJoined error:", e);
     } finally {
@@ -197,14 +216,39 @@ export function MeetingContainer({ onMeetingLeave, precallTracks = { video: fals
 
   function _handleOnMeetingStateChanged(data) {
     const { state } = data;
+
+    console.log("[VideoSDK] onMeetingStateChanged:", state);
     setMeetingState(state);
-    if (state === "FAILED") {
-      toast("Meeting connection failed", {
-        position: "bottom-left", autoClose: 5000, type: "warning",
-        hideProgressBar: true, closeButton: false, pauseOnHover: true,
-        draggable: true, progress: undefined, theme: "dark",
-      });
+
+    if (process.env.NODE_ENV !== "production") {
+      // Which states actually fired, in order: window.__meetingStates
+      window.__meetingStates = (window.__meetingStates || []).concat({ state, at: new Date().toISOString() });
     }
+
+    const entry = MEETING_STATE_TOAST[state];
+    if (!entry) return;
+
+    // Only ever one meeting-state toast on screen: drop the others first, so a
+    // flapping connection doesn't stack a pile of stale banners.
+    Object.keys(MEETING_STATE_TOAST)
+      .filter((other) => other !== state)
+      .forEach((other) => toast.dismiss(MEETING_STATE_TOAST_ID(other)));
+
+    toast(entry.message, {
+      toastId: MEETING_STATE_TOAST_ID(state),
+      position: "bottom-left",
+      type: entry.type,
+      // Type still drives the colour; just no leading glyph.
+      icon: false,
+      // Connecting / reconnecting have no natural end — they're cleared by
+      // whichever state comes next.
+      autoClose: entry.progress ? false : 4000,
+      hideProgressBar: true,
+      closeButton: false,
+      pauseOnHover: true,
+      draggable: true,
+      theme: "dark",
+    });
   }
 
   const isCustomer =
@@ -274,7 +318,7 @@ export function MeetingContainer({ onMeetingLeave, precallTracks = { video: fals
       mMeeting.participants.get(id)?.displayName?.toLowerCase() !== "recorder"
   ).length;
   const statusMessage =
-    meetingState === "CONNECTING" || meetingState === "DISCONNECTED"
+    meetingState !== "CONNECTED"
       ? "Reconnecting…"
       : remoteParticipantCount === 0
       ? "Waiting for Other Participant…"
@@ -283,6 +327,88 @@ export function MeetingContainer({ onMeetingLeave, precallTracks = { video: fals
   useEffect(() => {
     mMeetingRef.current = mMeeting;
   }, [mMeeting]);
+
+  // Both watches stand down unless the meeting is actually connected. While
+  // reconnecting the stats describe a half-torn-down transport, and both sides
+  // reset to "unknown" so no stale verdict survives the outage.
+  const isConnected = meetingState === "CONNECTED";
+
+  // Uplink health from loss / rtt / jitter on our own outbound stats.
+  const localNetwork = useNetworkWatch({
+    participantId: mMeeting?.localParticipant?.id,
+    enabled: !!localParticipantAllowedJoin && isConnected &&
+      (mMeeting?.localMicOn || mMeeting?.localWebcamOn),
+    direction: "uplink",
+  });
+
+  // Same check on the other party's inbound stream — what actually reaches us.
+  const remoteParticipantId = [...mMeeting.participants.keys()].find(
+    (id) =>
+      id !== mMeeting.localParticipant?.id &&
+      mMeeting.participants.get(id)?.displayName?.toLowerCase() !== "recorder"
+  );
+  const remoteNetwork = useNetworkWatch({
+    participantId: remoteParticipantId,
+    enabled: !!localParticipantAllowedJoin && isConnected && !!remoteParticipantId,
+    direction: "downlink",
+  });
+
+  // Banners: the SDK's own encoder limitation plus the low-uplink watch.
+  const networkAlerts = [];
+  if (qualityLimitation?.state === "detected") {
+    const copy = {
+      bandwidth: { title: "Limited bandwidth", body: "Video quality has been reduced to keep the call stable." },
+      congestion: { title: "Network congestion", body: "Network traffic is affecting call quality." },
+      cpu: { title: "Device under load", body: "Video quality has been reduced to keep the call stable." },
+    }[qualityLimitation.type] || { title: "Connection quality reduced", body: "Call quality has been adjusted automatically." };
+    networkAlerts.push({
+      id: `limit-${qualityLimitation.type}`,
+      tone: qualityLimitation.type === "cpu" ? "error" : "warn",
+      icon: qualityLimitation.type === "cpu" ? "cpu" : "wifi",
+      ...copy,
+    });
+  }
+  if (localNetwork === "unstable") {
+    networkAlerts.push({
+      id: "local-unstable",
+      tone: "error",
+      icon: "wifi",
+      title: "Unstable internet connection",
+      body: "Your audio and video may be interrupted. Moving closer to your router or switching networks may help.",
+    });
+  } else if (localNetwork === "recovered") {
+    networkAlerts.push({
+      id: "local-recovered",
+      tone: "ok",
+      icon: "ok",
+      title: "Connection restored",
+      body: "Your internet connection is stable again.",
+    });
+  }
+  // The other party — but only claimed on POSITIVE evidence that our own link
+  // is clean ("ok", never "unknown"). Inbound stats travel over our last mile,
+  // so a bad local connection degrades the incoming stream too and would
+  // otherwise get blamed on them.
+  const otherSide = isDoctor ? "Patient" : "Doctor";
+  if (remoteNetwork === "unstable" && localNetwork === "ok") {
+    networkAlerts.push({
+      id: "remote-unstable",
+      tone: "warn",
+      icon: "wifi",
+      title: `${otherSide} has an unstable connection`,
+      body: `The ${otherSide.toLowerCase()}'s audio or video may be interrupted. You may experience delays or quality issues.`,
+    });
+  } else if (remoteNetwork === "recovered" && localNetwork === "ok") {
+    networkAlerts.push({
+      id: "remote-recovered",
+      tone: "ok",
+      icon: "ok",
+      title: `${otherSide}'s connection restored`,
+      body: `The ${otherSide.toLowerCase()}'s audio and video are stable again.`,
+    });
+  }
+
+
 
   const { publish: publishDeviceInfo } = usePubSub("DEVICE_INFO", {});
 
@@ -586,7 +712,7 @@ export function MeetingContainer({ onMeetingLeave, precallTracks = { video: fals
       <div ref={containerRef} className={`h-full w-full flex flex-col relative ${localParticipantAllowedJoin ? "bg-[#1b1b1e]" : "bg-transparent"}`}>
         {localParticipantAllowedJoin ? (
             <>
-              <NetworkQualityPopup limitation={qualityLimitation} />
+              <NetworkAlerts alerts={networkAlerts} />
               {/* Client side of the agent's capture button — no camera in audio calls */}
               {!isAudioOnly && <ImageUploadListner />}
 

@@ -88,7 +88,22 @@ function NameTag({ displayName, isLocal, micOn, isPip }) {
 }
 
 function ParticipantView({ participantId, isPip, forceContain = false }) {
-  const { displayName, micStream, webcamOn, micOn, isLocal, mode } = useParticipant(participantId);
+  // Adaptive subscriptions pause incoming video when the link is tight or the
+  // participant isn't the dominant speaker; tell the viewer instead of just
+  // freezing the tile. ("muted" means they turned their camera/mic off, which
+  // the avatar already covers.)
+  const [pausedReason, setPausedReason] = useState(null);
+  const { displayName, micStream, webcamOn, micOn, isLocal, mode } = useParticipant(participantId, {
+    onStreamPaused: ({ kind, reason }) => {
+      console.log("ParticipantView: onStreamPaused", { kind, reason });
+
+      if (kind === "video" && reason !== "muted") setPausedReason(reason);
+    },
+    onStreamResumed: ({ kind }) => {
+      console.log("ParticipantView: onStreamResumed", { kind });
+      if (kind === "video") setPausedReason(null);
+    },
+  });
 
   const isMobile = useIsMobile();
   const { isDoctor, maintainLandscapeVideoAspectRatio, muteSpeaker, selectedSpeaker } =
@@ -124,6 +139,8 @@ function ParticipantView({ participantId, isPip, forceContain = false }) {
   }, [micStream, micOn]);
 
   if (mode !== "SEND_AND_RECV") return null;
+
+  const videoPaused = pausedReason;
 
   const fit = forceContain || (!isMobile && maintainLandscapeVideoAspectRatio) ? "video-contain" : "video-cover";
 
@@ -172,6 +189,24 @@ function ParticipantView({ participantId, isPip, forceContain = false }) {
               {label}
             </button>
           ))}
+        </div>
+      )}
+
+      {videoPaused && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/55 px-4">
+          <div className="flex items-center gap-2 rounded-lg bg-[rgba(27,27,30,0.92)] border border-white/10 px-3 py-2 max-w-full">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FF900C" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+              <line x1="1" y1="1" x2="23" y2="23" />
+              <path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55" />
+              <path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39" />
+              <path d="M10.71 5.05A16 16 0 0 1 22.56 9" />
+              <path d="M8.53 16.11a6 6 0 0 1 6.95 0" />
+              <circle cx="12" cy="20" r="1" fill="#FF900C" stroke="none" />
+            </svg>
+            <p className={`text-white ${isPip ? "text-[10px]" : "text-xs"} leading-4`}>
+              Video paused to save bandwidth
+            </p>
+          </div>
         </div>
       )}
 
