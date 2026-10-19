@@ -13,7 +13,7 @@ import { useParticipant } from "@videosdk.live/react-sdk";
 //   loss  8%    → SDK penalty 45 → FAIR
 //   rtt   500ms → SDK penalty 33 → GOOD/FAIR boundary
 //   jitter 80ms → SDK penalty 28 → past the SDK's own 70ms "high" flag
-export const BAD = {
+const BAD = {
   loss: 0.08,
   rtt: 500,
   jitter: 80,
@@ -55,6 +55,8 @@ function foldEntries(entries) {
     packetsLost: 0, totalPackets: 0, bitrate: 0,
     jitter: null, rtt: null,
     freezeSec: null, framesDropped: null, framesReceived: null,
+    // One per simulcast layer — what Chrome's encoder is reporting right now.
+    limitationReasons: [],
   };
   for (const e of entries) {
     if (e.packetsLost != null) out.packetsLost += e.packetsLost;
@@ -65,6 +67,7 @@ function foldEntries(entries) {
     // roundTripTime. Read both so the check can't silently go dead.
     const entryRtt = e.rtt ?? e.roundTripTime;
     if (entryRtt != null) out.rtt = Math.max(out.rtt ?? 0, entryRtt);
+    out.limitationReasons.push(e.limitation?.reason ?? null);
     if (e.totalFreezesDuration != null) out.freezeSec = Math.max(out.freezeSec ?? 0, e.totalFreezesDuration);
     if (e.framesDropped != null) out.framesDropped = Math.max(out.framesDropped ?? 0, e.framesDropped);
     if (e.framesReceived != null) out.framesReceived = Math.max(out.framesReceived ?? 0, e.framesReceived);
@@ -181,6 +184,9 @@ export default function useNetworkWatch({ participantId, enabled = true, directi
         window.__netWatch[direction] = {
           lossPct: expected ? +((lost / expected) * 100).toFixed(2) : null,
           expected, jitter: s.jitter, rtt: s.rtt, kbps: Math.round(s.bitrate), isVideo,
+          // One entry per encoding: 3 for a simulcast sender, 1 otherwise.
+          layers: entries.length,
+          limitationReasons: s.limitationReasons,
           frozen: deltaFreezeSec != null && elapsedMs ? +(deltaFreezeSec / (elapsedMs / 1000)).toFixed(3) : null,
           dropped: deltaReceived ? +(deltaDropped / deltaReceived).toFixed(3) : null,
           flags: { lossBad, rttBad, jitterBad, bitrateBad, frozenBad, droppedBad },

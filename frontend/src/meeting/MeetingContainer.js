@@ -4,6 +4,8 @@ import {
   useMeeting,
   usePubSub,
 } from "@videosdk.live/react-sdk";
+import { fireSdk } from "../lib/sdkCall";
+import useSafePublish from "../hooks/useSafePublish";
 import { BottomBar } from "./components/BottomBar";
 import MemorizedParticipantView from "./components/ParticipantView";
 import DoctorView from "../components/doctor/DoctorView";
@@ -20,6 +22,8 @@ import { ParticipantDetailsPanel } from "../components/ParticipantDetailsPanel";
 import MobileCustomerCallView from "../components/MobileCustomerCallView";
 import NetworkAlerts from "../components/NetworkAlerts";
 import useNetworkWatch from "../hooks/useNetworkWatch";
+import { useLimitationDetector, useIncomingVideoPause, DEFAULT_TRIGGERS, DEFAULT_RESTORE_DELAY_MS } from "../hooks/useBandwidthVideoSaver";
+import BandwidthSaverPanel from "../components/BandwidthSaverPanel";
 import useGeolocation from "../hooks/useGeolocation";
 import usePatientVideoQuality from "../hooks/usePatientVideoQuality";
 import { getIPGeoInfo } from "../api";
@@ -103,6 +107,7 @@ export function MeetingContainer({ onMeetingLeave, precallTracks = { video: fals
     caseId,
     setGeoData,
     isAudioOnly,
+    setIncomingVideoPaused,
   } = useMeetingAppContext();
 
   const [meetingErrorVisible, setMeetingErrorVisible] = useState(false);
@@ -155,7 +160,7 @@ export function MeetingContainer({ onMeetingLeave, precallTracks = { video: fals
   };
 
   function onParticipantJoined(participant) {
-    participant && participant.setQuality("high");
+    participant && fireSdk(() => participant.setQuality("high"), "setQuality");
   }
 
   // The pre-call tracks are handed to MeetingProvider as custom tracks and
@@ -167,16 +172,16 @@ export function MeetingContainer({ onMeetingLeave, precallTracks = { video: fals
       const meeting = mMeetingRef.current;
       if (initialWebcamOn && !isAudioOnly && !precallTracks.video) {
         const track = await createVideoTrack(selectedWebcam?.id);
-        if (track) meeting.changeWebcam(track);
+        if (track) fireSdk(() => meeting.changeWebcam(track), "changeWebcam");
       }
       if (initialMicOn && !precallTracks.audio) {
         const track = await createAudioTrack(selectedMicrophone?.id);
-        if (track) meeting.changeMic(track);
+        if (track) fireSdk(() => meeting.changeMic(track), "changeMic");
       }
       // Let the SDK pause/downgrade incoming video by itself when the link
       // degrades, instead of every participant always pulling full quality.
       try {
-        meeting.enableAdaptiveSubscription();
+        fireSdk(() => meeting.enableAdaptiveSubscription(), "enableAdaptiveSubscription");
       } catch (e) {
         console.warn("enableAdaptiveSubscription failed:", e);
       }
@@ -217,14 +222,7 @@ export function MeetingContainer({ onMeetingLeave, precallTracks = { video: fals
 
   function _handleOnMeetingStateChanged(data) {
     const { state } = data;
-
-    console.log("[VideoSDK] onMeetingStateChanged:", state);
     setMeetingState(state);
-
-    if (process.env.NODE_ENV !== "production") {
-      // Which states actually fired, in order: window.__meetingStates
-      window.__meetingStates = (window.__meetingStates || []).concat({ state, at: new Date().toISOString() });
-    }
 
     const entry = MEETING_STATE_TOAST[state];
     if (!entry) return;
@@ -258,7 +256,7 @@ export function MeetingContainer({ onMeetingLeave, precallTracks = { video: fals
     participantMode === participantModes.DOCTOR ||
     participantMode === participantModes.AGENT;
 
-  const { publish: publishMicSilence } = usePubSub("MIC_SILENCE", {
+  const { publish: publishMicSilence } = useSafePublish("MIC_SILENCE", {
     onMessageReceived: ({ payload, senderId }) => {
       if (!isDoctor || senderId === mMeetingRef.current?.localParticipant?.id) return;
       if (payload.state === "detected") {
@@ -274,7 +272,6 @@ export function MeetingContainer({ onMeetingLeave, precallTracks = { video: fals
 
   const onAudioInputSilence = useCallback(({ devicelabel, state }) => {
 
-    console.log("deviceLabel", devicelabel, state);
     
 
     if (!isCustomer) return;
@@ -296,8 +293,10 @@ export function MeetingContainer({ onMeetingLeave, precallTracks = { video: fals
     }
   }, [isCustomer, publishMicSilence]);
 
-  const _handleOnQualityLimitation = useCallback(({ type, state }) => {
-    setQualityLimitation({ type, state });
+  const _handleOnQualityLimitation = useCallback(({ type, state, timestamp }) => {
+    // Keep the timestamp: the saver keys an effect off this object, and two
+    // identical {type,state} pairs must still read as two separate events.
+    setQualityLimitation({ type, state, timestamp: timestamp ?? Date.now() });
   }, []);
 
   const mMeeting = useMeeting({
@@ -354,6 +353,84 @@ export function MeetingContainer({ onMeetingLeave, precallTracks = { video: fals
     direction: "downlink",
   });
 
+  // ── Bandwidth saver ───────────────────────────────────────────────────────
+  // When the PATIENT's connection struggles, the patient stops the SFU sending
+  // them the doctor's video — their downlink is freed without stopping any
+  // local stream. The doctor's camera, self-view and virtual background keep
+  // running, and the patient's camera is never touched, so the doctor sees
+  // them throughout.
+  const [saverConfig, setSaverConfig] = useState({
+    enabled: true,
+    triggers: DEFAULT_TRIGGERS,
+    restoreDelayMs: DEFAULT_RESTORE_DELAY_MS,
+  });
+  // The doctor's copy of the patient's verdict — for the banner only; nothing
+  // on the doctor's side is switched off.
+  const [directivePhase, setDirectivePhase] = useState("idle");
+
+  // ONE setting for the whole call: either side changes it, both follow.
+  // persist:true so a late joiner picks up the current value on subscribe.
+  const { publish: publishSaverConfig } = useSafePublish("SAVER_CONFIG", {
+    onMessageReceived: ({ payload }) => {
+      if (payload) setSaverConfig(payload);
+    },
+  });
+
+  const updateSaverConfig = useCallback(
+    (patch) => {
+      setSaverConfig((prev) => {
+        const next = { ...prev, ...patch };
+        try {
+          publishSaverConfig("SAVER_CONFIG", { persist: true }, next);
+        } catch (e) { /* pubsub not ready */ }
+        return next;
+      });
+    },
+    [publishSaverConfig]
+  );
+
+  // The patient's verdict, broadcast to the doctor. persist:true so a doctor
+  // who joins or rejoins mid-episode lands on the right camera state.
+  const { publish: publishDirective } = useSafePublish("VIDEO_DIRECTIVE", {
+    onMessageReceived: ({ payload, senderId }) => {
+      if (senderId === mMeetingRef.current?.localParticipant?.id) return;
+      setDirectivePhase(payload?.phase ?? "idle");
+    },
+  });
+
+  // Detection runs on the patient only — it is their connection we protect.
+  const detector = useLimitationDetector({
+    enabled: saverConfig.enabled && !isDoctor && !!localParticipantAllowedJoin && isConnected,
+    triggers: saverConfig.triggers,
+    restoreDelayMs: saverConfig.restoreDelayMs,
+    limitationEvent: qualityLimitation,
+    // Measured signals alongside the SDK's own events. "downlink" is the most
+    // direct evidence that the incoming doctor video is what's hurting them.
+    externalActive: [
+      ...(localNetwork === "unstable" ? ["uplink"] : []),
+      ...(remoteNetwork === "unstable" ? ["downlink"] : []),
+    ],
+    onPhaseChange: useCallback(({ phase, reasons }) => {
+      try {
+        publishDirective("VIDEO_DIRECTIVE", { persist: true }, { phase, reasons });
+      } catch (e) { /* pubsub not ready */ }
+    }, [publishDirective]),
+  });
+
+  // The patient acts on its own verdict, locally — no round trip needed for
+  // the thing that saves the bandwidth.
+  useIncomingVideoPause({
+    enabled: saverConfig.enabled && !isDoctor && !!localParticipantAllowedJoin && isConnected && !isAudioOnly,
+    phase: detector.phase,
+    meetingRef: mMeetingRef,
+    onPausedChange: setIncomingVideoPaused,
+  });
+
+  // What each side shows: the patient sees its own detector, the doctor sees
+  // the directive it received.
+  const saverPhase = isDoctor ? directivePhase : detector.phase;
+  const videoHeldOff = saverPhase === "saving" || saverPhase === "pending";
+
   // Banners: the SDK's own encoder limitation plus the low-uplink watch.
   const networkAlerts = [];
   if (qualityLimitation?.state === "detected") {
@@ -386,6 +463,25 @@ export function MeetingContainer({ onMeetingLeave, precallTracks = { video: fals
       body: "Your internet connection is stable again.",
     });
   }
+  if (videoHeldOff) {
+    networkAlerts.push(
+      isDoctor
+        ? {
+            id: "saver-doctor",
+            tone: "warn",
+            icon: "wifi",
+            title: "Your video is paused for the patient",
+            body: "The patient's network is struggling, so they have paused your video to keep the call stable. Your camera is still on — they can hear you, and you can still see them.",
+          }
+        : {
+            id: "saver-patient",
+            tone: "warn",
+            icon: "wifi",
+            title: "Doctor's video paused to save your data",
+            body: "Your connection is weak, so the doctor's video was paused to keep your call stable. Your own camera is still on and the doctor can see you.",
+          }
+    );
+  }
   // The other party — but only claimed on POSITIVE evidence that our own link
   // is clean ("ok", never "unknown"). Inbound stats travel over our last mile,
   // so a bad local connection degrades the incoming stream too and would
@@ -410,11 +506,10 @@ export function MeetingContainer({ onMeetingLeave, precallTracks = { video: fals
   }
 
 
-
   // Doctor picks the patient's camera resolution; applied here on the patient side.
   usePatientVideoQuality({ enabled: isCustomer && !isAudioOnly });
 
-  const { publish: publishDeviceInfo } = usePubSub("DEVICE_INFO", {});
+  const { publish: publishDeviceInfo } = useSafePublish("DEVICE_INFO", {});
   // Everything published so far, so a small update can be re-sent as the full
   // payload (the doctor restores only the LAST persisted message on reload).
   const deviceInfoRef = useRef({});
@@ -531,7 +626,7 @@ export function MeetingContainer({ onMeetingLeave, precallTracks = { video: fals
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [localParticipantAllowedJoin, selectedWebcam?.id, selectedMicrophone?.id, selectedSpeakerId, mMeeting?.localWebcamOn, mMeeting?.localMicOn]);
 
-  const { publish: publishGeoTag } = usePubSub("GEO_TAG", {
+  const { publish: publishGeoTag } = useSafePublish("GEO_TAG", {
     onMessageReceived: ({ payload, senderId }) => {
       if (senderId === mMeetingRef.current?.localParticipant?.id) return;
       if (isDoctor) setGeoData(payload);
@@ -543,7 +638,7 @@ export function MeetingContainer({ onMeetingLeave, precallTracks = { video: fals
     },
   });
 
-  const { publish: publishGeoFailed } = usePubSub("GEO_FAILED", {});
+  const { publish: publishGeoFailed } = useSafePublish("GEO_FAILED", {});
 
   usePubSub("GEO_RETRY", {
     onMessageReceived: ({ senderId }) => {
@@ -720,7 +815,7 @@ export function MeetingContainer({ onMeetingLeave, precallTracks = { video: fals
       if (meeting.localMicOn) {
         try {
           const audioTrack = await createAudioTrack(selectedMicrophone?.id);
-          if (audioTrack) meeting.changeMic(audioTrack);
+          if (audioTrack) fireSdk(() => meeting.changeMic(audioTrack), "changeMic");
         } catch (e) {
           console.warn("Mic restart after interruption failed:", e);
         }
@@ -728,10 +823,10 @@ export function MeetingContainer({ onMeetingLeave, precallTracks = { video: fals
 
       if (meeting.localWebcamOn) {
         try {
-          meeting.disableWebcam();
+          fireSdk(() => meeting.disableWebcam(), "disableWebcam");
           await new Promise((r) => setTimeout(r, 300));
           const videoTrack = await createVideoTrack(selectedWebcam?.id);
-          if (videoTrack) meeting.changeWebcam(videoTrack);
+          if (videoTrack) fireSdk(() => meeting.changeWebcam(videoTrack), "changeWebcam");
         } catch (e) {
           console.warn("Webcam restart after interruption failed:", e);
         }
@@ -748,6 +843,17 @@ export function MeetingContainer({ onMeetingLeave, precallTracks = { video: fals
         {localParticipantAllowedJoin ? (
             <>
               <NetworkAlerts alerts={networkAlerts} />
+              <BandwidthSaverPanel
+                enabled={saverConfig.enabled}
+                onEnabledChange={(enabled) => updateSaverConfig({ enabled })}
+                triggers={saverConfig.triggers}
+                onTriggersChange={(triggers) => updateSaverConfig({ triggers })}
+                restoreDelayMs={saverConfig.restoreDelayMs}
+                onRestoreDelayChange={(restoreDelayMs) => updateSaverConfig({ restoreDelayMs })}
+                phase={saverPhase}
+                activeTypes={isDoctor ? [] : detector.activeTypes}
+                role={isDoctor ? "doctor" : "patient"}
+              />
               {/* Client side of the agent's capture button — no camera in audio calls */}
               {!isAudioOnly && <ImageUploadListner />}
 

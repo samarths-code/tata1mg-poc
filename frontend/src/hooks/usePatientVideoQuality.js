@@ -1,4 +1,6 @@
 import { useMeeting, usePubSub } from "@videosdk.live/react-sdk";
+import { fireSdk } from "../lib/sdkCall";
+import useSafePublish from "../hooks/useSafePublish";
 import { useEffect, useRef } from "react";
 import { useMeetingStore } from "../store/meetingStore";
 import {
@@ -40,7 +42,7 @@ export default function usePatientVideoQuality({ enabled }) {
   const rerunRef = useRef(false);
   const failedRef = useRef(false);
 
-  const { publish: publishState } = usePubSub(PATIENT_VIDEO_QUALITY_STATE_TOPIC, {});
+  const { publish: publishState } = useSafePublish(PATIENT_VIDEO_QUALITY_STATE_TOPIC, {});
   const lastReportRef = useRef("");
   const report = () => {
     if (!enabled) return;
@@ -83,7 +85,7 @@ export default function usePatientVideoQuality({ enabled }) {
             await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
             continue;
           }
-          meeting.changeWebcam(track);
+          fireSdk(() => meeting.changeWebcam(track), "changeWebcam");
           // Release the previous camera track so the phone isn't holding two.
           const next = track.getVideoTracks?.()[0];
           if (old && old !== next) old.stop();

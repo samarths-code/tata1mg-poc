@@ -1,5 +1,6 @@
 import React, { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { useMeeting, usePubSub } from "@videosdk.live/react-sdk";
+import useSafePublish from "../../hooks/useSafePublish";
 import { XMarkIcon, ArrowDownTrayIcon, ArrowPathIcon, ScissorsIcon } from "@heroicons/react/24/outline";
 import Pill from "../buttons/Pill";
 import { IMAGE_TRANSFER_TOPIC, captureTopic } from "../ImageUploadListner";
@@ -26,7 +27,7 @@ export default function ImageCaptureButton({ customerId }) {
   const chunksRef = useRef({ id: null, parts: [], received: 0 });
   const timeoutRef = useRef(null);
 
-  const { publish: requestCapture } = usePubSub(captureTopic(customerId ?? "__none__"), {});
+  const { publish: requestCapture } = useSafePublish(captureTopic(customerId ?? "__none__"), {});
 
   usePubSub(
     IMAGE_TRANSFER_TOPIC,

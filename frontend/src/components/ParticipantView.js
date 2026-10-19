@@ -260,23 +260,21 @@ function ParticipantView({ participantId, isPip, forceContain = false }) {
   const [pausedReason, setPausedReason] = useState(null);
   const { displayName, micStream, webcamOn, micOn, isLocal, mode } = useParticipant(participantId, {
     onStreamPaused: ({ kind, reason }) => {
-      console.log("ParticipantView: onStreamPaused", { kind, reason });
-
       if (kind === "video" && reason !== "muted") setPausedReason(reason);
     },
     onStreamResumed: ({ kind }) => {
-      console.log("ParticipantView: onStreamResumed", { kind });
       if (kind === "video") setPausedReason(null);
     },
   });
 
   const isMobile = useIsMobile();
-  const { isDoctor, maintainLandscapeVideoAspectRatio, muteSpeaker, selectedSpeaker } =
+  const { isDoctor, maintainLandscapeVideoAspectRatio, muteSpeaker, selectedSpeaker, incomingVideoPaused } =
     useMeetingAppContext((s) => ({
       isDoctor: s.isDoctor,
       maintainLandscapeVideoAspectRatio: s.maintainLandscapeVideoAspectRatio,
       muteSpeaker: s.muteSpeaker,
       selectedSpeaker: s.selectedSpeaker,
+      incomingVideoPaused: s.incomingVideoPaused,
     }));
 
   const [zoom, setZoom] = useState(1);
@@ -307,14 +305,19 @@ function ParticipantView({ participantId, isPip, forceContain = false }) {
 
   if (mode !== "SEND_AND_RECV") return null;
 
-  const videoPaused = pausedReason;
+  // A paused consumer keeps webcamOn true and simply stops delivering frames,
+  // so the <video> would sit on its last decoded one. Our own pause flag is the
+  // authoritative source here — onStreamPaused is only a secondary signal (it
+  // covers the SDK's adaptive pauses, and may not fire for a pause we asked
+  // for ourselves). Remote tiles only: our own camera is unaffected.
+  const videoPaused = pausedReason || (incomingVideoPaused && !isLocal);
 
   const fit = forceContain || (!isMobile && maintainLandscapeVideoAspectRatio) ? "video-contain" : "video-cover";
 
   return (
     <div data-participant-tile className={`h-full w-full bg-gray-750 relative overflow-hidden rounded-lg ${fit}`}>
       <audio ref={micRef} autoPlay muted={isLocal || !muteSpeaker} />
-      {webcamOn ? (
+      {webcamOn && !videoPaused ? (
         <VideoPlayer
           participantId={participantId}
           type="video"
@@ -373,7 +376,10 @@ function ParticipantView({ participantId, isPip, forceContain = false }) {
       )}
 
       {videoPaused && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/55 px-4">
+        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-gray-750 px-4">
+          <div className="flex items-center justify-center rounded-full bg-gray-800 2xl:h-[92px] h-[52px] 2xl:w-[92px] w-[52px]">
+            <p className="text-2xl text-white">{String(displayName).charAt(0).toUpperCase()}</p>
+          </div>
           <div className="flex items-center gap-2 rounded-lg bg-[rgba(27,27,30,0.92)] border border-white/10 px-3 py-2 max-w-full">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FF900C" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
               <line x1="1" y1="1" x2="23" y2="23" />

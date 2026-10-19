@@ -1,4 +1,5 @@
 import { useMeeting, useParticipant, usePubSub } from "@videosdk.live/react-sdk";
+import useSafePublish from "../hooks/useSafePublish";
 
 const CHUNK_SIZE = 500;
 
@@ -13,7 +14,7 @@ const ImageUploadListner = () => {
   const localId = mMeeting?.localParticipant?.id;
   const { captureImage } = useParticipant(localId);
 
-  const { publish: publishChunk } = usePubSub(IMAGE_TRANSFER_TOPIC, {});
+  const { publish: publishChunk } = useSafePublish(IMAGE_TRANSFER_TOPIC, {});
 
   async function captureAndChunk() {
     const transferId = Math.random().toString(36).substring(2, 9);

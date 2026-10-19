@@ -12,7 +12,7 @@ import { trackMedia } from "../lib/mediaTracks";
 // preview track IS the track published into the meeting, so both use these.
 export const VIDEO_TRACK_CONFIG = {
   optimizationMode: "motion",
-  bitrateMode: Constants.BitrateMode.BANDWIDTH_OPTIMIZED, // HIGH_QUALITY | BALANCED | BANDWIDTH_OPTIMIZED
+  bitrateMode: Constants.BitrateMode.BANDWIDTH_OPTIMIZED,
   codec: "H264",
 };
 // Per-role resolution: the doctor's self-view only needs 180p. The patient's

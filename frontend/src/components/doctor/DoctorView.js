@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useMeeting, usePubSub } from "@videosdk.live/react-sdk";
+import useSafePublish from "../../hooks/useSafePublish";
 import { useMeetingStore } from "../../store/meetingStore";
 import SideBySideLayout from "../SideBySideLayout";
 import { BottomBar } from "../../meeting/components/BottomBar";
@@ -32,7 +33,7 @@ export default function DoctorView() {
   // Clear failed flag once real geo data arrives
   useEffect(() => { if (geoData) setGeoFailed(false); }, [geoData]);
 
-  const { publish: publishGeoRetry } = usePubSub("GEO_RETRY", {});
+  const { publish: publishGeoRetry } = useSafePublish("GEO_RETRY", {});
 
   usePubSub("GEO_FAILED", {
     onMessageReceived: () => setGeoFailed(true),

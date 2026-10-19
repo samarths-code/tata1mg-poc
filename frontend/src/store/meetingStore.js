@@ -35,6 +35,11 @@ export const useMeetingStore = create((set) => ({
   maintainLandscapeVideoAspectRatio: true,
   canRemoveOtherParticipant: false,
 
+  // True while WE have asked the SFU to stop sending us video (bandwidth
+  // saver). Drives the tile placeholder directly, so the message never depends
+  // on the SDK emitting onStreamPaused for a pause we initiated ourselves.
+  incomingVideoPaused: false,
+
   // ── UI / sidebar ───────────────────────────────────────────────────────────
   meetingMode: null,
   images: [],
@@ -87,6 +92,7 @@ export const useMeetingStore = create((set) => ({
 
   // ── Setters (value | updater-fn compatible) ────────────────────────────────
   setMeetingMode: updater(set, "meetingMode"),
+  setIncomingVideoPaused: updater(set, "incomingVideoPaused"),
   setImages: updater(set, "images"),
   setRaisedHandsParticipants: updater(set, "raisedHandsParticipants"),
   setSelectedMicroPhone: updater(set, "selectedMicrophone"),

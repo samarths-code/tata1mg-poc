@@ -1,4 +1,5 @@
 import { useMediaDevice, useMeeting } from "@videosdk.live/react-sdk";
+import { fireSdk } from "../../lib/sdkCall";
 import React, { Fragment, useEffect, useState } from "react";
 import { ChevronUpIcon, ComputerDesktopIcon } from "@heroicons/react/24/outline";
 import useIsTab from "../../hooks/useIsTab";
@@ -67,6 +68,7 @@ export const MicBTN = () => {
   const { getMicrophones } = useMediaDevice();
   const [mics, setMics] = useState([]);
   const localMicOn = mMeeting?.localMicOn;
+  const [micBusy, setMicBusy] = useState(false);
 
   // Fixed 16×16 inline icon — only the path changes on toggle, so there is no
   // layout shift (the old MicOnIcon/MicOffIcon components had different widths).
@@ -90,11 +92,22 @@ export const MicBTN = () => {
 
   return (
     <PillBtn
-      onToggle={() => mMeeting.toggleMic()}
+      onToggle={async () => {
+        // Same in-flight guard as the camera (ERROR_OPERATION_IN_PROGRESS).
+        if (micBusy) return;
+        setMicBusy(true);
+        try {
+          await mMeeting.toggleMic();
+        } catch (e) {
+          console.warn("toggleMic failed:", e?.message ?? e);
+        } finally {
+          setMicBusy(false);
+        }
+      }}
       icon={MicIcon}
       iconOn={localMicOn}
       micActive={localMicOn}
-      disabled={!isMicrophonePermissionAllowed}
+      disabled={!isMicrophonePermissionAllowed || micBusy}
     >
       <Popover className="relative">
         {({ close }) => (
@@ -116,7 +129,7 @@ export const MicBTN = () => {
                     close();
                     setSelectedMicroPhone({ id });
                     const track = await createAudioTrack(id);
-                    if (track) mMeeting.changeMic(track);
+                    if (track) fireSdk(() => mMeeting.changeMic(track), "changeMic");
                   }}
                 />
               </Popover.Panel>
@@ -197,6 +210,7 @@ export const WebCamBTN = () => {
   const { selectedWebcam, setSelectedWebcam, isCameraPermissionAllowed, isAudioOnly } = useMeetingAppContext();
   const [webcams, setWebcams] = useState([]);
   const localWebcamOn = mMeeting?.localWebcamOn;
+  const [webcamBusy, setWebcamBusy] = useState(false);
 
   if (isAudioOnly) return null;
 
@@ -221,14 +235,24 @@ export const WebCamBTN = () => {
     >
       <button
         onClick={async () => {
-          // Same 480p track (+ agent background) as pre-call and join.
-          const track = localWebcamOn ? undefined : await createVideoTrack(selectedWebcam?.id);
-          mMeeting.toggleWebcam(track);
-          // Camera going off — release the background processor too.
-          if (localWebcamOn) stopVirtualBackground();
+          // SDK v1 rejects a second enable/disable while one is in flight
+          // (ERROR_OPERATION_IN_PROGRESS), so hold the button until it settles.
+          if (webcamBusy) return;
+          setWebcamBusy(true);
+          try {
+            // Same 480p track (+ agent background) as pre-call and join.
+            const track = localWebcamOn ? undefined : await createVideoTrack(selectedWebcam?.id);
+            await mMeeting.toggleWebcam(track);
+            // Camera going off — release the background processor too.
+            if (localWebcamOn) stopVirtualBackground();
+          } catch (e) {
+            console.warn("toggleWebcam failed:", e?.message ?? e);
+          } finally {
+            setWebcamBusy(false);
+          }
         }}
         className="flex items-center justify-center p-1 rounded shrink-0"
-        disabled={!isCameraPermissionAllowed}
+        disabled={!isCameraPermissionAllowed || webcamBusy}
       >
         <VideoIcon />
       </button>
@@ -253,7 +277,7 @@ export const WebCamBTN = () => {
                     setSelectedWebcam({ id });
                     // Swap in place — no disable/enable gap for the other side.
                     const track = await createVideoTrack(id);
-                    if (track) mMeeting.changeWebcam(track);
+                    if (track) fireSdk(() => mMeeting.changeWebcam(track), "changeWebcam");
                   }}
                 />
               </Popover.Panel>
