@@ -10,9 +10,11 @@ function DrawerShell({ title, subtitle, onClose, children, footer }) {
       <div className="shrink-0 px-5 pt-5 pb-3 border-b border-[rgba(255,255,255,0.03)]">
         <div className="flex items-start justify-between gap-3">
           <h2 className="text-white text-lg font-semibold">{title}</h2>
-          <button onClick={onClose} className="shrink-0 text-[#919093] hover:text-white transition-colors">
-            <XMarkIcon className="w-5 h-5" />
-          </button>
+          {onClose && (
+            <button onClick={onClose} className="shrink-0 text-[#919093] hover:text-white transition-colors">
+              <XMarkIcon className="w-5 h-5" />
+            </button>
+          )}
         </div>
         {subtitle && <p className="text-[#919093] text-xs mt-1 leading-relaxed pr-6">{subtitle}</p>}
       </div>
@@ -53,34 +55,36 @@ function MetricRow({ label, value, badge }) {
   );
 }
 
-function DeviceList({ devices = [] }) {
-  if (!devices.length) return <p className="text-[#77777a] text-xs italic">None detected</p>;
+// One row per device kind, showing only the device the patient is using.
+// Label on top, full device name below (wraps — never truncated).
+function ActiveDeviceRow({ label, value, off }) {
   return (
-    <div className="space-y-2">
-      {devices.map((d, i) => {
-        const label = typeof d === "string" ? d : d.label;
-        return (
-          <div key={i} className="flex items-center gap-2.5">
-            <span className="w-5 h-5 rounded-full bg-[#303033] text-white text-[10px] font-bold flex items-center justify-center shrink-0">
-              {i + 1}
-            </span>
-            <span className="flex-1 truncate text-white text-sm">{label || `Device ${i + 1}`}</span>
-            {i === 0 && <GreenBadge>Active</GreenBadge>}
-          </div>
-        );
-      })}
+    <div className="py-2.5 border-b border-[#303033] last:border-0">
+      <div className="flex items-center justify-between gap-2 mb-1">
+        <span className="text-[#919093] text-xs">{label}</span>
+        {value && <GreenBadge>Active</GreenBadge>}
+      </div>
+      {value ? (
+        <p className="text-white text-sm leading-5 break-words">{value}</p>
+      ) : (
+        <p className="text-[#77777a] text-sm italic">{off || "Not detected"}</p>
+      )}
     </div>
   );
 }
 
 /* ───────────────────────── Connection Details ───────────────────────── */
 
-export function ConnectionDetailsPanel({ onClose, deviceInfo, geoData, geoFailed, onRequestLocation, onNextStep, hideCameras = false }) {
+export function ConnectionDetailsPanel({ onClose, deviceInfo, geoData, geoFailed, onRequestLocation, hideCameras = false }) {
   const [requesting, setRequesting] = useState(false);
 
-  const cameras = deviceInfo?.cameras || [];
-  const mics = deviceInfo?.microphones || [];
-  const outputs = deviceInfo?.audioOutputs || [];
+  // Only the devices in use. activeCamera / activeMic come from the tracks the
+  // patient is publishing, so null there means that device is turned off.
+  // Older payloads without them fall back to the selected labels.
+  const hasActive = deviceInfo && "activeMic" in deviceInfo;
+  const camera = hasActive ? deviceInfo.activeCamera : deviceInfo?.selectedCameraLabel;
+  const mic = hasActive ? deviceInfo.activeMic : deviceInfo?.selectedMicLabel;
+  const output = deviceInfo?.activeOutput || null;
   const region = [geoData?.city || deviceInfo?.city, geoData?.region || deviceInfo?.region, geoData?.country || deviceInfo?.country]
     .filter(Boolean)
     .join(", ");
@@ -99,20 +103,12 @@ export function ConnectionDetailsPanel({ onClose, deviceInfo, geoData, geoFailed
       title="Connection Details"
       subtitle="Review device, network, location, and connected hardware information for this participant."
       onClose={onClose}
-      footer={
-        onNextStep && (
-          <button
-            onClick={onNextStep}
-            className="ml-auto px-5 py-2.5 rounded-lg text-sm font-semibold text-white bg-[#ff6f61] hover:bg-[#e85e51] transition-colors"
-          >
-            Mark Verified
-          </button>
-        )
-      }
     >
-      {!hideCameras && <Card title="Camera Devices"><DeviceList devices={cameras} /></Card>}
-      <Card title="Microphones"><DeviceList devices={mics} /></Card>
-      <Card title="Audio Output"><DeviceList devices={outputs} /></Card>
+      <Card title="Active Devices">
+        {!hideCameras && <ActiveDeviceRow label="Camera" value={camera} off={hasActive ? "Camera off" : undefined} />}
+        <ActiveDeviceRow label="Microphone" value={mic} off={hasActive ? "Mic off" : undefined} />
+        <ActiveDeviceRow label="Speaker" value={output} off="System default" />
+      </Card>
 
       <Card title="Location">
         {geoData?.latitude != null ? (

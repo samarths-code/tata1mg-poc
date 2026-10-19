@@ -8,6 +8,8 @@ import { getToken, getSessionCredentials, getSessionParticipantId } from "./api"
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { releaseAllMedia } from "./lib/mediaTracks";
+import { createAudioTrack, createVideoTrack } from "./hooks/useMediaStream";
+import { useMeetingStore } from "./store/meetingStore";
 
 class MeetingErrorBoundary extends React.Component {
   state = { error: null };
@@ -115,12 +117,61 @@ const App = () => {
       });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => {
-    // Rejoin flow: as soon as the token is ready, start the meeting directly
-    // instead of showing the pre-call join screen.
-    if (isRejoin && token && !isMeetingStarted) {
+  // Rejoin skips the pre-call screen, so nothing has opened the camera/mic yet.
+  // Open them here, exactly as pre-call does (createVideoTrack applies the
+  // doctor's virtual background), and hand them to MeetingProvider as custom
+  // tracks. Without this the SDK opened a plain camera on join and the
+  // background was lost.
+  const prepareRejoinTracks = async () => {
+    // New session: the patient's first track is 360p again; the doctor's
+    // persisted choice is applied after join (usePatientVideoQuality).
+    useMeetingStore.getState().resetPatientQuality();
+    const { selectedWebcam, selectedMicrophone } = useMeetingStore.getState();
+    const [video, audio] = await Promise.all([
+      isAudioOnly ? null : createVideoTrack(selectedWebcam?.id),
+      createAudioTrack(selectedMicrophone?.id),
+    ]);
+    // null -> MeetingProvider falls back to opening the device itself.
+    setCustomVideoStream(video || null);
+    setCustomAudioStream(audio || null);
+
+    // The pre-call screen is what normally records camera/mic permission, and
+    // rejoin skips it. Without this the in-call mic / camera / speaker buttons
+    // and device menus stay disabled (they're gated on these flags). A device
+    // that just opened is proof of permission; otherwise ask the browser.
+    const store = useMeetingStore.getState();
+    const granted = async (name) => {
+      try {
+        return (await navigator.permissions?.query({ name }))?.state === "granted";
+      } catch (e) {
+        return false; // e.g. Firefox / Safari without this permission name
+      }
+    };
+    store.setIsMicrophonePermissionAllowed(!!audio || (await granted("microphone")));
+    if (!isAudioOnly) store.setIsCameraPermissionAllowed(!!video || (await granted("camera")));
+  };
+
+  const rejoinStartingRef = React.useRef(false);
+  const startRejoinedMeeting = async () => {
+    if (rejoinStartingRef.current) return;
+    rejoinStartingRef.current = true;
+    try {
+      await prepareRejoinTracks();
+    } catch (e) {
+      console.warn("Rejoin track setup failed, joining with default devices:", e);
+    } finally {
+      rejoinStartingRef.current = false;
       setMeetingStarted(true);
     }
+  };
+
+  useEffect(() => {
+    // Rejoin flow (?rejoin=1 link): as soon as the token is ready, start the
+    // meeting directly instead of showing the pre-call join screen.
+    if (isRejoin && token && !isMeetingStarted) {
+      startRejoinedMeeting();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isRejoin, token, isMeetingStarted]);
 
   const handleStartMeeting = async () => {
@@ -157,8 +208,9 @@ const App = () => {
     setMicOn(true);
     setWebcamOn(!isAudioOnly);
     setSpekerOn(true);
-    // The previous session's custom tracks are now ended — drop them so the SDK
-    // acquires fresh camera/mic tracks on rejoin (otherwise: error 3031).
+    // The previous session's custom tracks are ended — drop them; fresh ones
+    // (with the virtual background) are opened in startRejoinedMeeting.
+    // Handing ended tracks to the SDK fails with error 3031.
     setCustomVideoStream(null);
     setCustomAudioStream(null);
 
@@ -167,14 +219,14 @@ const App = () => {
     if (urlTok) {
       setToken(urlTok);
       setParticipantId(urlPid);
-      setMeetingStarted(true);
+      startRejoinedMeeting();
     } else {
       // mode-only link — mint fresh credentials, then start.
       getSessionCredentials({ meetingId: mId, mode: (sp.get("mode") || "").toUpperCase() })
         .then(({ token: tok, participantId: pid }) => {
           setToken(tok);
           setParticipantId(pid);
-          setMeetingStarted(true);
+          startRejoinedMeeting();
         })
         .catch((err) => {
           console.error("Rejoin failed:", err);

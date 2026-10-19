@@ -59,7 +59,7 @@ export function TopBar({ bottomBarHeight, caseId, meetingTitle, onToggleParticip
             </span>
           )
         ) : (
-          !isMobile && (
+          !isMobile && onToggleParticipantPanel && (
             <button
               onClick={onToggleParticipantPanel}
               className="bg-[rgba(255,255,255,0.02)] border border-[rgba(255,255,255,0.05)] text-white text-sm font-medium px-3 py-1.5 rounded hover:bg-[rgba(255,255,255,0.06)] transition-colors"

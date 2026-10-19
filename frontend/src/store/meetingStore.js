@@ -55,6 +55,13 @@ export const useMeetingStore = create((set) => ({
 
   // ── Captured data ──────────────────────────────────────────────────────────
   geoData: null,
+  // Patient camera resolution (180 | 360 | 540), chosen by the doctor.
+  // Patient camera quality. `patientVideoQuality` is what the doctor asked for
+  // (every session starts at 360); `patientTrackQuality` is the preset of the
+  // camera track actually opened last (null = none yet). They differ only
+  // while a switch is in flight or has failed.
+  patientVideoQuality: 360,
+  patientTrackQuality: null,
 
   // ── Session seeding ────────────────────────────────────────────────────────
   setSessionConfig: ({ initialMicOn, initialWebcamOn, initialSpeakerOn, participantMode, caseId, isAudioOnly }) =>
@@ -92,6 +99,10 @@ export const useMeetingStore = create((set) => ({
   setMuteSpeaker: updater(set, "muteSpeaker"),
   setParticipantLeftReason: updater(set, "participantLeftReason"),
   setGeoData: updater(set, "geoData"),
+  setPatientVideoQuality: updater(set, "patientVideoQuality"),
+  setPatientTrackQuality: updater(set, "patientTrackQuality"),
+  // New session (first join / rejoin): first track is always 360p again.
+  resetPatientQuality: () => set({ patientVideoQuality: 360, patientTrackQuality: null }),
 }));
 
 /**

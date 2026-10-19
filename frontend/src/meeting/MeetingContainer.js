@@ -21,8 +21,10 @@ import MobileCustomerCallView from "../components/MobileCustomerCallView";
 import NetworkAlerts from "../components/NetworkAlerts";
 import useNetworkWatch from "../hooks/useNetworkWatch";
 import useGeolocation from "../hooks/useGeolocation";
+import usePatientVideoQuality from "../hooks/usePatientVideoQuality";
 import { getIPGeoInfo } from "../api";
 import { releaseAllMedia } from "../lib/mediaTracks";
+import { useMeetingStore } from "../store/meetingStore";
 
 async function reverseGeocode(lat, lng) {
   try {
@@ -103,7 +105,6 @@ export function MeetingContainer({ onMeetingLeave, precallTracks = { video: fals
     isAudioOnly,
   } = useMeetingAppContext();
 
-  const [showParticipantPanel, setShowParticipantPanel] = useState(false);
   const [meetingErrorVisible, setMeetingErrorVisible] = useState(false);
   const [meetingError, setMeetingError] = useState(false);
   const [localParticipantAllowedJoin, setLocalParticipantAllowedJoin] = useState(null);
@@ -410,7 +411,41 @@ export function MeetingContainer({ onMeetingLeave, precallTracks = { video: fals
 
 
 
+  // Doctor picks the patient's camera resolution; applied here on the patient side.
+  usePatientVideoQuality({ enabled: isCustomer && !isAudioOnly });
+
   const { publish: publishDeviceInfo } = usePubSub("DEVICE_INFO", {});
+  // Everything published so far, so a small update can be re-sent as the full
+  // payload (the doctor restores only the LAST persisted message on reload).
+  const deviceInfoRef = useRef({});
+  const publishDeviceInfoMerged = (patch) => {
+    deviceInfoRef.current = { ...deviceInfoRef.current, ...patch };
+    try {
+      publishDeviceInfo("DEVICE_INFO", { persist: true }, deviceInfoRef.current);
+    } catch (err) {
+      console.error("Error publishing device info:", err);
+    }
+  };
+
+  // The devices actually in use: labels of the tracks being published (not
+  // just the first enumerated device) plus the chosen speaker.
+  const readActiveDevices = async () => {
+    let activeCamera = null, activeMic = null, activeOutput = null;
+    for (const st of mMeetingRef.current?.localParticipant?.streams?.values?.() ?? []) {
+      if (st?.kind === "video") activeCamera = st.track?.label || null;
+      if (st?.kind === "audio") activeMic = st.track?.label || null;
+    }
+    try {
+      const outputs = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "audiooutput");
+      const outId = useMeetingStore.getState().selectedSpeaker?.id;
+      activeOutput =
+        outputs.find((d) => d.deviceId === outId)?.label ||
+        outputs.find((d) => d.deviceId === "default")?.label ||
+        outputs[0]?.label ||
+        null;
+    } catch (_) {}
+    return { activeCamera, activeMic, activeOutput };
+  };
 
   useEffect(() => {
     if (!localParticipantAllowedJoin || !isCustomer) return;
@@ -434,19 +469,16 @@ export function MeetingContainer({ onMeetingLeave, precallTracks = { video: fals
         selectedMicLabel    = selMic?.label || microphones[0] || null;
       } catch (_) {}
 
-      try {
-        publishDeviceInfo("DEVICE_INFO", { persist: true }, {
-          userAgent: navigator.userAgent,
-          selectedCameraLabel,
-          selectedMicLabel,
-          connection: navigator.connection?.effectiveType ?? "unknown",
-          cameras,
-          microphones,
-          audioOutputs,
-        });
-      } catch (err) {
-        console.error("Error publishing device info (phase 1):", err);
-      }
+      publishDeviceInfoMerged({
+        userAgent: navigator.userAgent,
+        selectedCameraLabel,
+        selectedMicLabel,
+        connection: navigator.connection?.effectiveType ?? "unknown",
+        cameras,
+        microphones,
+        audioOutputs,
+        ...(await readActiveDevices()),
+      });
 
       // ── Phase 2: enrich with live in-call network stats + geo (background) ──
       // 0.12.5 replacement for getNetworkStats(): read the participant RTC stats.
@@ -467,34 +499,37 @@ export function MeetingContainer({ onMeetingLeave, precallTracks = { video: fals
 
       const ipGeo = await getIPGeoInfo();
 
-      try {
-        publishDeviceInfo("DEVICE_INFO", { persist: true }, {
-          userAgent: navigator.userAgent,
-          selectedCameraLabel,
-          selectedMicLabel,
-          connection: navigator.connection?.effectiveType ?? "unknown",
-          cameras,
-          microphones,
-          audioOutputs,
-          downloadSpeed,
-          uploadSpeed,
-          latencyMs,
-          packetLossPct,
-          jitterMs,
-          city: ipGeo?.city,
-          region: ipGeo?.region,
-          country: ipGeo?.country,
-          isp: ipGeo?.org,
-          ip: ipGeo?.ip,
-          timezone: ipGeo?.timezone,
-        });
-      } catch (err) {
-        console.error("Error publishing device info (phase 2):", err);
-      }
+      publishDeviceInfoMerged({
+        downloadSpeed,
+        uploadSpeed,
+        latencyMs,
+        packetLossPct,
+        jitterMs,
+        city: ipGeo?.city,
+        region: ipGeo?.region,
+        country: ipGeo?.country,
+        isp: ipGeo?.org,
+        ip: ipGeo?.ip,
+        timezone: ipGeo?.timezone,
+        ...(await readActiveDevices()),
+      });
     };
 
     collectAndPublish();
   }, [localParticipantAllowedJoin]);
+
+  // Re-publish the active devices when the patient switches camera / mic /
+  // speaker, or turns one on or off, so the doctor's panel stays current.
+  const selectedSpeakerId = useMeetingStore((s) => s.selectedSpeaker?.id);
+  const firstDeviceSyncRef = useRef(true);
+  useEffect(() => {
+    if (!localParticipantAllowedJoin || !isCustomer) return;
+    if (firstDeviceSyncRef.current) { firstDeviceSyncRef.current = false; return; } // phase 1 covers join
+    // Let the SDK finish swapping the track before reading its label.
+    const id = setTimeout(async () => publishDeviceInfoMerged(await readActiveDevices()), 800);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [localParticipantAllowedJoin, selectedWebcam?.id, selectedMicrophone?.id, selectedSpeakerId, mMeeting?.localWebcamOn, mMeeting?.localMicOn]);
 
   const { publish: publishGeoTag } = usePubSub("GEO_TAG", {
     onMessageReceived: ({ payload, senderId }) => {
@@ -731,16 +766,14 @@ export function MeetingContainer({ onMeetingLeave, precallTracks = { video: fals
                     bottomBarHeight={bottomBarHeight}
                     caseId={caseId}
                     meetingTitle={new URLSearchParams(window.location.search).get("meetingTitle") || ""}
-                    onToggleParticipantPanel={() => setShowParticipantPanel((s) => !s)}
                   />
 
                   <div className="relative flex flex-1 flex-row bg-[#1b1b1e] overflow-hidden">
                     <MemorizedParticipantView statusMessage={statusMessage} />
-                    {showParticipantPanel && (
-                      <div className="shrink-0 h-full">
-                        <ParticipantDetailsPanel onClose={() => setShowParticipantPanel(false)} />
-                      </div>
-                    )}
+                    {/* Always open on desktop */}
+                    <div className="shrink-0 h-full">
+                      <ParticipantDetailsPanel />
+                    </div>
                   </div>
 
                   <BottomBar bottomBarHeight={bottomBarHeight} />

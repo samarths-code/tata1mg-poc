@@ -26,12 +26,14 @@ export function ParticipantDetailsPanel({ onClose }) {
       <div className="flex flex-col gap-2 p-5 shrink-0 w-full">
         <div className="flex gap-2.5 items-center w-full">
           <h2 className="flex-1 text-white text-lg font-semibold leading-[26px]">Participant Details</h2>
-          <button
-            onClick={onClose}
-            className="flex items-center justify-center p-1 rounded-[6px] text-[#919093] hover:text-white transition-colors"
-          >
-            <XMarkIcon className="w-4 h-4" />
-          </button>
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="flex items-center justify-center p-1 rounded-[6px] text-[#919093] hover:text-white transition-colors"
+            >
+              <XMarkIcon className="w-4 h-4" />
+            </button>
+          )}
         </div>
         <p className="text-[#919093] text-xs leading-4 w-full">
           Review device, network, location, and connected hardware information for this participant.

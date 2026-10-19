@@ -1,9 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { CheckCircleIcon as CheckCircleOutline } from "@heroicons/react/24/outline";
 import useIsRecording from "../../hooks/useIsRecording";
 import useIsMobile from "../../hooks/useIsMobile";
-
-const STEP_LABEL = "Step 1: Connection Verification";
 
 function getCurrentTime() {
   return new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -19,29 +16,7 @@ export function RecBadge() {
   );
 }
 
-function StepPill({ done, onClick, className }) {
-  return (
-    <button onClick={onClick} className={className}>
-      {done && <CheckCircleOutline className="w-4 h-4 text-[#22c55e] shrink-0" />}
-      <span className={`text-sm font-medium whitespace-nowrap ${done ? "text-[#22c55e]" : "text-white"}`}>
-        {STEP_LABEL}
-      </span>
-    </button>
-  );
-}
-
-// Step pill rendered ABOVE the bottom bar on mobile (doctor only)
-export function DoctorStepBar({ completedSteps = [], onStepClick }) {
-  return (
-    <StepPill
-      done={completedSteps.includes(1)}
-      onClick={onStepClick}
-      className="w-full flex items-center justify-center gap-1.5 px-3 py-[6px] bg-[rgba(255,255,255,0.02)] border border-[rgba(255,255,255,0.05)] rounded"
-    />
-  );
-}
-
-export default function DoctorTopBar({ meetingTitle, caseId, completedSteps = [], onStepClick }) {
+export default function DoctorTopBar({ meetingTitle, caseId }) {
   // All hooks must be called unconditionally — before any early return
   const isMobile = useIsMobile();
   const [time, setTime] = useState(getCurrentTime());
@@ -63,7 +38,7 @@ export default function DoctorTopBar({ meetingTitle, caseId, completedSteps = []
     );
   }
 
-  // Desktop: time + title + REC + step pill
+  // Desktop: time + title + REC
   return (
     <div className="flex items-center justify-between px-5 shrink-0 z-20 h-14">
       <div className="flex items-center gap-2 text-white min-w-0">
@@ -72,12 +47,6 @@ export default function DoctorTopBar({ meetingTitle, caseId, completedSteps = []
         <span className="text-base whitespace-nowrap overflow-hidden text-ellipsis">{title}</span>
         {isRecording && <RecBadge />}
       </div>
-
-      <StepPill
-        done={completedSteps.includes(1)}
-        onClick={onStepClick}
-        className="shrink-0 bg-white/[0.02] border border-white/5 flex items-center gap-1.5 px-3 py-[6px] rounded-[4px] hover:bg-white/5 transition-colors cursor-pointer"
-      />
     </div>
   );
 }

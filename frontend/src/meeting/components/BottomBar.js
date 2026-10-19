@@ -1,5 +1,5 @@
 import { useMediaDevice, useMeeting } from "@videosdk.live/react-sdk";
-import React, { Fragment, useEffect, useRef, useState } from "react";
+import React, { Fragment, useEffect, useState } from "react";
 import { ChevronUpIcon, ComputerDesktopIcon } from "@heroicons/react/24/outline";
 import useIsTab from "../../hooks/useIsTab";
 import useIsMobile from "../../hooks/useIsMobile";
@@ -8,9 +8,9 @@ import { Popover, Transition } from "../../lib/headless";
 import { useMeetingAppContext } from "../../context/MeetingAppContext";
 import { toast } from "react-toastify";
 import { nameTructed, trimSnackBarText } from "../../utils/helper";
-import VerificationPendingModal from "../../components/doctor/VerificationPendingModal";
 import ImageCaptureButton from "../../components/doctor/ImageCaptureButton";
 import NetworkStatsButton from "../../components/doctor/NetworkStatsButton";
+import PatientQualityControl from "../../components/doctor/PatientQualityControl";
 import { stopVirtualBackground } from "../../lib/virtualBackground";
 import { createAudioTrack, createVideoTrack } from "../../hooks/useMediaStream";
 
@@ -277,10 +277,8 @@ export function useCallTimer() {
   return `${mm}:${ss}`;
 }
 
-function LeaveBTN({ isDoctor, completedStepsRef, completedSteps, showLeaveModal, setShowLeaveModal }) {
+function LeaveBTN({ isDoctor }) {
   const { leave, end, localParticipant } = useMeeting();
-
-  const allVerified = !isDoctor || completedStepsRef.current.includes(1);
 
   const performLeave = () => {
     const name = trimSnackBarText(nameTructed(localParticipant.displayName, 15));
@@ -298,25 +296,16 @@ function LeaveBTN({ isDoctor, completedStepsRef, completedSteps, showLeaveModal,
   };
 
   return (
-    <>
-      <button
-        onClick={() => allVerified ? performLeave() : setShowLeaveModal(true)}
-        className="bg-[#991b1b] text-[#fecaca] font-medium text-sm px-3 py-1.5 rounded-lg whitespace-nowrap hover:bg-[#7f1d1d] transition-colors"
-      >
-        End Call
-      </button>
-      {showLeaveModal && (
-        <VerificationPendingModal
-          completedSteps={completedSteps}
-          onLeaveAnyway={() => { setShowLeaveModal(false); performLeave(); }}
-          onClose={() => setShowLeaveModal(false)}
-        />
-      )}
-    </>
+    <button
+      onClick={performLeave}
+      className="bg-[#991b1b] text-[#fecaca] font-medium text-sm px-3 py-1.5 rounded-lg whitespace-nowrap hover:bg-[#7f1d1d] transition-colors"
+    >
+      End Call
+    </button>
   );
 }
 
-export function BottomBar({ bottomBarHeight, onShowConnectionDetails, completedSteps = [], customerId = null }) {
+export function BottomBar({ bottomBarHeight, onShowConnectionDetails, customerId = null }) {
   const { participantMode, isAudioOnly } = useMeetingAppContext((s) => ({
     participantMode: s.participantMode,
     isAudioOnly: s.isAudioOnly,
@@ -328,12 +317,8 @@ export function BottomBar({ bottomBarHeight, onShowConnectionDetails, completedS
 
   const isMobile = useIsMobile();
   const isTab = useIsTab();
-  const [showLeaveModal, setShowLeaveModal] = useState(false);
   const timer = useCallTimer();
 
-  // Ref so LeaveBTN always reads the latest completedSteps regardless of closure staleness
-  const completedStepsRef = useRef(completedSteps);
-  useEffect(() => { completedStepsRef.current = completedSteps; }, [completedSteps]);
 
   function getBrowserName(ua) {
     if (ua.includes("Firefox")) return "Firefox";
@@ -352,7 +337,7 @@ export function BottomBar({ bottomBarHeight, onShowConnectionDetails, completedS
   const showCapture = isDoctor && !isAudioOnly;
 
   const leaveButton = (
-    <LeaveBTN isDoctor={isDoctor} completedStepsRef={completedStepsRef} completedSteps={completedSteps} showLeaveModal={showLeaveModal} setShowLeaveModal={setShowLeaveModal} />
+    <LeaveBTN isDoctor={isDoctor} />
   );
 
   // Mobile / tablet layout — Figma floating pill: black bg, rounded-t-[24px]
@@ -375,6 +360,7 @@ export function BottomBar({ bottomBarHeight, onShowConnectionDetails, completedS
           <WebCamBTN />
           {showCapture && <ImageCaptureButton customerId={customerId} />}
           {isDoctor && <NetworkStatsButton customerId={customerId} />}
+          {showCapture && <PatientQualityControl customerId={customerId} />}
           {leaveButton}
         </div>
       </div>
@@ -407,6 +393,9 @@ export function BottomBar({ bottomBarHeight, onShowConnectionDetails, completedS
 
           {/* Agent: transport-level network stats (audio + video calls) */}
           {isDoctor && <NetworkStatsButton customerId={customerId} />}
+
+          {/* Agent: patient camera resolution (video calls only) */}
+          {showCapture && <PatientQualityControl customerId={customerId} />}
 
           {/* End Call */}
           <div className="ml-1">{leaveButton}</div>

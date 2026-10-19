@@ -227,6 +227,7 @@ export function JoiningScreen({
   };
 
   const _toggleWebcam = () => {
+    webcamRef.current = !webcamOn;
     if (webcamOn) {
       replaceVideo(null);
       stopVirtualBackground();
@@ -238,6 +239,9 @@ export function JoiningScreen({
   };
 
   const _toggleMic = () => {
+    // Update the ref now (not after re-render) so a getAudioTrack() still in
+    // flight from a quick on->off tap is dropped instead of re-opening the mic.
+    micRef.current = !micOn;
     if (micOn) {
       replaceAudio(null);
       setMicOn(false);
@@ -258,8 +262,17 @@ export function JoiningScreen({
   };
 
   const getDefaultMediaTracks = async ({ mic, webcam }) => {
-    if (mic) replaceAudio(await getAudioTrack({ micId: selectedMicrophone?.id }));
-    if (webcam && !isAudioOnly) replaceVideo(await getVideoTrack({ webcamId: selectedWebcam?.id }));
+    if (mic) {
+      const stream = await getAudioTrack({ micId: selectedMicrophone?.id });
+      // Turned off while the mic was opening — release it instead of using it.
+      if (micRef.current === false) stream?.getTracks().forEach((t) => t.stop());
+      else replaceAudio(stream);
+    }
+    if (webcam && !isAudioOnly) {
+      const stream = await getVideoTrack({ webcamId: selectedWebcam?.id });
+      if (webcamRef.current === false) stream?.getTracks().forEach((t) => t.stop());
+      else replaceVideo(stream);
+    }
   };
 
   async function requestAudioVideoPermission(mediaType) {
@@ -272,10 +285,12 @@ export function JoiningScreen({
         setIsCameraPermissionAllowed(permission.get(Constants.permission.VIDEO));
       }
       if (permission.get(Constants.permission.AUDIO)) {
+        micRef.current = true;
         setMicOn(true);
         getDefaultMediaTracks({ mic: true, webcam: false });
       }
       if (permission.get(Constants.permission.VIDEO)) {
+        webcamRef.current = true;
         setWebcamOn(true);
         getDefaultMediaTracks({ mic: false, webcam: true });
       }
@@ -297,12 +312,12 @@ export function JoiningScreen({
     const result = await checkPermissions(isAudioOnly ? Constants.permission.AUDIO : undefined);
     const micAllowed = result.get(Constants.permission.AUDIO);
     setIsMicrophonePermissionAllowed(micAllowed);
-    if (micAllowed) { setMicOn(true); getDefaultMediaTracks({ mic: true, webcam: false }); }
+    if (micAllowed) { micRef.current = true; setMicOn(true); getDefaultMediaTracks({ mic: true, webcam: false }); }
     else { await requestAudioVideoPermission(Constants.permission.AUDIO); }
     if (isAudioOnly) return;
     const camAllowed = result.get(Constants.permission.VIDEO);
     setIsCameraPermissionAllowed(camAllowed);
-    if (camAllowed) { setWebcamOn(true); getDefaultMediaTracks({ mic: false, webcam: true }); }
+    if (camAllowed) { webcamRef.current = true; setWebcamOn(true); getDefaultMediaTracks({ mic: false, webcam: true }); }
     else { await requestAudioVideoPermission(Constants.permission.VIDEO); }
   };
 
@@ -392,9 +407,25 @@ export function JoiningScreen({
         <div className="relative">
           <button
             onClick={() => isMicrophonePermissionAllowed ? _toggleMic() : setShowDeviceModal('mic')}
-            className="bg-[rgba(0,0,0,0.5)] border border-white/80 rounded flex items-center justify-center h-8 w-8"
+            aria-label={micOn ? "Turn microphone off" : "Turn microphone on"}
+            aria-pressed={micOn}
+            className={`border rounded flex items-center justify-center h-8 w-8 ${
+              micOn && isMicrophonePermissionAllowed
+                ? "bg-[rgba(0,0,0,0.5)] border-white/80"
+                : "bg-[#dc2626] border-[#dc2626]"
+            }`}
           >
-            <MicrophoneIcon className={`w-5 h-5 ${micOn && isMicrophonePermissionAllowed ? "text-white" : "text-white"}`} />
+            {micOn && isMicrophonePermissionAllowed ? (
+              <MicrophoneIcon className="w-5 h-5 text-white" />
+            ) : (
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="1" y1="1" x2="23" y2="23" />
+                <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6" />
+                <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23" />
+                <line x1="12" y1="19" x2="12" y2="23" />
+                <line x1="8" y1="23" x2="16" y2="23" />
+              </svg>
+            )}
           </button>
           {!isMicrophonePermissionAllowed && (
             <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-[#dc2626] flex items-center justify-center text-white text-[7px] font-bold leading-none">!</span>
@@ -505,8 +536,13 @@ export function JoiningScreen({
             </div>
 
             {/* 2. Camera preview */}
-            <div style={{ aspectRatio: "370 / 300" }}>
-              {renderCameraCard("100%", "100%")}
+            {/* Card is absolutely positioned so the video's intrinsic size
+                (portrait 360x640 on Android) can't stretch the box — it stays
+                370:300 on every device, the frame is cropped by object-cover. */}
+            <div className="relative w-full overflow-hidden" style={{ aspectRatio: "370 / 300" }}>
+              <div className="absolute inset-0">
+                {renderCameraCard("100%", "100%")}
+              </div>
             </div>
 
             {/* 3. Device selectors — stacked full-width */}

@@ -1,7 +1,7 @@
 import React, { useMemo } from "react";
 import { useMeeting } from "@videosdk.live/react-sdk";
 import { MemoizedParticipantGrid } from "../../components/ParticipantGrid";
-import PipLayout from "../../components/PipLayout";
+import SideBySideLayout from "../../components/SideBySideLayout";
 
 function ParticipantsViewer({ statusMessage }) {
   const {
@@ -53,7 +53,15 @@ function ParticipantsViewer({ statusMessage }) {
       <MemoizedParticipantGrid participantIds={participantIds} />
     );
   }
-  return <PipLayout participantIds={participantIds} statusMessage={statusMessage} />;
+  // 1:1 call — doctor (remote) on the left, self on the right.
+  const [selfId, otherId] = participantIds;
+  return (
+    <SideBySideLayout
+      tiles={[otherId ?? null, selfId]}
+      waitingText={statusMessage || "Waiting for Other Participant..."}
+      statusMessage={otherId ? statusMessage : null}
+    />
+  );
 }
 
 const MemorizedParticipantView = React.memo(
