@@ -24,12 +24,11 @@ BACKEND_DIR = PACKAGE_DIR.parent
 
 VIDEOSDK_API = "https://api.videosdk.live"
 ZERORUNTIME_API = "https://api.zeroruntime.ai"
-MODELS_DIR = PACKAGE_DIR / "models"
 LOGO_FILE = PACKAGE_DIR / "assets" / "muthoot-logo.png"
 
 # Requests without an org id use this org.
 DEFAULT_ORG_ID = os.environ.get("MUTHOOT_ORG_ID", "muthoot").strip().lower()
-# Files the flow writes go in DATA_DIR/<org id>/ (events, selfies, unsent results).
+# Files the flow writes go in DATA_DIR/<org id>/ (events, unsent results).
 _data_root = os.environ.get("MUTHOOT_DATA_DIR", "").strip()
 
 

@@ -1,4 +1,4 @@
-"""VideoSDK tokens and rooms, Zero Runtime agent dispatch and VideoSDK Face Match,
+"""VideoSDK tokens and rooms, Zero Runtime agent dispatch and VideoSDK face count + Face Match,
 all with the requesting org's API key and secret (orgs.json).
 Token format: https://docs.videosdk.live/api-reference/realtime-communication/intro"""
 import base64
@@ -90,6 +90,22 @@ def dispatch_agent(cfg: Settings, room_id: str, metadata: dict) -> dict:
 def _data_uri(image_bytes: bytes, path_hint: str = ".jpg") -> str:
     mime = "image/png" if path_hint.lower().endswith(".png") else "image/jpeg"
     return f"data:{mime};base64,{base64.b64encode(image_bytes).decode()}"
+
+
+def count_faces(cfg: Settings, image: bytes) -> int:
+    """VideoSDK face count (Enterprise plan): the camera checks and the selfie.
+    https://docs.videosdk.live/javascript/guide/identity-verification/number-of-face"""
+    response = _post(
+        cfg,
+        f"{config.VIDEOSDK_API}/ai/v1/face-verification/detect-faces",
+        {"img": _data_uri(image)},
+        timeout=10,
+    )
+    data = _json(response)
+    faces = data.get("number_of_faces")
+    if not response.ok or not isinstance(faces, int):
+        raise VideoSDKError(f"Face count failed ({response.status_code}): {response.text[:200]}")
+    return faces
 
 
 def face_match(cfg: Settings, reference: bytes, reference_name: str, selfie: bytes) -> dict:

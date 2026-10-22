@@ -25,10 +25,12 @@ def _iso_date(text: str) -> str:
 
 
 def _language(value: str) -> str:
-    """The PD's language from pd_language. English (or empty) means Hinglish: the
-    demo speaks Hinglish to customers who chose English."""
+    """The PD's language from pd_language. Empty means English; "Hinglish" means
+    Hindi (the agent speaks Hinglish to Hindi customers)."""
     value = value.strip()
-    return "Hinglish" if not value or value.lower() == "english" else value
+    if not value or value.lower() == "english":
+        return "English"
+    return "Hindi" if value.lower() == "hinglish" else value
 
 
 def _number(text: str) -> int | float | None:

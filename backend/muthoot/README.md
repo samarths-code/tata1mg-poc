@@ -27,9 +27,8 @@ muthoot/
     demo.py  sessions.py  verify.py  results.py  events.py  health.py  validation.py
   services/        the logic
     sheet.py  los.py  links.py  mailer.py  videosdk.py  sessions.py
-    face.py  reference_photo.py  selfie.py  results.py  results_sheet.py  journey_events.py
+    reference_photo.py  selfie.py  results.py  results_sheet.py  journey_events.py
   assets/          email logo
-  models/          face model (downloaded on first use, gitignored)
   photos/          local reference photos (gitignored)
   data/            written files (gitignored)
 ```
@@ -42,8 +41,8 @@ muthoot/
 | `POST` | `/demo/customers/<id>/link` | page (start page) | New signed PD link for one customer, saved to the LOS tab, emailed in the background |
 | `POST` | `/sessions/from-link` | page | `{pd}` from the link: checks signature, newest link, expiry, selfie pause → room + token |
 | `POST` | `/sessions/<room_id>/consents` | page | The 4 consents + location; then the agent is dispatched |
-| `POST` | `/verify/face` | page | `{image}` → `{faces}` for the live camera checks |
-| `POST` | `/verify/selfie` | page | `{room_id, capture_id, image}` → face count + VideoSDK Face Match |
+| `POST` | `/verify/face` | page | `{image}` → `{faces}` (VideoSDK face count) for the live camera checks |
+| `POST` | `/verify/selfie` | page | `{room_id, capture_id, image}` → VideoSDK face count + Face Match |
 | `GET` | `/verify/selfie/<room_id>/<capture_id>` | agent | That selfie's result (404 until it arrives) |
 | `POST` | `/results` | agent | The finished PD → one row in the Results tab |
 | `POST` | `/events` | agent, page | A journey event → `data/journey_events.jsonl` and the Events tab (every 10 s) |
@@ -73,8 +72,8 @@ Errors are `{"detail": ...}`, as the customer page expects.
    so an existing setup keeps working. Other orgs read only their own variables.
 3. **Sheet:** share the Google Sheet (tabs `LOS`, `Results`, `Events`) with the
    service account as Editor.
-4. **Install:** `pip install -r requirements.txt` (adds `gspread` and `mediapipe`;
-   the face model is downloaded to `muthoot/models/` on first use).
+4. **Install:** `pip install -r requirements.txt` (adds `gspread`). Face count and
+   Face Match are VideoSDK APIs (Enterprise plan).
 
 ## Run as one process
 
@@ -91,7 +90,7 @@ selfie check (Face Match, up to 30 s) must not block the camera checks.
 
 ## Files written
 
-`muthoot/data/<org id>/` (gitignored, or `MUTHOOT_DATA_DIR`): `journey_events.jsonl`,
-`selfies/<room>_<attempt>.jpg` (for the auditor) and `results_not_in_sheet.jsonl`
-(results that couldn't reach the sheet). Local reference photos go in
+`muthoot/data/<org id>/` (gitignored, or `MUTHOOT_DATA_DIR`): `journey_events.jsonl` and
+`results_not_in_sheet.jsonl` (results that couldn't reach the sheet). Selfies are
+only checked, never saved. Local reference photos go in
 `muthoot/photos/` (gitignored), or use the Drive folder `MUTHOOT_GOOGLE_PHOTOS_FOLDER_ID`.
