@@ -3,12 +3,13 @@ per application_id (used as the record's "customer_id")."""
 import time
 from datetime import datetime
 
+from ..config import Settings
 from .sheet import read_los
 
 # Day-first, as written in India.
 DATE_FORMATS = ["%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%d %b %Y", "%d %B %Y"]
 
-# application_id -> (read at, record). Longer than a 10-minute PD.
+# (org id, application_id) -> (read at, record). Longer than a 10-minute PD.
 RECORD_CACHE_SECONDS = 15 * 60
 _records: dict[str, tuple[float, dict]] = {}
 
@@ -83,18 +84,19 @@ def _record(row: dict) -> dict:
     }
 
 
-def load_customers(fresh: bool = False) -> dict[str, dict]:
-    """Every application in the LOS tab, by application_id."""
-    return {row["application_id"]: _record(row) for row in read_los(fresh) if row.get("application_id")}
+def load_customers(cfg: Settings, fresh: bool = False) -> dict[str, dict]:
+    """Every application in the org's LOS tab, by application_id."""
+    return {row["application_id"]: _record(row) for row in read_los(cfg, fresh) if row.get("application_id")}
 
 
-def get_customer(customer_id: str, fresh: bool = False) -> dict | None:
+def get_customer(cfg: Settings, customer_id: str, fresh: bool = False) -> dict | None:
     """One application's record, kept for RECORD_CACHE_SECONDS. Opening a link reads
     it fresh (fresh=True), so sheet edits count from the next PD."""
-    cached = _records.get(customer_id)
+    cache_key = (cfg.org_id, customer_id)
+    cached = _records.get(cache_key)
     if cached and not fresh and time.time() - cached[0] < RECORD_CACHE_SECONDS:
         return cached[1]
-    customer = load_customers(fresh=fresh).get(customer_id)
+    customer = load_customers(cfg, fresh=fresh).get(customer_id)
     if customer is not None:
-        _records[customer_id] = (time.time(), customer)
+        _records[cache_key] = (time.time(), customer)
     return customer

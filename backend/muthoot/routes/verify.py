@@ -3,7 +3,7 @@ from flask import jsonify
 
 from ..services import selfie
 from ..services.face import count_faces, decode_image
-from . import bp
+from . import bp, org_settings
 from .validation import field, json_body
 
 
@@ -20,9 +20,9 @@ def verify_selfie():
     room_id = field(body, "room_id", str)
     capture_id = int(field(body, "capture_id", int))  # the agent's attempt number
     image = decode_image(field(body, "image", str))  # base64 from captureImage()
-    return jsonify(selfie.check_selfie(room_id, capture_id, image))
+    return jsonify(selfie.check_selfie(org_settings(room_id), room_id, capture_id, image))
 
 
 @bp.route("/verify/selfie/<room_id>/<int:capture_id>", methods=["GET"])
 def selfie_result(room_id, capture_id):
-    return jsonify(selfie.selfie_result(room_id, capture_id))
+    return jsonify(selfie.selfie_result(org_settings(room_id), room_id, capture_id))

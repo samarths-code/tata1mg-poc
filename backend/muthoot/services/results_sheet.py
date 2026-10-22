@@ -1,14 +1,14 @@
 """M2-9: one row per Video PD in the Results tab (the hand-off to the Auditor BOT).
-If the sheet can't be written, the row goes to data/results_not_in_sheet.jsonl."""
+If the sheet can't be written, the row goes to data/<org>/results_not_in_sheet.jsonl."""
 import json
 import logging
 
-from .. import config
+from ..config import Settings
 from . import sheet
 
 logger = logging.getLogger(__name__)
 
-FALLBACK_FILE = config.DATA_DIR / "results_not_in_sheet.jsonl"
+FALLBACK_NAME = "results_not_in_sheet.jsonl"
 
 COLUMNS = [
     "Ended at (IST)",
@@ -36,12 +36,13 @@ COLUMNS = [
 ]
 
 
-def save_result(row: dict) -> dict:
+def save_result(cfg: Settings, row: dict) -> dict:
     try:
-        return {"saved": True, "sheet": sheet.append_rows(sheet.RESULTS_TAB, COLUMNS, [row])}
+        return {"saved": True, "sheet": sheet.append_rows(cfg, sheet.RESULTS_TAB, COLUMNS, [row])}
     except sheet.SheetError as error:
-        logger.error("%s. Kept in %s instead.", error, FALLBACK_FILE.name)
-        FALLBACK_FILE.parent.mkdir(parents=True, exist_ok=True)
-        with FALLBACK_FILE.open("a", encoding="utf-8") as file:
+        fallback = cfg.data_dir / FALLBACK_NAME
+        logger.error("%s. Kept in %s instead.", error, fallback)
+        fallback.parent.mkdir(parents=True, exist_ok=True)
+        with fallback.open("a", encoding="utf-8") as file:
             file.write(json.dumps(row, ensure_ascii=False) + "\n")
-        return {"saved": True, "file": str(FALLBACK_FILE)}
+        return {"saved": True, "file": str(fallback)}

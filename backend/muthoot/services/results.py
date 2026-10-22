@@ -2,6 +2,7 @@
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+from ..config import Settings
 from . import results_sheet
 from .los import get_customer
 from .sessions import get_session, pause_customer
@@ -19,13 +20,15 @@ def _yes_no(value) -> str:
     return "" if value is None else ("Yes" if value else "No")
 
 
-def save_result(room_id: str, customer_id: str, status: str, started_at, ended_at: float, results: dict) -> dict:
+def save_result(cfg: Settings, room_id: str, customer_id: str, status: str, started_at, ended_at: float, results: dict) -> dict:
     """status is COMPLETED, IDENTITY_NOT_VERIFIED, TERMS_REJECTED, SELFIE_NOT_VERIFIED,
     SELFIE_CHECK_ERROR, CUSTOMER_INACTIVE, CUSTOMER_LEFT, BANK_NOT_VERIFIED or
     PAID_CHARGES."""
     session = get_session(room_id) or {}
+    if session.get("org_id") != cfg.org_id:
+        session = {}
     # The copy read when the link was opened; the LOS only if the session is gone.
-    customer = session.get("customer") or get_customer(customer_id) or {}
+    customer = session.get("customer") or get_customer(cfg, customer_id) or {}
     consents = session.get("consents", {})
     location = consents.get("location") or {}
     identity = results.get("identity", {})
@@ -33,7 +36,7 @@ def save_result(room_id: str, customer_id: str, status: str, started_at, ended_a
     selfie = results.get("selfie", {})
 
     if status == "SELFIE_NOT_VERIFIED":
-        pause_customer(customer_id, ended_at)
+        pause_customer(cfg, customer_id, ended_at)
 
     row = {
         "Ended at (IST)": _ist(ended_at),
@@ -75,4 +78,4 @@ def save_result(room_id: str, customer_id: str, status: str, started_at, ended_a
     row["Paid charges to anyone"] = _yes_no(charges.get("paid"))
     row["Paid charges words"] = charges.get("said", "")
 
-    return results_sheet.save_result(row)
+    return results_sheet.save_result(cfg, row)

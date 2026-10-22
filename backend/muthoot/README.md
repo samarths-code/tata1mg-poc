@@ -2,8 +2,13 @@
 
 The backend of the Muthoot AI Video PD demo, moved from its separate FastAPI service into a
 Flask blueprint on this multi-org backend (the FastAPI service is no longer needed). Every route is under
-**`/api/v1/muthoot`** and uses the **`muthoot` org's** VideoSDK API key and secret
-from `orgs.json` (admin page).
+**`/api/v1/muthoot`** and runs with **one org's** settings: its VideoSDK API key and
+secret plus its *org variables* (sheet, agent, email), all in `orgs.json` and edited
+on the admin page.
+
+**Which org:** the customer page sends `X-Org-Id` (like every other org frontend).
+Calls about a room (consents, selfie, results, events — the agent's calls) use the
+org whose link opened that room. No org id at all: `MUTHOOT_ORG_ID` (`muthoot`).
 
 The other two parts of the demo live elsewhere:
 
@@ -51,8 +56,21 @@ Errors are `{"detail": ...}`, as the customer page expects.
 1. **Org:** on the admin page add org **`muthoot`** with the VideoSDK API key and
    secret of the account the Zero Runtime agent runs on, and the customer page's
    origin under *Frontend origins* (for CORS).
-2. **`.env`:** fill in the `MUTHOOT_*` keys (see `.env.example`). The Google
-   service account key file is referenced by path and never committed.
+2. **Org variables:** on the admin page, *Edit* the org and add its variables one
+   at a time (the Name box suggests them):
+
+   | Name | |
+   |---|---|
+   | `ZERORUNTIME_AGENT_ID` | the deployed Zero Runtime agent |
+   | `CLIENT_URL` | the customer page's address; PD links are built on it |
+   | `GOOGLE_SHEET_ID` | the sheet with `LOS`, `Results`, `Events` tabs |
+   | `GOOGLE_SERVICE_ACCOUNT_JSON` (secret) | the service account's JSON key, pasted in full — or `GOOGLE_SERVICE_ACCOUNT_FILE`, a path on the server |
+   | `GOOGLE_PHOTOS_FOLDER_ID` | optional Drive folder of reference photos |
+   | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` (secret), `EMAIL_FROM`, `EMAIL_FROM_NAME` | link emails; no `SMTP_USER` = no emails |
+   | `LINK_VALID_HOURS` (24), `SELFIE_RETRY_MINUTES` (30), `PHOTOS_DIR` | optional |
+
+   The default org (`muthoot`) also falls back to the `MUTHOOT_*` keys in `.env`,
+   so an existing setup keeps working. Other orgs read only their own variables.
 3. **Sheet:** share the Google Sheet (tabs `LOS`, `Results`, `Events`) with the
    service account as Editor.
 4. **Install:** `pip install -r requirements.txt` (adds `gspread` and `mediapipe`;
@@ -73,7 +91,7 @@ selfie check (Face Match, up to 30 s) must not block the camera checks.
 
 ## Files written
 
-`muthoot/data/` (gitignored, or `MUTHOOT_DATA_DIR`): `journey_events.jsonl`,
+`muthoot/data/<org id>/` (gitignored, or `MUTHOOT_DATA_DIR`): `journey_events.jsonl`,
 `selfies/<room>_<attempt>.jpg` (for the auditor) and `results_not_in_sheet.jsonl`
 (results that couldn't reach the sheet). Local reference photos go in
 `muthoot/photos/` (gitignored), or use the Drive folder `MUTHOOT_GOOGLE_PHOTOS_FOLDER_ID`.

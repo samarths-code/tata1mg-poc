@@ -1,5 +1,5 @@
 """VideoSDK tokens and rooms, Zero Runtime agent dispatch and VideoSDK Face Match,
-all with the Muthoot org's credentials from orgs.json.
+all with the requesting org's API key and secret (orgs.json).
 Token format: https://docs.videosdk.live/api-reference/realtime-communication/intro"""
 import base64
 import logging
@@ -9,11 +9,7 @@ import jwt
 import requests
 
 from .. import config
-
-try:
-    from ... import org_store
-except ImportError:  # backend run as a script: python3 app.py
-    import org_store
+from ..config import Settings
 
 logger = logging.getLogger(__name__)
 
@@ -24,24 +20,12 @@ class VideoSDKError(Exception):
     pass
 
 
-def muthoot_org() -> dict:
-    """The org's config (apiKey, secret, ...) from orgs.json."""
-    try:
-        return org_store.get_org(config.ORG_ID)
-    except org_store.OrgNotFound:
-        raise VideoSDKError(
-            f"Organisation '{config.ORG_ID}' is not set up: add it (API key and secret) "
-            "on the admin page."
-        )
-
-
-def generate_token(roles: list, room_id: str = None) -> str:
+def generate_token(cfg: Settings, roles: list, room_id: str = None) -> str:
     """roles: "crawler" for the v2 REST APIs, "rtc" for joining a room.
     room_id limits the token to one room."""
-    org = muthoot_org()
     now = int(time.time())
     payload = {
-        "apikey": org["apiKey"],
+        "apikey": cfg.api_key,
         "permissions": ["allow_join"],
         "version": 2,
         "roles": roles,
@@ -50,11 +34,11 @@ def generate_token(roles: list, room_id: str = None) -> str:
     }
     if room_id:
         payload["roomId"] = room_id
-    return jwt.encode(payload, org["secret"], algorithm="HS256")
+    return jwt.encode(payload, cfg.secret, algorithm="HS256")
 
 
-def generate_join_token(room_id: str) -> str:
-    return generate_token(roles=["rtc"], room_id=room_id)
+def generate_join_token(cfg: Settings, room_id: str) -> str:
+    return generate_token(cfg, roles=["rtc"], room_id=room_id)
 
 
 def _json(response: requests.Response) -> dict:
@@ -65,11 +49,11 @@ def _json(response: requests.Response) -> dict:
     return data if isinstance(data, dict) else {}
 
 
-def _post(url: str, body: dict = None, timeout: int = 10) -> requests.Response:
+def _post(cfg: Settings, url: str, body: dict = None, timeout: int = 10) -> requests.Response:
     try:
         return requests.post(
             url,
-            headers={"Authorization": generate_token(roles=["crawler"]), "Content-Type": "application/json"},
+            headers={"Authorization": generate_token(cfg, roles=["crawler"]), "Content-Type": "application/json"},
             json=body or {},
             timeout=timeout,
         )
@@ -77,22 +61,23 @@ def _post(url: str, body: dict = None, timeout: int = 10) -> requests.Response:
         raise VideoSDKError(f"Couldn't reach {url.split('/')[2]}: {error}") from error
 
 
-def create_room() -> str:
-    response = _post(f"{config.VIDEOSDK_API}/v2/rooms")
+def create_room(cfg: Settings) -> str:
+    response = _post(cfg, f"{config.VIDEOSDK_API}/v2/rooms")
     data = _json(response)
     if not response.ok or "roomId" not in data:
         raise VideoSDKError(f"Room creation failed ({response.status_code}): {response.text[:200]}")
     return data["roomId"]
 
 
-def dispatch_agent(room_id: str, metadata: dict) -> dict:
+def dispatch_agent(cfg: Settings, room_id: str, metadata: dict) -> dict:
     """Sends the Zero Runtime agent into a room, authorised with a VideoSDK token
     (https://docs.zeroruntime.ai/agent-builder/agent/variables)."""
-    if not config.ZERORUNTIME_AGENT_ID:
-        raise VideoSDKError("MUTHOOT_ZERORUNTIME_AGENT_ID must be set in backend/.env")
+    if not cfg.zeroruntime_agent_id:
+        raise VideoSDKError(f"Org '{cfg.org_id}': set ZERORUNTIME_AGENT_ID on the admin page.")
     response = _post(
+        cfg,
         f"{config.ZERORUNTIME_API}/v2/agent/dispatch",
-        {"meetingId": room_id, "agentId": config.ZERORUNTIME_AGENT_ID, "metadata": metadata},
+        {"meetingId": room_id, "agentId": cfg.zeroruntime_agent_id, "metadata": metadata},
     )
     data = _json(response)
     if not response.ok:
@@ -107,10 +92,11 @@ def _data_uri(image_bytes: bytes, path_hint: str = ".jpg") -> str:
     return f"data:{mime};base64,{base64.b64encode(image_bytes).decode()}"
 
 
-def face_match(reference: bytes, reference_name: str, selfie: bytes) -> dict:
+def face_match(cfg: Settings, reference: bytes, reference_name: str, selfie: bytes) -> dict:
     """VideoSDK Face Match (Enterprise plan): the full answer; "verified" says
     whether it's the same person."""
     response = _post(
+        cfg,
         f"{config.VIDEOSDK_API}/ai/v1/face-verification/verify",
         {"img1": _data_uri(reference, reference_name), "img2": _data_uri(selfie)},
         timeout=30,

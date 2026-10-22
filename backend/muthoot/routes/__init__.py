@@ -13,18 +13,41 @@
 
 Each module adds its routes to the one blueprint `bp`. Handlers only read the
 request and shape the reply; the work is in muthoot/services.
+
+Org: every handler works with one org's settings (org_settings()): the org whose
+link opened the room, else the X-Org-Id header (or orgId), else MUTHOOT_ORG_ID.
 """
 import logging
 
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify, request
 
+from ..config import Settings, settings_for
 from ..errors import ApiError
+from ..services.sessions import org_id_of
 from ..services.sheet import SheetError
 
 logger = logging.getLogger(__name__)
 
 URL_PREFIX = "/api/v1/muthoot"
 bp = Blueprint("muthoot", __name__, url_prefix=URL_PREFIX)
+
+
+def org_settings(room_id: str | None = None) -> Settings:
+    """The settings of the org this request is for.
+
+    A known room decides: the agent's calls carry no org id, and a header can't
+    point a room at another org's sheet. Otherwise the page's X-Org-Id header
+    (or orgId in the query or body), the same id the other org frontends send."""
+    org_id = org_id_of(room_id) if room_id else None
+    if not org_id:
+        body = request.get_json(silent=True)
+        org_id = (
+            request.headers.get("X-Org-Id")
+            or request.args.get("orgId")
+            or (body.get("orgId") if isinstance(body, dict) else None)
+            or ""
+        )
+    return settings_for(str(org_id))
 
 
 @bp.errorhandler(ApiError)
@@ -41,4 +64,4 @@ def _sheet_error(error: SheetError):
 # Imported last: each module registers its routes on `bp`.
 from . import demo, events, health, results, sessions, verify  # noqa: E402,F401
 
-__all__ = ["bp", "URL_PREFIX"]
+__all__ = ["bp", "URL_PREFIX", "org_settings"]

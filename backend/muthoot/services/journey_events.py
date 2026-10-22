@@ -1,6 +1,6 @@
 """Journey events of every Video PD: appended at once to
-data/journey_events.jsonl, and copied to the Events tab in batches every
-FLUSH_SECONDS, so a PD costs a few Sheets writes instead of one per event (60/min)."""
+data/<org>/journey_events.jsonl, and copied to the org's Events tab in batches
+every FLUSH_SECONDS, so a PD costs a few Sheets writes instead of one per event (60/min)."""
 import json
 import logging
 import threading
@@ -8,15 +8,16 @@ import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from .. import config
+from ..config import Settings, settings_for
+from ..errors import ApiError
 from . import sheet
 
 logger = logging.getLogger(__name__)
 
 IST = ZoneInfo("Asia/Kolkata")
-EVENTS_FILE = config.DATA_DIR / "journey_events.jsonl"
+EVENTS_FILE_NAME = "journey_events.jsonl"
 FLUSH_SECONDS = 10
-# If the sheet can't be written, keep at most this many rows waiting (the jsonl has all).
+# If the sheet can't be written, keep at most this many rows waiting per org (the jsonl has all).
 MAX_PENDING = 2000
 
 COLUMNS = [
@@ -33,18 +34,20 @@ COLUMNS = [
 
 _lock = threading.Lock()
 _first_at: dict[str, float] = {}  # room_id -> its first event's time ("Seconds into PD")
-_pending: list[dict] = []  # sheet rows not written yet
+_pending: dict[str, list[dict]] = {}  # org id -> sheet rows not written yet
 
 
-def record(event: dict) -> None:
+def record(cfg: Settings, event: dict) -> None:
     """{room_id, customer_id, source, event, step, state, details, at}"""
     event = {**event, "at": event.get("at") or time.time()}
+    events_file = cfg.data_dir / EVENTS_FILE_NAME
     with _lock:
         first_at = _first_at.setdefault(event["room_id"], event["at"])
-        _pending.append(_sheet_row(event, first_at))
-        del _pending[:-MAX_PENDING]
-        EVENTS_FILE.parent.mkdir(parents=True, exist_ok=True)
-        with EVENTS_FILE.open("a", encoding="utf-8") as file:
+        pending = _pending.setdefault(cfg.org_id, [])
+        pending.append(_sheet_row(event, first_at))
+        del pending[:-MAX_PENDING]
+        events_file.parent.mkdir(parents=True, exist_ok=True)
+        with events_file.open("a", encoding="utf-8") as file:
             file.write(json.dumps(event, ensure_ascii=False) + "\n")
 
 
@@ -63,16 +66,17 @@ def _sheet_row(event: dict, first_at: float) -> dict:
 
 
 def flush_to_sheet() -> None:
-    """Writes the waiting rows to the Events tab in one call."""
+    """Writes each org's waiting rows to its Events tab, one call per org."""
     with _lock:
-        rows = list(_pending)
+        batches = {org_id: rows for org_id, rows in _pending.items() if rows}
         _pending.clear()
-    if not rows:
-        return
-    try:
-        sheet.append_rows(sheet.EVENTS_TAB, COLUMNS, rows)
-    except sheet.SheetError as error:
-        logger.error("Journey events not written to the sheet yet (%s); will retry.", error)
-        with _lock:
-            _pending[:0] = rows  # back in front, in order
-            del _pending[:-MAX_PENDING]
+    for org_id, rows in batches.items():
+        try:
+            sheet.append_rows(settings_for(org_id), sheet.EVENTS_TAB, COLUMNS, rows)
+        except (sheet.SheetError, ApiError) as error:
+            detail = error.detail if isinstance(error, ApiError) else error
+            logger.error("Journey events of %s not written to the sheet yet (%s); will retry.", org_id, detail)
+            with _lock:
+                pending = _pending.setdefault(org_id, [])
+                pending[:0] = rows  # back in front, in order
+                del pending[:-MAX_PENDING]

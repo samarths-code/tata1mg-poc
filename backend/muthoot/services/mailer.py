@@ -7,15 +7,7 @@ from email.message import EmailMessage
 from email.utils import formataddr, make_msgid
 from html import escape
 
-from ..config import (
-    EMAIL_FROM,
-    EMAIL_FROM_NAME,
-    LOGO_FILE,
-    SMTP_HOST,
-    SMTP_PASSWORD,
-    SMTP_PORT,
-    SMTP_USER,
-)
+from ..config import LOGO_FILE, Settings
 
 logger = logging.getLogger(__name__)
 
@@ -26,8 +18,8 @@ class EmailError(Exception):
     pass
 
 
-def email_configured() -> bool:
-    return bool(SMTP_USER and SMTP_PASSWORD and EMAIL_FROM)
+def email_configured(cfg: Settings) -> bool:
+    return bool(cfg.smtp_user and cfg.smtp_password and cfg.email_from)
 
 
 def _text(name: str, application_id: str, link: str) -> str:
@@ -78,13 +70,13 @@ def _html(name: str, application_id: str, link: str, logo_cid: str | None) -> st
 </body></html>"""
 
 
-def send_link_email(to: str, name: str, application_id: str, link: str) -> None:
+def send_link_email(cfg: Settings, to: str, name: str, application_id: str, link: str) -> None:
     """Raises EmailError."""
-    if not email_configured():
-        raise EmailError("Email is not set up: add MUTHOOT_SMTP_USER and MUTHOOT_SMTP_PASSWORD to backend/.env.")
+    if not email_configured(cfg):
+        raise EmailError(f"Org '{cfg.org_id}': email is not set up (SMTP_USER and SMTP_PASSWORD on the admin page).")
     message = EmailMessage()
     message["Subject"] = f"Your Muthoot Finance Video PD link · Application {application_id}"
-    message["From"] = formataddr((EMAIL_FROM_NAME, EMAIL_FROM))
+    message["From"] = formataddr((cfg.email_from_name, cfg.email_from))
     message["To"] = to
     message.set_content(_text(name, application_id, link))
 
@@ -97,14 +89,14 @@ def send_link_email(to: str, name: str, application_id: str, link: str) -> None:
         )
 
     try:
-        if SMTP_PORT == 465:
-            with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, context=ssl.create_default_context(), timeout=20) as smtp:
-                smtp.login(SMTP_USER, SMTP_PASSWORD)
+        if cfg.smtp_port == 465:
+            with smtplib.SMTP_SSL(cfg.smtp_host, cfg.smtp_port, context=ssl.create_default_context(), timeout=20) as smtp:
+                smtp.login(cfg.smtp_user, cfg.smtp_password)
                 smtp.send_message(message)
         else:
-            with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=20) as smtp:
+            with smtplib.SMTP(cfg.smtp_host, cfg.smtp_port, timeout=20) as smtp:
                 smtp.starttls(context=ssl.create_default_context())
-                smtp.login(SMTP_USER, SMTP_PASSWORD)
+                smtp.login(cfg.smtp_user, cfg.smtp_password)
                 smtp.send_message(message)
     except (smtplib.SMTPException, OSError) as error:
         raise EmailError(f"Couldn't email {to}: {type(error).__name__}: {error}") from error

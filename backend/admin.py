@@ -5,6 +5,8 @@ config per client). Everything is stored in orgs.json via org_store.
     GET  /<ADMIN_PATH>/                       the page
     GET  /<ADMIN_PATH>/api/orgs               list orgs (secrets masked)
     POST /<ADMIN_PATH>/api/orgs               create / update an org
+    POST /<ADMIN_PATH>/api/orgs/<id>/env      add / update one env var of an org
+    POST /<ADMIN_PATH>/api/orgs/<id>/env/delete  remove one env var
     GET  /<ADMIN_PATH>/api/builds             each org's frontend domain + last upload
     POST /<ADMIN_PATH>/api/orgs/<id>/build    upload a .zip build (see builds.py)
 
@@ -193,7 +195,17 @@ def _public(org_id: str, org: dict) -> dict:
         "frontendOrigins": org.get("frontendOrigins") or [],
         "frontendDomain": org.get("frontendDomain", ""),
         "roomConfig": org.get("roomConfig") or {},
+        "env": _public_env(org),
     }
+
+
+def _public_env(org: dict) -> list:
+    """The org's env vars for the page; secret values are never sent back."""
+    secrets = set(org.get("envSecrets") or [])
+    return [
+        {"key": key, "secret": key in secrets, "value": _mask(value) if key in secrets else value}
+        for key, value in sorted((org.get("env") or {}).items())
+    ]
 
 
 def _check_credentials(api_key: str, secret: str):
@@ -242,6 +254,7 @@ def admin_list_orgs():
     return jsonify({
         "orgs": [_public(oid, o) for oid, o in sorted(orgs.items())],
         "presets": PRESETS,
+        "knownEnvKeys": org_store.KNOWN_ENV_KEYS,
     })
 
 
@@ -294,9 +307,49 @@ def admin_save_org():
         "frontendOrigins": origins,
         "frontendDomain": domain,
         "roomConfig": room_config,
+        # Env vars are edited on their own (below); saving the org keeps them.
+        "env": existing.get("env") or {},
+        "envSecrets": existing.get("envSecrets") or [],
     }
     org_store.save_org(org_id, org)
     return jsonify({"org": _public(org_id, org)}), 200
+
+
+@bp.route("/api/orgs/<org_id>/env", methods=["POST"])
+@require_admin
+def admin_set_env(org_id):
+    """Add or update one env var: {key, value, secret}."""
+    body = request.get_json(silent=True) or {}
+    key = str(body.get("key", "")).strip().upper()
+    if not org_store.ENV_KEY_PATTERN.match(key):
+        return jsonify({"message": "Name: capital letters, digits and _ (e.g. GOOGLE_SHEET_ID)"}), 400
+    value = body.get("value")
+    if not isinstance(value, str):
+        return jsonify({"message": "Value must be text"}), 400
+    value = value.strip()
+    if not value:
+        return jsonify({"message": "Value is empty (use Delete to remove a variable)"}), 400
+    if len(value) > org_store.MAX_ENV_VALUE_CHARS:
+        return jsonify({"message": f"Value is longer than {org_store.MAX_ENV_VALUE_CHARS} characters"}), 400
+    known = org_store.KNOWN_ENV_KEYS.get(key, {})
+    secret = bool(body.get("secret")) or known.get("secret", False)
+    try:
+        org = org_store.set_env_var(org_id, key, value, secret)
+    except org_store.OrgNotFound:
+        return jsonify({"message": f"Unknown org: {org_id}"}), 404
+    return jsonify({"env": _public_env(org)}), 200
+
+
+@bp.route("/api/orgs/<org_id>/env/delete", methods=["POST"])
+@require_admin
+def admin_delete_env(org_id):
+    """Remove one env var: {key}."""
+    key = str((request.get_json(silent=True) or {}).get("key", "")).strip().upper()
+    try:
+        org = org_store.delete_env_var(org_id, key)
+    except org_store.OrgNotFound:
+        return jsonify({"message": f"Unknown org: {org_id}"}), 404
+    return jsonify({"env": _public_env(org)}), 200
 
 
 @bp.route("/api/builds", methods=["GET"])
@@ -387,6 +440,9 @@ ADMIN_HTML = """<!doctype html>
   .site input[type=file] { width:auto; max-width:220px; padding:4px; font-size:12px; }
   .site label.inline { display:inline-flex; gap:4px; align-items:center; margin:0; white-space:nowrap; }
   .site label.inline input { width:auto; }
+  label.inline { display:inline-flex; gap:6px; align-items:center; margin:0; }
+  label.inline input { width:auto; }
+  #envMsg.err { color:var(--danger); } #envMsg.ok { color:var(--ok); }
 </style>
 </head>
 <body>
@@ -439,6 +495,28 @@ ADMIN_HTML = """<!doctype html>
         <button type="submit" class="primary">Save</button>
         <button type="button" id="clearBtn">Clear</button>
         <span id="msg"></span>
+      </div>
+    </form>
+  </div>
+
+  <div class="card" id="envCard" hidden>
+    <h2 style="font-size:16px;margin:0 0 4px">Org variables · <code id="envOrg"></code></h2>
+    <p class="hint" style="margin:0 0 12px">Settings only this org uses (e.g. its Video PD sheet, agent and email). Each one is saved on its own and used from the next request.</p>
+    <table>
+      <thead><tr><th>Name</th><th>Value</th><th></th></tr></thead>
+      <tbody id="envRows"></tbody>
+    </table>
+    <form id="envForm" class="grid" autocomplete="off" style="margin-top:12px">
+      <div><label for="envKey">Name</label>
+        <input id="envKey" list="envKeys" required pattern="[A-Za-z][A-Za-z0-9_]{0,63}" placeholder="GOOGLE_SHEET_ID">
+        <datalist id="envKeys"></datalist>
+        <div class="hint" id="envHelp"></div></div>
+      <div><label for="envValue">Value</label>
+        <textarea id="envValue" spellcheck="false" style="min-height:38px" rows="1"></textarea></div>
+      <div class="full row">
+        <label class="inline"><input type="checkbox" id="envSecret"> Secret (masked after saving)</label>
+        <button type="submit" class="primary">Add / update</button>
+        <span id="envMsg"></span>
       </div>
     </form>
   </div>
@@ -515,7 +593,8 @@ function fill(o) {
   $("frontendDomain").value = o.frontendDomain || "";
   $("roomConfig").value = JSON.stringify(o.roomConfig || {}, null, 2);
   $("preset").value = ""; setMsg("");
-  window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+  showEnv(o);
+  $("formTitle").scrollIntoView({ behavior: "smooth" });
 }
 
 function reset() {
@@ -523,11 +602,79 @@ function reset() {
   $("formTitle").textContent = "Add organisation";
   $("secretHint").textContent = "Required for a new org.";
   $("roomConfig").value = "{}"; setMsg("");
+  envOrgId = null; $("envCard").hidden = true;
 }
 
+// ---- Org variables (shown while editing an org) ----
+let knownEnvKeys = {};
+let envOrgId = null;
+
+function setEnvMsg(text, kind) { const m = $("envMsg"); m.textContent = text; m.className = kind || ""; }
+
+function showEnv(o) {
+  envOrgId = o.id; $("envOrg").textContent = o.id; $("envCard").hidden = false;
+  $("envForm").reset(); $("envHelp").textContent = ""; setEnvMsg("");
+  renderEnv(o.env || []);
+}
+
+function renderEnv(env) {
+  const o = orgs.find(x => x.id === envOrgId); if (o) o.env = env;
+  const rows = $("envRows"); rows.textContent = "";
+  if (!env.length) {
+    const tr = document.createElement("tr"); const td = document.createElement("td");
+    td.colSpan = 3; td.className = "hint"; td.textContent = "No variables yet."; tr.appendChild(td); rows.appendChild(tr);
+  }
+  for (const v of env) {
+    const tr = document.createElement("tr");
+    const k = document.createElement("td"); const kc = document.createElement("code"); kc.textContent = v.key; k.appendChild(kc);
+    if (v.secret) { const t = document.createElement("span"); t.className = "tag"; t.textContent = "secret"; t.style.marginLeft = "6px"; k.appendChild(t); }
+    const val = document.createElement("td"); const vc = document.createElement("code");
+    vc.textContent = v.value.length > 120 ? v.value.slice(0, 120) + "…" : v.value; val.appendChild(vc);
+    const act = document.createElement("td"); act.style.whiteSpace = "nowrap";
+    const edit = document.createElement("button"); edit.type = "button"; edit.className = "link"; edit.textContent = "Edit";
+    edit.onclick = () => {
+      $("envKey").value = v.key; $("envValue").value = v.secret ? "" : v.value; $("envSecret").checked = v.secret;
+      envKeyHelp(); setEnvMsg(v.secret ? "Secret values aren't shown; enter the new value." : ""); $("envValue").focus();
+    };
+    const del = document.createElement("button"); del.type = "button"; del.className = "link"; del.textContent = "Delete"; del.style.color = "var(--danger)";
+    del.onclick = async () => {
+      if (!confirm("Delete " + v.key + " from " + envOrgId + "?")) return;
+      try { const d = await api(BASE + "/api/orgs/" + encodeURIComponent(envOrgId) + "/env/delete", { key: v.key });
+            renderEnv(d.env); setEnvMsg("Deleted " + v.key, "ok"); }
+      catch (e) { setEnvMsg(e.message, "err"); }
+    };
+    act.append(edit, del);
+    tr.append(k, val, act); rows.appendChild(tr);
+  }
+}
+
+function envKeyHelp() {
+  const info = knownEnvKeys[$("envKey").value.trim().toUpperCase()];
+  $("envHelp").textContent = info ? info.group + ": " + info.help : "";
+  if (info && info.secret) $("envSecret").checked = true;
+}
+$("envKey").oninput = envKeyHelp;
+
+$("envForm").onsubmit = async (e) => {
+  e.preventDefault();
+  const key = $("envKey").value.trim().toUpperCase();
+  setEnvMsg("Saving…");
+  try {
+    const d = await api(BASE + "/api/orgs/" + encodeURIComponent(envOrgId) + "/env",
+      { key, value: $("envValue").value, secret: $("envSecret").checked });
+    renderEnv(d.env); $("envForm").reset(); $("envHelp").textContent = ""; setEnvMsg("Saved " + key, "ok");
+  } catch (err) { setEnvMsg(err.message, "err"); }
+};
+
 async function load() {
-  try { const d = await api(BASE + "/api/orgs"); orgs = d.orgs; presets = d.presets; render(); }
-  catch (e) { $("rows").innerHTML = ""; setMsg(e.message, "err"); }
+  try {
+    const d = await api(BASE + "/api/orgs"); orgs = d.orgs; presets = d.presets; knownEnvKeys = d.knownEnvKeys || {};
+    const list = $("envKeys"); list.textContent = "";
+    for (const [k, info] of Object.entries(knownEnvKeys)) {
+      const opt = document.createElement("option"); opt.value = k; opt.label = info.group + " · " + info.help; list.appendChild(opt);
+    }
+    render();
+  } catch (e) { $("rows").innerHTML = ""; setMsg(e.message, "err"); }
 }
 
 $("preset").onchange = (e) => {

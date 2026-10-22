@@ -1,23 +1,22 @@
 """M2-6 selfie check: face count, then VideoSDK Face Match against the customer's
 reference photo. The customer page posts the selfie; the agent polls the result."""
-from .. import config
+from ..config import Settings
 from ..errors import ApiError
 from .face import count_faces
 from .reference_photo import PhotoError, load_reference_photo
 from .sessions import get_session
 from .videosdk import VideoSDKError, face_match
 
-SELFIE_DIR = config.DATA_DIR / "selfies"
 
-
-def check_selfie(room_id: str, capture_id: int, image: bytes) -> dict:
+def check_selfie(cfg: Settings, room_id: str, capture_id: int, image: bytes) -> dict:
     session = get_session(room_id)
-    customer = session.get("customer") if session else None
+    customer = session.get("customer") if session and session["org_id"] == cfg.org_id else None
     if customer is None:
         raise ApiError(404, "Unknown Video PD session.")
 
-    SELFIE_DIR.mkdir(parents=True, exist_ok=True)
-    (SELFIE_DIR / f"{room_id}_{capture_id}.jpg").write_bytes(image)  # for the auditor
+    selfie_dir = cfg.data_dir / "selfies"
+    selfie_dir.mkdir(parents=True, exist_ok=True)
+    (selfie_dir / f"{room_id}_{capture_id}.jpg").write_bytes(image)  # for the auditor
 
     faces = count_faces(image)
     result = {"capture_id": capture_id, "faces": faces, "verified": False, "reason": None, "error": None}
@@ -28,9 +27,10 @@ def check_selfie(room_id: str, capture_id: int, image: bytes) -> dict:
     else:
         try:
             reference, reference_name = load_reference_photo(
+                cfg,
                 customer["reference_images"]["face"], customer["customer_id"]
             )
-            match = face_match(reference, reference_name, image)
+            match = face_match(cfg, reference, reference_name, image)
             result["verified"] = bool(match["verified"])
             result["face_match_response"] = match
             if not result["verified"]:
@@ -42,8 +42,9 @@ def check_selfie(room_id: str, capture_id: int, image: bytes) -> dict:
     return result
 
 
-def selfie_result(room_id: str, capture_id: int) -> dict:
-    result = (get_session(room_id) or {}).get("selfie", {}).get(capture_id)
+def selfie_result(cfg: Settings, room_id: str, capture_id: int) -> dict:
+    session = get_session(room_id) or {}
+    result = session.get("selfie", {}).get(capture_id) if session.get("org_id") == cfg.org_id else None
     if result is None:
         raise ApiError(404, "Selfie not received yet.")
     return result
