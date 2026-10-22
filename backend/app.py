@@ -16,9 +16,11 @@ load_dotenv()
 try:
     from . import org_store
     from .admin import admin_url_prefix, bp as admin_bp
+    from . import muthoot
 except ImportError:  # run as a script: python3 app.py
     import org_store
     from admin import admin_url_prefix, bp as admin_bp
+    import muthoot
 
 app = Flask(__name__)
 # Largest request body: a 20 MB build zip (admin upload) + multipart overhead.
@@ -26,6 +28,10 @@ app.config["MAX_CONTENT_LENGTH"] = 21 * 1024 * 1024
 # Admin lives at a secret path from .env; unset -> not registered at all (404).
 if admin_url_prefix():
     app.register_blueprint(admin_bp, url_prefix=admin_url_prefix())
+
+# Muthoot Finance AI Video PD: /api/v1/muthoot/* (backend/muthoot/README.md).
+app.register_blueprint(muthoot.bp)
+muthoot.start_event_writer()
 
 # from . import sheet_sync    # noqa: E402 — imported after app so sheet_sync can reference it
 # from . import ppmc_routes   # noqa: E402 — frontend-URL bulk flow + disable endpoint

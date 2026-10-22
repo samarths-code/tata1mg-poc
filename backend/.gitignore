@@ -15,3 +15,11 @@ logs/
 # Org registry — holds every client's VideoSDK secrets
 orgs.json
 .orgs-*.json
+
+# Muthoot Video PD: written data (events, selfies), the downloaded face model,
+# customers' reference photos and the Google service account key
+muthoot/data/
+muthoot/models/
+muthoot/photos/*
+!muthoot/photos/.gitkeep
+*service-account*.json
