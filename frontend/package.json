@@ -24,7 +24,9 @@
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "extract:pubsub-worker": "node scripts/extract-pubsub-worker.js",
+    "prebuild": "node scripts/extract-pubsub-worker.js"
   },
   "eslintConfig": {
     "extends": [

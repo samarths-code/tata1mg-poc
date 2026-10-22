@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useRef, useState } from "react";
 
 // Stacked connection banners. Sources:
 //   • the SDK's onQualityLimitation (bandwidth / congestion / cpu)
@@ -52,12 +52,38 @@ function CpuIcon({ color }) {
 
 const ICONS = { wifi: WifiOffIcon, cpu: CpuIcon, ok: CheckCircleIcon };
 
-function Alert({ tone = "warn", icon = "wifi", title, body }) {
+const SWIPE_PX = 48;       // drag past this to dismiss
+const DOUBLE_TAP_MS = 300;
+
+function Alert({ tone = "warn", icon = "wifi", title, body, onDismiss }) {
   const accent = (TONE[tone] || TONE.warn).accent;
   const Icon = ICONS[icon] || WifiOffIcon;
+  const startX = useRef(null);
+  const lastTap = useRef(0);
+  const [dx, setDx] = useState(0);
+
+  const onTouchStart = (e) => { startX.current = e.touches[0].clientX; };
+  const onTouchMove = (e) => {
+    if (startX.current != null) setDx(e.touches[0].clientX - startX.current);
+  };
+  const onTouchEnd = () => {
+    startX.current = null;
+    if (Math.abs(dx) > SWIPE_PX) onDismiss?.();
+    else setDx(0);
+  };
+  // Works for both mouse and touch, so no separate onDoubleClick.
+  const onPointerUp = () => {
+    const now = Date.now();
+    if (now - lastTap.current < DOUBLE_TAP_MS) onDismiss?.();
+    lastTap.current = now;
+  };
 
   return (
     <div
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
+      onPointerUp={onPointerUp}
       style={{
         display: "flex",
         alignItems: "flex-start",
@@ -72,7 +98,13 @@ function Alert({ tone = "warn", icon = "wifi", title, body }) {
         maxWidth: 380,
         minWidth: 260,
         boxShadow: "0 8px 32px rgba(0,0,0,0.55)",
-        animation: "nqp-slidein 0.22s ease-out",
+        animation: dx ? "none" : "nqp-slidein 0.22s ease-out",
+        pointerEvents: "auto",
+        touchAction: "pan-y",
+        cursor: "pointer",
+        transform: `translateX(${dx}px)`,
+        opacity: Math.max(0, 1 - Math.abs(dx) / 160),
+        transition: dx ? "none" : "transform 0.18s ease, opacity 0.18s ease",
       }}
     >
       <div style={{ marginTop: 1, flexShrink: 0 }}><Icon color={accent} /></div>
@@ -86,8 +118,20 @@ function Alert({ tone = "warn", icon = "wifi", title, body }) {
   );
 }
 
+// Swipe sideways or double-tap a banner to dismiss it. A dismissed id is
+// forgotten once that alert clears, so the same condition can warn again later.
 export default function NetworkAlerts({ alerts = [] }) {
-  if (!alerts.length) return null;
+  const [dismissed, setDismissed] = useState(() => new Set());
+
+  const live = new Set(alerts.map((a) => a.id));
+  let pruned = null;
+  dismissed.forEach((id) => {
+    if (!live.has(id)) (pruned = pruned || new Set(dismissed)).delete(id);
+  });
+  if (pruned) setDismissed(pruned);
+
+  const visible = alerts.filter((a) => !dismissed.has(a.id));
+  if (!visible.length) return null;
 
   return (
     <div
@@ -109,8 +153,15 @@ export default function NetworkAlerts({ alerts = [] }) {
           to   { opacity: 1; transform: translateY(0); }
         }
       `}</style>
-      {alerts.map((a) => (
-        <Alert key={a.id} tone={a.tone} icon={a.icon} title={a.title} body={a.body} />
+      {visible.map((a) => (
+        <Alert
+          key={a.id}
+          tone={a.tone}
+          icon={a.icon}
+          title={a.title}
+          body={a.body}
+          onDismiss={() => setDismissed((prev) => new Set(prev).add(a.id))}
+        />
       ))}
     </div>
   );

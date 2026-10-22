@@ -300,6 +300,11 @@ const App = () => {
                   // link can be served a lower one; the patient stays single
                   // layer to protect their own uplink.
                   multiStream: isDoctorRole,
+                  // Self-hosted so a CSP without `worker-src blob:` can't
+                  // refuse it; regenerated from the SDK by `prebuild`.
+                  // Root-relative on purpose — PUBLIC_URL is the production
+                  // origin here, and a worker script must be same-origin.
+                  pubsubWorkerUrl: "/pubsub-worker.js",
                   // All our tracks are VP8. With switching on, the SDK may
                   // replace the published custom track with a fresh camera
                   // (losing the exact pre-call track / virtual background).

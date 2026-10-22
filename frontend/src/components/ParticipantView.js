@@ -4,6 +4,7 @@ import ReactDOM from "react-dom";
 import { useMeetingAppContext } from "../context/MeetingAppContext";
 import useIsMobile from "../hooks/useIsMobile";
 import useAudioLevel from "../hooks/useAudioLevel";
+import useParticipantStats from "../hooks/useParticipantStats";
 import MicOffSmallIcon from "../icons/MicOffSmallIcon";
 import NetworkIcon from "../icons/NetworkIcon";
 import { getQualityScore, nameTructed } from "../utils/common";
@@ -22,8 +23,6 @@ const clampZoom = (v) =>
 // (e.g. the Apollo background logo reads correctly).
 export const UNMIRROR = { transform: "scaleX(-1)" };
 
-// 2 s is plenty for a quality badge; getStats() is not free on low-end phones.
-const STATS_POLL_MS = 2000;
 
 const QUALITY = {
   good: { color: "#3BA55D", label: "Good" },
@@ -129,25 +128,30 @@ function NetworkBadge({ participantId, isLocal, displayName }) {
   const btnRef = useRef(null);
   const panelRef = useRef(null);
 
+  // Badge colour comes off the shared 2s poller — no interval of its own.
+  const snapshot = useParticipantStats(
+    participantId, getVideoStats, getAudioStats, !!(webcamStream || micStream)
+  );
   useEffect(() => {
-    if (!webcamStream && !micStream) return;
+    if (!snapshot) return;
+    setQuality(snapshot.entries?.length ? qualityFromScore(getQualityScore(snapshot.entries[0])) : QUALITY.good);
+  }, [snapshot]);
+
+  // The detail modal wants both kinds, faster, and only while it is open.
+  useEffect(() => {
+    if (!open) return;
     let cancelled = false;
     const update = async () => {
       try {
-        const main = webcamStream ? await getVideoStats() : await getAudioStats();
-        if (cancelled) return;
-        setQuality(main?.length ? qualityFromScore(getQualityScore(main[0])) : QUALITY.good);
-        if (open) {
-          const [video, audio] = await Promise.all([getVideoStats(), getAudioStats()]);
-          if (!cancelled) setStats({ video: video || [], audio: audio || [] });
-        }
-      } catch (e) { /* stats unavailable — keep last value */ }
+        const [video, audio] = await Promise.all([getVideoStats(), getAudioStats()]);
+        if (!cancelled) setStats({ video: video || [], audio: audio || [] });
+      } catch (e) { /* keep last value */ }
     };
     update();
-    const id = setInterval(update, open ? OPEN_POLL_MS : STATS_POLL_MS);
+    const id = setInterval(update, OPEN_POLL_MS);
     return () => { cancelled = true; clearInterval(id); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [webcamStream, micStream, open]);
+  }, [open]);
 
   // Close on any click outside the badge / modal; follow the tile on resize.
   useEffect(() => {

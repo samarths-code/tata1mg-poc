@@ -6,8 +6,12 @@
 // package and its MediaPipe model load on first use, so a patient on a phone
 // never downloads them. Desktop browsers only (SDK limitation).
 
-// Served from /public; absolute URL because the processor loads it itself.
-const BACKGROUND_URL = `${window.location.origin}${process.env.PUBLIC_URL || ""}/virtual-backgrounds/apollo-healthaxis.jpg`;
+// Served from /public. Always built off the CURRENT origin: package.json sets
+// `homepage` to a full URL, so CRA compiles PUBLIC_URL to that whole origin —
+// prefixing it with window.location.origin produced a doubled, broken URL, and
+// using it alone would point a preview deployment at the production domain
+// (a cross-origin image taints the processor's canvas).
+const BACKGROUND_URL = `${window.location.origin}/virtual-backgrounds/apollo-healthaxis.jpg`;
 const CONFIG = { type: "image", imageUrl: BACKGROUND_URL };
 
 let processor = null;

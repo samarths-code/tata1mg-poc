@@ -1,5 +1,6 @@
 import { useCallback } from "react";
-import { usePubSub, useMeeting } from "@videosdk.live/react-sdk";
+import { usePubSub } from "@videosdk.live/react-sdk";
+import { useMeetingAppContext } from "../context/MeetingAppContext";
 
 // Drop-in for usePubSub where the publish is fire-and-forget.
 //
@@ -15,7 +16,10 @@ import { usePubSub, useMeeting } from "@videosdk.live/react-sdk";
 // Use usePubSub directly where the caller awaits and wants the error.
 export default function useSafePublish(topic, listeners, properties) {
   const { publish, messages } = usePubSub(topic, listeners, properties);
-  const { isMeetingJoined } = useMeeting();
+  // From the onMeetingJoined / onMeetingLeft callbacks, via the store —
+  // cheaper than a useMeeting() subscription in every publishing component,
+  // and it also goes false while reconnecting (publish rejects then too).
+  const isMeetingJoined = useMeetingAppContext((st) => st.isMeetingJoined);
 
   const safePublish = useCallback(
     (...args) => {

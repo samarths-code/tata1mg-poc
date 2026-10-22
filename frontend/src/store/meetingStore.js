@@ -35,6 +35,11 @@ export const useMeetingStore = create((set) => ({
   maintainLandscapeVideoAspectRatio: true,
   canRemoveOtherParticipant: false,
 
+  // Set from onMeetingJoined / onMeetingLeft, and cleared whenever the meeting
+  // is not CONNECTED. SDK v1 rejects publish() before join (error 3035) and
+  // while reconnecting, so this is the gate for every fire-and-forget publish.
+  isMeetingJoined: false,
+
   // True while WE have asked the SFU to stop sending us video (bandwidth
   // saver). Drives the tile placeholder directly, so the message never depends
   // on the SDK emitting onStreamPaused for a pause we initiated ourselves.
@@ -93,6 +98,7 @@ export const useMeetingStore = create((set) => ({
   // ── Setters (value | updater-fn compatible) ────────────────────────────────
   setMeetingMode: updater(set, "meetingMode"),
   setIncomingVideoPaused: updater(set, "incomingVideoPaused"),
+  setIsMeetingJoined: updater(set, "isMeetingJoined"),
   setImages: updater(set, "images"),
   setRaisedHandsParticipants: updater(set, "raisedHandsParticipants"),
   setSelectedMicroPhone: updater(set, "selectedMicrophone"),

@@ -23,7 +23,6 @@ import MobileCustomerCallView from "../components/MobileCustomerCallView";
 import NetworkAlerts from "../components/NetworkAlerts";
 import useNetworkWatch from "../hooks/useNetworkWatch";
 import { useLimitationDetector, useIncomingVideoPause, DEFAULT_TRIGGERS, DEFAULT_RESTORE_DELAY_MS } from "../hooks/useBandwidthVideoSaver";
-import BandwidthSaverPanel from "../components/BandwidthSaverPanel";
 import useGeolocation from "../hooks/useGeolocation";
 import usePatientVideoQuality from "../hooks/usePatientVideoQuality";
 import { getIPGeoInfo } from "../api";
@@ -108,6 +107,7 @@ export function MeetingContainer({ onMeetingLeave, precallTracks = { video: fals
     setGeoData,
     isAudioOnly,
     setIncomingVideoPaused,
+    setIsMeetingJoined,
   } = useMeetingAppContext();
 
   const [meetingErrorVisible, setMeetingErrorVisible] = useState(false);
@@ -223,6 +223,9 @@ export function MeetingContainer({ onMeetingLeave, precallTracks = { video: fals
   function _handleOnMeetingStateChanged(data) {
     const { state } = data;
     setMeetingState(state);
+    // Gate for fire-and-forget publishes: publish() rejects before join AND
+    // while reconnecting, and CONNECTED is emitted right after MEETING_JOINED.
+    setIsMeetingJoined(state === "CONNECTED");
 
     const entry = MEETING_STATE_TOAST[state];
     if (!entry) return;
@@ -359,35 +362,9 @@ export function MeetingContainer({ onMeetingLeave, precallTracks = { video: fals
   // local stream. The doctor's camera, self-view and virtual background keep
   // running, and the patient's camera is never touched, so the doctor sees
   // them throughout.
-  const [saverConfig, setSaverConfig] = useState({
-    enabled: true,
-    triggers: DEFAULT_TRIGGERS,
-    restoreDelayMs: DEFAULT_RESTORE_DELAY_MS,
-  });
   // The doctor's copy of the patient's verdict — for the banner only; nothing
   // on the doctor's side is switched off.
   const [directivePhase, setDirectivePhase] = useState("idle");
-
-  // ONE setting for the whole call: either side changes it, both follow.
-  // persist:true so a late joiner picks up the current value on subscribe.
-  const { publish: publishSaverConfig } = useSafePublish("SAVER_CONFIG", {
-    onMessageReceived: ({ payload }) => {
-      if (payload) setSaverConfig(payload);
-    },
-  });
-
-  const updateSaverConfig = useCallback(
-    (patch) => {
-      setSaverConfig((prev) => {
-        const next = { ...prev, ...patch };
-        try {
-          publishSaverConfig("SAVER_CONFIG", { persist: true }, next);
-        } catch (e) { /* pubsub not ready */ }
-        return next;
-      });
-    },
-    [publishSaverConfig]
-  );
 
   // The patient's verdict, broadcast to the doctor. persist:true so a doctor
   // who joins or rejoins mid-episode lands on the right camera state.
@@ -400,16 +377,10 @@ export function MeetingContainer({ onMeetingLeave, precallTracks = { video: fals
 
   // Detection runs on the patient only — it is their connection we protect.
   const detector = useLimitationDetector({
-    enabled: saverConfig.enabled && !isDoctor && !!localParticipantAllowedJoin && isConnected,
-    triggers: saverConfig.triggers,
-    restoreDelayMs: saverConfig.restoreDelayMs,
+    enabled: !isDoctor && !!localParticipantAllowedJoin && isConnected,
+    triggers: DEFAULT_TRIGGERS,
+    restoreDelayMs: DEFAULT_RESTORE_DELAY_MS,
     limitationEvent: qualityLimitation,
-    // Measured signals alongside the SDK's own events. "downlink" is the most
-    // direct evidence that the incoming doctor video is what's hurting them.
-    externalActive: [
-      ...(localNetwork === "unstable" ? ["uplink"] : []),
-      ...(remoteNetwork === "unstable" ? ["downlink"] : []),
-    ],
     onPhaseChange: useCallback(({ phase, reasons }) => {
       try {
         publishDirective("VIDEO_DIRECTIVE", { persist: true }, { phase, reasons });
@@ -420,7 +391,7 @@ export function MeetingContainer({ onMeetingLeave, precallTracks = { video: fals
   // The patient acts on its own verdict, locally — no round trip needed for
   // the thing that saves the bandwidth.
   useIncomingVideoPause({
-    enabled: saverConfig.enabled && !isDoctor && !!localParticipantAllowedJoin && isConnected && !isAudioOnly,
+    enabled: !isDoctor && !!localParticipantAllowedJoin && isConnected && !isAudioOnly,
     phase: detector.phase,
     meetingRef: mMeetingRef,
     onPausedChange: setIncomingVideoPaused,
@@ -843,17 +814,6 @@ export function MeetingContainer({ onMeetingLeave, precallTracks = { video: fals
         {localParticipantAllowedJoin ? (
             <>
               <NetworkAlerts alerts={networkAlerts} />
-              <BandwidthSaverPanel
-                enabled={saverConfig.enabled}
-                onEnabledChange={(enabled) => updateSaverConfig({ enabled })}
-                triggers={saverConfig.triggers}
-                onTriggersChange={(triggers) => updateSaverConfig({ triggers })}
-                restoreDelayMs={saverConfig.restoreDelayMs}
-                onRestoreDelayChange={(restoreDelayMs) => updateSaverConfig({ restoreDelayMs })}
-                phase={saverPhase}
-                activeTypes={isDoctor ? [] : detector.activeTypes}
-                role={isDoctor ? "doctor" : "patient"}
-              />
               {/* Client side of the agent's capture button — no camera in audio calls */}
               {!isAudioOnly && <ImageUploadListner />}
 

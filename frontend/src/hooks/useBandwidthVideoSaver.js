@@ -9,19 +9,15 @@ import { useCallback, useEffect, useRef, useState } from "react";
 //   useLimitationDetector  — patient: decides, from its own signals
 //   useIncomingVideoPause  — patient: pauses/resumes what the SFU sends it
 //
-// Trigger types. The first three are SDK onQualityLimitation events; the last
-// two are our own measurements (useNetworkWatch).
-//   uplink   — the patient can't send well
-//   downlink — the patient can't RECEIVE well; the most direct evidence that
-//              the incoming doctor video is the thing hurting them
-export const TRIGGER_TYPES = ["bandwidth", "congestion", "cpu", "uplink", "downlink"];
-export const DEFAULT_TRIGGERS = ["bandwidth", "uplink", "downlink"];
+// Triggers: the SDK's onQualityLimitation types. `externalActive` can feed in
+// measured signals under their own names too, but nothing does right now.
+export const DEFAULT_TRIGGERS = ["bandwidth", "congestion", "cpu"];
 export const DEFAULT_RESTORE_DELAY_MS = 3000;
 
-// phase: "idle"    — patient is fine; doctor's camera may be on
-//        "saving"  — at least one trigger active; doctor's camera off
-//        "pending" — triggers cleared, waiting out the delay. Camera stays OFF
-//                    here: we only restore once the quiet period completes.
+// phase: "idle"    — patient is fine; the doctor's video is delivered
+//        "saving"  — at least one trigger active; delivery paused
+//        "pending" — triggers cleared, waiting out the delay. Still paused:
+//                    we only resume once the quiet period completes.
 export function useLimitationDetector({
   enabled,
   triggers = DEFAULT_TRIGGERS,
@@ -148,11 +144,6 @@ export function useIncomingVideoPause({ enabled, phase, meetingRef, onPausedChan
         if (shouldPause) await meeting.pauseAllStreams("video");
         else await meeting.resumeAllStreams("video");
         if (!cancelled) pausedRef.current = shouldPause;
-        if (process.env.NODE_ENV !== "production") {
-          // Confirm against window.__netWatch.downlink.kbps — it should fall
-          // to ~0 within a couple of polls of a pause.
-          console.log(`[saver] ${shouldPause ? "pauseAllStreams" : "resumeAllStreams"}("video") sent`);
-        }
       } catch (e) {
         console.warn("Incoming video pause failed:", e);
       } finally {
