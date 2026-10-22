@@ -7,8 +7,8 @@ import logging
 import time
 from urllib.parse import parse_qs, quote, urlparse
 
-from .config import CLIENT_URL, LINK_VALID_HOURS
-from .email_link import EmailError, email_configured, send_link_email
+from ..config import CLIENT_URL, LINK_VALID_HOURS
+from .mailer import EmailError, email_configured, send_link_email
 from .los import load_customers
 from .sheet import LINK_COLUMN, write_column
 from .videosdk import muthoot_org

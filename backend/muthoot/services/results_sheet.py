@@ -3,7 +3,8 @@ If the sheet can't be written, the row goes to data/results_not_in_sheet.jsonl."
 import json
 import logging
 
-from . import config, sheet
+from .. import config
+from . import sheet
 
 logger = logging.getLogger(__name__)
 

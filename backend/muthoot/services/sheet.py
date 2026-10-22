@@ -6,7 +6,7 @@ import time
 import gspread
 from gspread.utils import rowcol_to_a1
 
-from . import config
+from .. import config
 
 LOS_TAB = "LOS"
 RESULTS_TAB = "Results"

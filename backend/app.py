@@ -33,16 +33,6 @@ if admin_url_prefix():
 app.register_blueprint(muthoot.bp)
 muthoot.start_event_writer()
 
-# from . import sheet_sync    # noqa: E402 — imported after app so sheet_sync can reference it
-# from . import ppmc_routes   # noqa: E402 — frontend-URL bulk flow + disable endpoint
-# from . import ppmc_embed    # noqa: E402 — prebuilt embed bulk flow
-# app.register_blueprint(ppmc_routes.bp)
-# app.register_blueprint(ppmc_embed.bp)
-
-# ---------------------------------------------------------------------------
-# Configuration
-# ---------------------------------------------------------------------------
-
 warnings.filterwarnings("ignore", category=Warning, module="urllib3")
 
 

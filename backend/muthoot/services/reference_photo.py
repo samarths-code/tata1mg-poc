@@ -4,7 +4,7 @@ tab's face_photo gives a Drive link or a file name (extension optional)."""
 import re
 from pathlib import Path
 
-from . import config
+from .. import config
 from .sheet import SheetError, google_session
 
 GOOGLE_PHOTOS_FOLDER_ID = config.GOOGLE_PHOTOS_FOLDER_ID

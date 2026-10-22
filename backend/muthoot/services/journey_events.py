@@ -8,7 +8,8 @@ import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from . import config, sheet
+from .. import config
+from . import sheet
 
 logger = logging.getLogger(__name__)
 

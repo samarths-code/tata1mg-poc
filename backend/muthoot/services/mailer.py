@@ -7,7 +7,7 @@ from email.message import EmailMessage
 from email.utils import formataddr, make_msgid
 from html import escape
 
-from .config import (
+from ..config import (
     EMAIL_FROM,
     EMAIL_FROM_NAME,
     LOGO_FILE,

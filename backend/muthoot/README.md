@@ -1,7 +1,7 @@
 # Muthoot Finance — AI Video PD (`backend/muthoot`)
 
-The backend of the Muthoot AI Video PD demo, ported from its FastAPI service to a
-Flask blueprint on this multi-org backend. Every route is under
+The backend of the Muthoot AI Video PD demo, moved from its separate FastAPI service into a
+Flask blueprint on this multi-org backend (the FastAPI service is no longer needed). Every route is under
 **`/api/v1/muthoot`** and uses the **`muthoot` org's** VideoSDK API key and secret
 from `orgs.json` (admin page).
 
@@ -10,6 +10,24 @@ The other two parts of the demo live elsewhere:
 - **Customer page** (React): set `REACT_APP_BACKEND_URL=https://<this backend>/api/v1/muthoot`.
 - **AI agent** (Zero Runtime Cloud): set `BACKEND_URL=https://<this backend>/api/v1/muthoot`
   in its `deploy.env`.
+
+## Layout
+
+```
+muthoot/
+  __init__.py      bp + start_event_writer() (used by app.py)
+  config.py        MUTHOOT_* settings from backend/.env
+  errors.py        ApiError -> {"detail": ...}
+  routes/          thin Flask handlers, one blueprint under /api/v1/muthoot
+    demo.py  sessions.py  verify.py  results.py  events.py  health.py  validation.py
+  services/        the logic
+    sheet.py  los.py  links.py  mailer.py  videosdk.py  sessions.py
+    face.py  reference_photo.py  selfie.py  results.py  results_sheet.py  journey_events.py
+  assets/          email logo
+  models/          face model (downloaded on first use, gitignored)
+  photos/          local reference photos (gitignored)
+  data/            written files (gitignored)
+```
 
 ## Routes
 

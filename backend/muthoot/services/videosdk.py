@@ -8,10 +8,10 @@ import time
 import jwt
 import requests
 
-from . import config
+from .. import config
 
 try:
-    from .. import org_store
+    from ... import org_store
 except ImportError:  # backend run as a script: python3 app.py
     import org_store
 

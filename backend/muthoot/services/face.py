@@ -9,7 +9,7 @@ from mediapipe import Image
 from mediapipe.tasks.python.core.base_options import BaseOptions
 from mediapipe.tasks.python.vision import FaceDetector, FaceDetectorOptions
 
-from . import config
+from .. import config
 
 FACE_MODEL = config.MODELS_DIR / "blaze_face_short_range.tflite"
 FACE_MODEL_URL = (
