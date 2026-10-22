@@ -499,9 +499,11 @@ ADMIN_HTML = """<!doctype html>
     </form>
   </div>
 
-  <div class="card" id="envCard" hidden>
-    <h2 style="font-size:16px;margin:0 0 4px">Org variables · <code id="envOrg"></code></h2>
+  <div class="card" id="envCard">
+    <h2 style="font-size:16px;margin:0 0 4px">Org variables<span id="envOrgWrap" hidden> · <code id="envOrg"></code></span></h2>
     <p class="hint" style="margin:0 0 12px">Settings only this org uses (e.g. its Video PD sheet, agent and email). Each one is saved on its own and used from the next request.</p>
+    <p class="hint" id="envNoOrg" style="margin:0 0 12px"><b>Save the organisation above first</b> (or press Edit / Variables on one), then add its variables here.</p>
+    <div id="envBody" hidden>
     <table>
       <thead><tr><th>Name</th><th>Value</th><th></th></tr></thead>
       <tbody id="envRows"></tbody>
@@ -519,6 +521,7 @@ ADMIN_HTML = """<!doctype html>
         <span id="envMsg"></span>
       </div>
     </form>
+    </div>
   </div>
   </section>
 
@@ -578,7 +581,10 @@ function render() {
     const tda = document.createElement("td"); tda.style.whiteSpace = "nowrap";
     const edit = document.createElement("button"); edit.className = "link"; edit.textContent = "Edit";
     edit.onclick = () => fill(o);
-    tda.append(edit); tr.appendChild(tda);
+    const vars = document.createElement("button"); vars.className = "link";
+    vars.textContent = "Variables (" + (o.env || []).length + ")";
+    vars.onclick = () => { fill(o); $("envCard").scrollIntoView({ behavior: "smooth" }); };
+    tda.append(edit, vars); tr.appendChild(tda);
     rows.appendChild(tr);
   }
 }
@@ -602,7 +608,7 @@ function reset() {
   $("formTitle").textContent = "Add organisation";
   $("secretHint").textContent = "Required for a new org.";
   $("roomConfig").value = "{}"; setMsg("");
-  envOrgId = null; $("envCard").hidden = true;
+  envOrgId = null; $("envBody").hidden = true; $("envOrgWrap").hidden = true; $("envNoOrg").hidden = false;
 }
 
 // ---- Org variables (shown while editing an org) ----
@@ -612,13 +618,14 @@ let envOrgId = null;
 function setEnvMsg(text, kind) { const m = $("envMsg"); m.textContent = text; m.className = kind || ""; }
 
 function showEnv(o) {
-  envOrgId = o.id; $("envOrg").textContent = o.id; $("envCard").hidden = false;
+  envOrgId = o.id; $("envOrg").textContent = o.id;
+  $("envBody").hidden = false; $("envOrgWrap").hidden = false; $("envNoOrg").hidden = true;
   $("envForm").reset(); $("envHelp").textContent = ""; setEnvMsg("");
   renderEnv(o.env || []);
 }
 
 function renderEnv(env) {
-  const o = orgs.find(x => x.id === envOrgId); if (o) o.env = env;
+  const o = orgs.find(x => x.id === envOrgId); if (o) { o.env = env; render(); }
   const rows = $("envRows"); rows.textContent = "";
   if (!env.length) {
     const tr = document.createElement("tr"); const td = document.createElement("td");
@@ -693,7 +700,8 @@ $("form").onsubmit = async (e) => {
       secret: $("secret").value, webhookUrl: $("webhookUrl").value,
       frontendOrigins: $("frontendOrigins").value, frontendDomain: $("frontendDomain").value, roomConfig,
     });
-    reset(); setMsg("Saved " + d.org.id, "ok"); load();
+    await load(); fill(orgs.find(x => x.id === d.org.id) || d.org);
+    setMsg("Saved " + d.org.id + " — add its variables below", "ok");
   } catch (err) { setMsg(err.message, "err"); }
 };
 load();
