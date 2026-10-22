@@ -8,7 +8,9 @@ credentials and meeting config.
         "apiKey": "...",
         "secret": "...",
         "webhookUrl": "",
-        "roomConfig": { ...merged into the POST /v2/rooms body... }
+        "roomConfig": { ...merged into the POST /v2/rooms body... },
+        "env": { "KEY": "value", ... },     # org variables (see org_vars.py)
+        "envSecrets": ["KEY", ...]
       }
     }
 
@@ -125,3 +127,30 @@ def save_org(org_id: str, org: dict) -> None:
         data = _read()
         data[org_id] = org
         _write(data)
+
+
+def update_org(org_id: str, change) -> dict:
+    """Read-modify-write one org under the lock: change(org) edits it in place.
+    Returns a copy of the saved org. Raises OrgNotFound."""
+    with _lock:
+        data = _read()
+        org = data.get(org_id)
+        if not isinstance(org, dict):
+            raise OrgNotFound(org_id)
+        change(org)
+        _write(data)
+        return copy.deepcopy(org)
+
+
+def request_org_id() -> str:
+    """The org id a request names: X-Org-Id header, orgId in the JSON body, or
+    orgId in the query string. "" when none (get_org then uses "default")."""
+    from flask import request  # only needed by request handlers
+
+    body = request.get_json(silent=True) or {}
+    return (
+        request.headers.get("X-Org-Id")
+        or (body.get("orgId") if isinstance(body, dict) else None)
+        or request.args.get("orgId")
+        or ""
+    ).strip().lower()

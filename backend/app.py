@@ -16,9 +16,11 @@ load_dotenv()
 try:
     from . import org_store
     from .admin import admin_url_prefix, bp as admin_bp
+    from . import muthoot
 except ImportError:  # run as a script: python3 app.py
     import org_store
     from admin import admin_url_prefix, bp as admin_bp
+    import muthoot
 
 app = Flask(__name__)
 # Largest request body: a 20 MB build zip (admin upload) + multipart overhead.
@@ -27,15 +29,9 @@ app.config["MAX_CONTENT_LENGTH"] = 21 * 1024 * 1024
 if admin_url_prefix():
     app.register_blueprint(admin_bp, url_prefix=admin_url_prefix())
 
-# from . import sheet_sync    # noqa: E402 — imported after app so sheet_sync can reference it
-# from . import ppmc_routes   # noqa: E402 — frontend-URL bulk flow + disable endpoint
-# from . import ppmc_embed    # noqa: E402 — prebuilt embed bulk flow
-# app.register_blueprint(ppmc_routes.bp)
-# app.register_blueprint(ppmc_embed.bp)
-
-# ---------------------------------------------------------------------------
-# Configuration
-# ---------------------------------------------------------------------------
+# Muthoot Finance AI Video PD: /api/v1/muthoot/* (backend/muthoot/README.md).
+app.register_blueprint(muthoot.bp)
+muthoot.start_event_writer()
 
 warnings.filterwarnings("ignore", category=Warning, module="urllib3")
 
@@ -61,19 +57,9 @@ _ENV_ORIGINS = {
 # query string). All tokens and VideoSDK calls for that request are made with
 # that org's API key + secret from orgs.json. No org id -> "default" (.env).
 
-def request_org_id() -> str:
-    body = request.get_json(silent=True) or {}
-    return (
-        request.headers.get("X-Org-Id")
-        or (body.get("orgId") if isinstance(body, dict) else None)
-        or request.args.get("orgId")
-        or ""
-    ).strip().lower()
-
-
 def resolve_org():
     """Return (org, None) or (None, error_response)."""
-    org_id = request_org_id()
+    org_id = org_store.request_org_id()
     try:
         return org_store.get_org(org_id), None
     except org_store.OrgNotFound:

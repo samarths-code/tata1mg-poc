@@ -5,6 +5,10 @@ config per client). Everything is stored in orgs.json via org_store.
     GET  /<ADMIN_PATH>/                       the page
     GET  /<ADMIN_PATH>/api/orgs               list orgs (secrets masked)
     POST /<ADMIN_PATH>/api/orgs               create / update an org
+    POST /<ADMIN_PATH>/api/orgs/<id>/env      add / update one env var of an org
+    POST /<ADMIN_PATH>/api/orgs/<id>/env/bulk add / update many at once (pasted .env)
+    POST /<ADMIN_PATH>/api/env/parse          pasted .env text -> variables (nothing saved)
+    POST /<ADMIN_PATH>/api/orgs/<id>/env/delete  remove one env var
     GET  /<ADMIN_PATH>/api/builds             each org's frontend domain + last upload
     POST /<ADMIN_PATH>/api/orgs/<id>/build    upload a .zip build (see builds.py)
 
@@ -32,10 +36,11 @@ import requests
 from flask import Blueprint, Response, jsonify, request
 
 try:
-    from . import builds, org_store
+    from . import builds, org_store, org_vars
 except ImportError:
     import builds
     import org_store
+    import org_vars
 
 bp = Blueprint("admin", __name__)
 
@@ -179,8 +184,7 @@ def security_headers(response: Response) -> Response:
     return response
 
 
-def _mask(secret: str) -> str:
-    return f"••••{secret[-4:]}" if len(secret) > 4 else "••••"
+_mask = org_vars.mask
 
 
 def _public(org_id: str, org: dict) -> dict:
@@ -193,6 +197,7 @@ def _public(org_id: str, org: dict) -> dict:
         "frontendOrigins": org.get("frontendOrigins") or [],
         "frontendDomain": org.get("frontendDomain", ""),
         "roomConfig": org.get("roomConfig") or {},
+        "env": org_vars.list_public(org),
     }
 
 
@@ -294,9 +299,64 @@ def admin_save_org():
         "frontendOrigins": origins,
         "frontendDomain": domain,
         "roomConfig": room_config,
+        # Org variables are edited on their own (below); saving the org keeps them.
+        **org_vars.stored(existing),
     }
     org_store.save_org(org_id, org)
     return jsonify({"org": _public(org_id, org)}), 200
+
+
+@bp.route("/api/orgs/<org_id>/env", methods=["POST"])
+@require_admin
+def admin_set_env(org_id):
+    """Add or update one org variable: {key, value, secret}."""
+    body = request.get_json(silent=True) or {}
+    try:
+        org = org_vars.set_var(org_id, body.get("key"), body.get("value"), bool(body.get("secret")))
+    except org_vars.OrgVarError as e:
+        return jsonify({"message": str(e)}), 400
+    except org_store.OrgNotFound:
+        return jsonify({"message": f"Unknown org: {org_id}"}), 404
+    return jsonify({"env": org_vars.list_public(org)}), 200
+
+
+@bp.route("/api/orgs/<org_id>/env/bulk", methods=["POST"])
+@require_admin
+def admin_set_env_bulk(org_id):
+    """Add or update many org variables in one save: {vars: [{key, value}], secret}."""
+    body = request.get_json(silent=True) or {}
+    rows = body.get("vars")
+    if not isinstance(rows, list) or not all(isinstance(r, dict) for r in rows):
+        return jsonify({"message": "vars must be a list of {key, value}"}), 400
+    try:
+        org = org_vars.set_vars(org_id, [(r.get("key"), r.get("value")) for r in rows], bool(body.get("secret")))
+    except org_vars.OrgVarError as e:
+        return jsonify({"message": str(e)}), 400
+    except org_store.OrgNotFound:
+        return jsonify({"message": f"Unknown org: {org_id}"}), 404
+    return jsonify({"env": org_vars.list_public(org)}), 200
+
+
+@bp.route("/api/env/parse", methods=["POST"])
+@require_admin
+def admin_parse_env():
+    """Pasted .env text -> {vars: [{key, value}], skipped: [...]}; nothing is saved."""
+    text = (request.get_json(silent=True) or {}).get("text")
+    if not isinstance(text, str):
+        return jsonify({"message": "text must be a string"}), 400
+    items, skipped = org_vars.parse_env(text)
+    return jsonify({"vars": [{"key": k, "value": v} for k, v in items], "skipped": skipped}), 200
+
+
+@bp.route("/api/orgs/<org_id>/env/delete", methods=["POST"])
+@require_admin
+def admin_delete_env(org_id):
+    """Remove one org variable: {key}."""
+    try:
+        org = org_vars.delete_var(org_id, (request.get_json(silent=True) or {}).get("key"))
+    except org_store.OrgNotFound:
+        return jsonify({"message": f"Unknown org: {org_id}"}), 404
+    return jsonify({"env": org_vars.list_public(org)}), 200
 
 
 @bp.route("/api/builds", methods=["GET"])
@@ -387,6 +447,11 @@ ADMIN_HTML = """<!doctype html>
   .site input[type=file] { width:auto; max-width:220px; padding:4px; font-size:12px; }
   .site label.inline { display:inline-flex; gap:4px; align-items:center; margin:0; white-space:nowrap; }
   .site label.inline input { width:auto; }
+  label.inline { display:inline-flex; gap:6px; align-items:center; margin:0; }
+  label.inline input { width:auto; }
+  #envMsg.err, #envBulkMsg.err { color:var(--danger); } #envMsg.ok { color:var(--ok); }
+  #envBulkRows input, #envBulkRows textarea { font-family: ui-monospace, Menlo, monospace; font-size:12px; }
+  #envBulkRows textarea { min-height:34px; }
 </style>
 </head>
 <body>
@@ -441,6 +506,43 @@ ADMIN_HTML = """<!doctype html>
         <span id="msg"></span>
       </div>
     </form>
+  </div>
+
+  <div class="card" id="envCard">
+    <h2 style="font-size:16px;margin:0 0 4px">Org variables<span id="envOrgWrap" hidden> · <code id="envOrg"></code></span></h2>
+    <p class="hint" style="margin:0 0 12px">Settings only this org uses (e.g. its Video PD sheet, agent and email). Each one is saved on its own and used from the next request.</p>
+    <p class="hint" id="envNoOrg" style="margin:0 0 12px"><b>Save the organisation above first</b> (or press Edit / Variables on one), then add its variables here.</p>
+    <div id="envBody" hidden>
+    <table>
+      <thead><tr><th>Name</th><th>Value</th><th></th></tr></thead>
+      <tbody id="envRows"></tbody>
+    </table>
+    <form id="envForm" class="grid" autocomplete="off" style="margin-top:12px">
+      <div><label for="envKey">Name</label>
+        <input id="envKey" required pattern="[A-Za-z][A-Za-z0-9_]{0,63}" placeholder="e.g. CLIENT_URL"></div>
+      <div><label for="envValue">Value</label>
+        <textarea id="envValue" spellcheck="false" style="min-height:38px" rows="1"></textarea></div>
+      <div class="full row">
+        <label class="inline"><input type="checkbox" id="envSecret"> Secret (masked after saving)</label>
+        <button type="submit" class="primary">Add / update</button>
+        <span id="envMsg"></span>
+      </div>
+      <div class="full hint">Tip: paste the contents of a .env file into Name to add all its variables at once.</div>
+    </form>
+    <div id="envBulk" hidden style="margin-top:12px">
+      <p class="hint" id="envBulkInfo" style="margin:0 0 8px"></p>
+      <table>
+        <thead><tr><th>Name</th><th>Value</th><th></th></tr></thead>
+        <tbody id="envBulkRows"></tbody>
+      </table>
+      <div class="row" style="margin-top:10px">
+        <label class="inline"><input type="checkbox" id="envBulkSecret"> Mark all as secret</label>
+        <button type="button" class="primary" id="envBulkSave">Save</button>
+        <button type="button" id="envBulkCancel">Cancel</button>
+        <span id="envBulkMsg"></span>
+      </div>
+    </div>
+    </div>
   </div>
   </section>
 
@@ -500,7 +602,10 @@ function render() {
     const tda = document.createElement("td"); tda.style.whiteSpace = "nowrap";
     const edit = document.createElement("button"); edit.className = "link"; edit.textContent = "Edit";
     edit.onclick = () => fill(o);
-    tda.append(edit); tr.appendChild(tda);
+    const vars = document.createElement("button"); vars.className = "link";
+    vars.textContent = "Variables (" + (o.env || []).length + ")";
+    vars.onclick = () => { fill(o); $("envCard").scrollIntoView({ behavior: "smooth" }); };
+    tda.append(edit, vars); tr.appendChild(tda);
     rows.appendChild(tr);
   }
 }
@@ -515,7 +620,8 @@ function fill(o) {
   $("frontendDomain").value = o.frontendDomain || "";
   $("roomConfig").value = JSON.stringify(o.roomConfig || {}, null, 2);
   $("preset").value = ""; setMsg("");
-  window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+  showEnv(o);
+  $("formTitle").scrollIntoView({ behavior: "smooth" });
 }
 
 function reset() {
@@ -523,11 +629,131 @@ function reset() {
   $("formTitle").textContent = "Add organisation";
   $("secretHint").textContent = "Required for a new org.";
   $("roomConfig").value = "{}"; setMsg("");
+  envOrgId = null; $("envBody").hidden = true; $("envOrgWrap").hidden = true; $("envNoOrg").hidden = false;
 }
 
+// ---- Org variables (shown while editing an org) ----
+let envOrgId = null;
+
+function setEnvMsg(text, kind) { const m = $("envMsg"); m.textContent = text; m.className = kind || ""; }
+
+function showEnv(o) {
+  envOrgId = o.id; $("envOrg").textContent = o.id;
+  $("envBody").hidden = false; $("envOrgWrap").hidden = false; $("envNoOrg").hidden = true;
+  $("envForm").reset(); setEnvMsg(""); closeBulk();
+  renderEnv(o.env || []);
+}
+
+function renderEnv(env) {
+  const o = orgs.find(x => x.id === envOrgId); if (o) { o.env = env; render(); }
+  const rows = $("envRows"); rows.textContent = "";
+  if (!env.length) {
+    const tr = document.createElement("tr"); const td = document.createElement("td");
+    td.colSpan = 3; td.className = "hint"; td.textContent = "No variables yet."; tr.appendChild(td); rows.appendChild(tr);
+  }
+  for (const v of env) {
+    const tr = document.createElement("tr");
+    const k = document.createElement("td"); const kc = document.createElement("code"); kc.textContent = v.key; k.appendChild(kc);
+    if (v.secret) { const t = document.createElement("span"); t.className = "tag"; t.textContent = "secret"; t.style.marginLeft = "6px"; k.appendChild(t); }
+    const val = document.createElement("td"); const vc = document.createElement("code");
+    vc.textContent = v.value.length > 120 ? v.value.slice(0, 120) + "…" : v.value; val.appendChild(vc);
+    const act = document.createElement("td"); act.style.whiteSpace = "nowrap";
+    const edit = document.createElement("button"); edit.type = "button"; edit.className = "link"; edit.textContent = "Edit";
+    edit.onclick = () => {
+      $("envKey").value = v.key; $("envValue").value = v.secret ? "" : v.value; $("envSecret").checked = v.secret;
+      setEnvMsg(v.secret ? "Secret values aren't shown; enter the new value." : ""); $("envValue").focus();
+    };
+    const del = document.createElement("button"); del.type = "button"; del.className = "link"; del.textContent = "Delete"; del.style.color = "var(--danger)";
+    del.onclick = async () => {
+      if (!confirm("Delete " + v.key + " from " + envOrgId + "?")) return;
+      try { const d = await api(BASE + "/api/orgs/" + encodeURIComponent(envOrgId) + "/env/delete", { key: v.key });
+            renderEnv(d.env); setEnvMsg("Deleted " + v.key, "ok"); }
+      catch (e) { setEnvMsg(e.message, "err"); }
+    };
+    act.append(edit, del);
+    tr.append(k, val, act); rows.appendChild(tr);
+  }
+}
+
+// ---- Paste a .env file: every KEY=value becomes a row, saved together ----
+let bulkSkipped = [];
+const ENV_LINE = /^\\s*(export\\s+)?[A-Za-z_][A-Za-z0-9_]*\\s*=/m;
+
+function closeBulk() {
+  $("envBulk").hidden = true; $("envForm").hidden = false;
+  $("envBulkRows").textContent = ""; $("envBulkMsg").textContent = ""; $("envBulkSecret").checked = false;
+}
+
+function bulkRow(key, value) {
+  const tr = document.createElement("tr");
+  const k = document.createElement("td"); const ki = document.createElement("input"); ki.value = key; ki.className = "bk"; k.appendChild(ki);
+  const v = document.createElement("td"); const vi = document.createElement("textarea"); vi.value = value; vi.rows = 1; vi.className = "bv"; v.appendChild(vi);
+  const x = document.createElement("td"); const rm = document.createElement("button"); rm.type = "button"; rm.className = "link"; rm.textContent = "Remove";
+  rm.onclick = () => { tr.remove(); updateBulkCount(); }; x.appendChild(rm);
+  tr.append(k, v, x); return tr;
+}
+
+function updateBulkCount() {
+  const n = $("envBulkRows").children.length;
+  $("envBulkSave").textContent = "Save " + n + " variable" + (n === 1 ? "" : "s");
+  $("envBulkSave").disabled = n === 0;
+  $("envBulkInfo").textContent = n + " found in the pasted text — check them, then save." +
+    (bulkSkipped.length ? " Skipped: " + bulkSkipped.join(", ") + "." : "") +
+    " Existing names are overwritten.";
+}
+
+async function openBulk(text) {
+  let d;
+  try { d = await api(BASE + "/api/env/parse", { text }); }
+  catch (e) { setEnvMsg(e.message, "err"); return; }
+  if (!d.vars.length) { setEnvMsg("No KEY=value lines found in the pasted text.", "err"); return; }
+  bulkSkipped = d.skipped || [];
+  const rows = $("envBulkRows"); rows.textContent = "";
+  for (const v of d.vars) rows.appendChild(bulkRow(v.key, v.value));
+  $("envForm").hidden = true; $("envBulk").hidden = false; setEnvMsg(""); updateBulkCount();
+}
+
+function onEnvPaste(e, needsKeyLine) {
+  const text = (e.clipboardData || window.clipboardData).getData("text");
+  const multi = text.trim().includes("\\n");
+  // Name box: any KEY=value. Value box: only multi-line text with KEY=value lines
+  // (a single value may contain "=", e.g. a URL).
+  if (needsKeyLine ? !(multi && ENV_LINE.test(text)) : !(multi || ENV_LINE.test(text))) return;
+  e.preventDefault();
+  openBulk(text);
+}
+$("envKey").addEventListener("paste", (e) => onEnvPaste(e, false));
+$("envValue").addEventListener("paste", (e) => onEnvPaste(e, true));
+$("envBulkCancel").onclick = closeBulk;
+$("envBulkSave").onclick = async () => {
+  const vars = [...$("envBulkRows").children].map(tr => ({
+    key: tr.querySelector(".bk").value.trim(), value: tr.querySelector(".bv").value,
+  }));
+  const say = (t, k) => { const m = $("envBulkMsg"); m.textContent = t; m.className = k || ""; };
+  say("Saving…");
+  try {
+    const d = await api(BASE + "/api/orgs/" + encodeURIComponent(envOrgId) + "/env/bulk",
+      { vars, secret: $("envBulkSecret").checked });
+    renderEnv(d.env); closeBulk(); setEnvMsg("Saved " + vars.length + " variable" + (vars.length === 1 ? "" : "s"), "ok");
+  } catch (err) { say(err.message, "err"); }
+};
+
+$("envForm").onsubmit = async (e) => {
+  e.preventDefault();
+  const key = $("envKey").value.trim().toUpperCase();
+  setEnvMsg("Saving…");
+  try {
+    const d = await api(BASE + "/api/orgs/" + encodeURIComponent(envOrgId) + "/env",
+      { key, value: $("envValue").value, secret: $("envSecret").checked });
+    renderEnv(d.env); $("envForm").reset(); setEnvMsg("Saved " + key, "ok");
+  } catch (err) { setEnvMsg(err.message, "err"); }
+};
+
 async function load() {
-  try { const d = await api(BASE + "/api/orgs"); orgs = d.orgs; presets = d.presets; render(); }
-  catch (e) { $("rows").innerHTML = ""; setMsg(e.message, "err"); }
+  try {
+    const d = await api(BASE + "/api/orgs"); orgs = d.orgs; presets = d.presets;
+    render();
+  } catch (e) { $("rows").innerHTML = ""; setMsg(e.message, "err"); }
 }
 
 $("preset").onchange = (e) => {
@@ -546,7 +772,8 @@ $("form").onsubmit = async (e) => {
       secret: $("secret").value, webhookUrl: $("webhookUrl").value,
       frontendOrigins: $("frontendOrigins").value, frontendDomain: $("frontendDomain").value, roomConfig,
     });
-    reset(); setMsg("Saved " + d.org.id, "ok"); load();
+    await load(); fill(orgs.find(x => x.id === d.org.id) || d.org);
+    setMsg("Saved " + d.org.id + " — add its variables below", "ok");
   } catch (err) { setMsg(err.message, "err"); }
 };
 load();
