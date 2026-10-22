@@ -19,12 +19,17 @@ link opened the room, else the X-Org-Id header (or orgId), else MUTHOOT_ORG_ID.
 """
 import logging
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify
 
 from ..config import Settings, settings_for
 from ..errors import ApiError
 from ..services.sessions import org_id_of
 from ..services.sheet import SheetError
+
+try:
+    from ... import org_store
+except ImportError:  # backend run as a script: python3 app.py
+    import org_store
 
 logger = logging.getLogger(__name__)
 
@@ -38,16 +43,8 @@ def org_settings(room_id: str | None = None) -> Settings:
     A known room decides: the agent's calls carry no org id, and a header can't
     point a room at another org's sheet. Otherwise the page's X-Org-Id header
     (or orgId in the query or body), the same id the other org frontends send."""
-    org_id = org_id_of(room_id) if room_id else None
-    if not org_id:
-        body = request.get_json(silent=True)
-        org_id = (
-            request.headers.get("X-Org-Id")
-            or request.args.get("orgId")
-            or (body.get("orgId") if isinstance(body, dict) else None)
-            or ""
-        )
-    return settings_for(str(org_id))
+    org_id = (org_id_of(room_id) if room_id else None) or org_store.request_org_id()
+    return settings_for(org_id)
 
 
 @bp.errorhandler(ApiError)

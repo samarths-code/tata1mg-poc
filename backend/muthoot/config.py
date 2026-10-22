@@ -86,13 +86,6 @@ class Settings:
     data_dir: Path
 
 
-def _number(org_id: str, name: str, value: str, kind):
-    try:
-        return kind(value)
-    except ValueError:
-        raise ApiError(500, f"Org '{org_id}': {name} must be a number (it is '{value}').")
-
-
 def settings_for(org_id: str) -> Settings:
     """The org's Video PD settings. Raises ApiError if the org isn't set up."""
     org_id = (org_id or "").strip().lower() or DEFAULT_ORG_ID
@@ -101,41 +94,43 @@ def settings_for(org_id: str) -> Settings:
     except org_store.OrgNotFound:
         raise ApiError(404, f"Organisation '{org_id}' is not set up: add it (API key and secret) on the admin page.")
 
+    # Only the default org also reads the old MUTHOOT_* keys from .env.
     use_dotenv = org_id == DEFAULT_ORG_ID
 
-    def get(name: str, default: str = "") -> str:
-        value = org_store.org_env(org, name)
-        if value is None and use_dotenv:
-            value = os.environ.get(f"MUTHOOT_{name}")
-        value = (value or "").strip()
-        return value or default
+    def var(name: str, default="", cast=str):
+        return org_store.get_var(
+            org, name, default, cast=cast, env_fallback=f"MUTHOOT_{name}" if use_dotenv else None
+        )
 
-    smtp_host = get("SMTP_HOST", "smtp.gmail.com")
-    smtp_user = get("SMTP_USER")
-    smtp_password = get("SMTP_PASSWORD")
-    if "gmail" in smtp_host:
-        # Google shows app passwords in groups ("abcd efgh ..."); the spaces aren't part of it.
-        smtp_password = smtp_password.replace(" ", "")
-    key_file = get("GOOGLE_SERVICE_ACCOUNT_FILE")
+    try:
+        smtp_host = var("SMTP_HOST", "smtp.gmail.com")
+        smtp_user = var("SMTP_USER")
+        smtp_password = var("SMTP_PASSWORD")
+        if "gmail" in smtp_host:
+            # Google shows app passwords in groups ("abcd efgh ..."); the spaces aren't part of it.
+            smtp_password = smtp_password.replace(" ", "")
+        key_file = var("GOOGLE_SERVICE_ACCOUNT_FILE")
 
-    return Settings(
-        org_id=org_id,
-        api_key=org["apiKey"],
-        secret=org["secret"],
-        zeroruntime_agent_id=get("ZERORUNTIME_AGENT_ID"),
-        client_url=get("CLIENT_URL", "http://localhost:3000").rstrip("/"),
-        google_sheet_id=get("GOOGLE_SHEET_ID"),
-        google_service_account_json=get("GOOGLE_SERVICE_ACCOUNT_JSON"),
-        google_service_account_file=str(_path(key_file, Path())) if key_file else "",
-        google_photos_folder_id=get("GOOGLE_PHOTOS_FOLDER_ID"),
-        link_valid_hours=_number(org_id, "LINK_VALID_HOURS", get("LINK_VALID_HOURS", "24"), float),
-        selfie_retry_minutes=_number(org_id, "SELFIE_RETRY_MINUTES", get("SELFIE_RETRY_MINUTES", "30"), int),
-        smtp_host=smtp_host,
-        smtp_port=_number(org_id, "SMTP_PORT", get("SMTP_PORT", "587"), int),
-        smtp_user=smtp_user,
-        smtp_password=smtp_password,
-        email_from=get("EMAIL_FROM") or smtp_user,
-        email_from_name=get("EMAIL_FROM_NAME", "Muthoot Finance Video PD"),
-        photos_dir=_path(get("PHOTOS_DIR"), PACKAGE_DIR / "photos"),
-        data_dir=DATA_ROOT / org_id,
-    )
+        return Settings(
+            org_id=org_id,
+            api_key=org["apiKey"],
+            secret=org["secret"],
+            zeroruntime_agent_id=var("ZERORUNTIME_AGENT_ID"),
+            client_url=var("CLIENT_URL", "http://localhost:3000").rstrip("/"),
+            google_sheet_id=var("GOOGLE_SHEET_ID"),
+            google_service_account_json=var("GOOGLE_SERVICE_ACCOUNT_JSON"),
+            google_service_account_file=str(_path(key_file, Path())) if key_file else "",
+            google_photos_folder_id=var("GOOGLE_PHOTOS_FOLDER_ID"),
+            link_valid_hours=var("LINK_VALID_HOURS", 24.0, float),
+            selfie_retry_minutes=var("SELFIE_RETRY_MINUTES", 30, int),
+            smtp_host=smtp_host,
+            smtp_port=var("SMTP_PORT", 587, int),
+            smtp_user=smtp_user,
+            smtp_password=smtp_password,
+            email_from=var("EMAIL_FROM") or smtp_user,
+            email_from_name=var("EMAIL_FROM_NAME", "Muthoot Finance Video PD"),
+            photos_dir=_path(var("PHOTOS_DIR"), PACKAGE_DIR / "photos"),
+            data_dir=DATA_ROOT / org_id,
+        )
+    except org_store.OrgVarError as error:
+        raise ApiError(500, str(error))
