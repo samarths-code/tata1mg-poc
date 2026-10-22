@@ -14,9 +14,10 @@ from pathlib import Path
 from .errors import ApiError
 
 try:
-    from .. import org_store
+    from .. import org_store, org_vars
 except ImportError:  # backend run as a script: python3 app.py
     import org_store
+    import org_vars
 
 PACKAGE_DIR = Path(__file__).resolve().parent
 BACKEND_DIR = PACKAGE_DIR.parent
@@ -60,7 +61,7 @@ ORG_KEYS = {
     "EMAIL_FROM_NAME": ("sender name (default Muthoot Finance Video PD)", False),
     "PHOTOS_DIR": ("folder of local reference photos (default backend/muthoot/photos)", False),
 }
-org_store.register_env_keys("Muthoot Video PD", ORG_KEYS)
+org_vars.register("Muthoot Video PD", ORG_KEYS)
 
 
 @dataclass(frozen=True)
@@ -95,12 +96,7 @@ def settings_for(org_id: str) -> Settings:
         raise ApiError(404, f"Organisation '{org_id}' is not set up: add it (API key and secret) on the admin page.")
 
     # Only the default org also reads the old MUTHOOT_* keys from .env.
-    use_dotenv = org_id == DEFAULT_ORG_ID
-
-    def var(name: str, default="", cast=str):
-        return org_store.get_var(
-            org, name, default, cast=cast, env_fallback=f"MUTHOOT_{name}" if use_dotenv else None
-        )
+    var = org_vars.reader(org, env_prefix="MUTHOOT_" if org_id == DEFAULT_ORG_ID else None).get
 
     try:
         smtp_host = var("SMTP_HOST", "smtp.gmail.com")
@@ -132,5 +128,5 @@ def settings_for(org_id: str) -> Settings:
             photos_dir=_path(var("PHOTOS_DIR"), PACKAGE_DIR / "photos"),
             data_dir=DATA_ROOT / org_id,
         )
-    except org_store.OrgVarError as error:
+    except org_vars.OrgVarError as error:
         raise ApiError(500, str(error))

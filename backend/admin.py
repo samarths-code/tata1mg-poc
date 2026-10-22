@@ -34,10 +34,11 @@ import requests
 from flask import Blueprint, Response, jsonify, request
 
 try:
-    from . import builds, org_store
+    from . import builds, org_store, org_vars
 except ImportError:
     import builds
     import org_store
+    import org_vars
 
 bp = Blueprint("admin", __name__)
 
@@ -181,8 +182,7 @@ def security_headers(response: Response) -> Response:
     return response
 
 
-def _mask(secret: str) -> str:
-    return f"••••{secret[-4:]}" if len(secret) > 4 else "••••"
+_mask = org_vars.mask
 
 
 def _public(org_id: str, org: dict) -> dict:
@@ -195,17 +195,8 @@ def _public(org_id: str, org: dict) -> dict:
         "frontendOrigins": org.get("frontendOrigins") or [],
         "frontendDomain": org.get("frontendDomain", ""),
         "roomConfig": org.get("roomConfig") or {},
-        "env": _public_env(org),
+        "env": org_vars.list_public(org),
     }
-
-
-def _public_env(org: dict) -> list:
-    """The org's env vars for the page; secret values are never sent back."""
-    secrets = set(org.get("envSecrets") or [])
-    return [
-        {"key": key, "secret": key in secrets, "value": _mask(value) if key in secrets else value}
-        for key, value in sorted((org.get("env") or {}).items())
-    ]
 
 
 def _check_credentials(api_key: str, secret: str):
@@ -254,7 +245,7 @@ def admin_list_orgs():
     return jsonify({
         "orgs": [_public(oid, o) for oid, o in sorted(orgs.items())],
         "presets": PRESETS,
-        "knownEnvKeys": org_store.KNOWN_ENV_KEYS,
+        "knownEnvKeys": org_vars.KNOWN_KEYS,
     })
 
 
@@ -307,9 +298,8 @@ def admin_save_org():
         "frontendOrigins": origins,
         "frontendDomain": domain,
         "roomConfig": room_config,
-        # Env vars are edited on their own (below); saving the org keeps them.
-        "env": existing.get("env") or {},
-        "envSecrets": existing.get("envSecrets") or [],
+        # Org variables are edited on their own (below); saving the org keeps them.
+        **org_vars.stored(existing),
     }
     org_store.save_org(org_id, org)
     return jsonify({"org": _public(org_id, org)}), 200
@@ -318,38 +308,26 @@ def admin_save_org():
 @bp.route("/api/orgs/<org_id>/env", methods=["POST"])
 @require_admin
 def admin_set_env(org_id):
-    """Add or update one env var: {key, value, secret}."""
+    """Add or update one org variable: {key, value, secret}."""
     body = request.get_json(silent=True) or {}
-    key = str(body.get("key", "")).strip().upper()
-    if not org_store.ENV_KEY_PATTERN.match(key):
-        return jsonify({"message": "Name: capital letters, digits and _ (e.g. GOOGLE_SHEET_ID)"}), 400
-    value = body.get("value")
-    if not isinstance(value, str):
-        return jsonify({"message": "Value must be text"}), 400
-    value = value.strip()
-    if not value:
-        return jsonify({"message": "Value is empty (use Delete to remove a variable)"}), 400
-    if len(value) > org_store.MAX_ENV_VALUE_CHARS:
-        return jsonify({"message": f"Value is longer than {org_store.MAX_ENV_VALUE_CHARS} characters"}), 400
-    known = org_store.KNOWN_ENV_KEYS.get(key, {})
-    secret = bool(body.get("secret")) or known.get("secret", False)
     try:
-        org = org_store.set_env_var(org_id, key, value, secret)
+        org = org_vars.set_var(org_id, body.get("key"), body.get("value"), bool(body.get("secret")))
+    except org_vars.OrgVarError as e:
+        return jsonify({"message": str(e)}), 400
     except org_store.OrgNotFound:
         return jsonify({"message": f"Unknown org: {org_id}"}), 404
-    return jsonify({"env": _public_env(org)}), 200
+    return jsonify({"env": org_vars.list_public(org)}), 200
 
 
 @bp.route("/api/orgs/<org_id>/env/delete", methods=["POST"])
 @require_admin
 def admin_delete_env(org_id):
-    """Remove one env var: {key}."""
-    key = str((request.get_json(silent=True) or {}).get("key", "")).strip().upper()
+    """Remove one org variable: {key}."""
     try:
-        org = org_store.delete_env_var(org_id, key)
+        org = org_vars.delete_var(org_id, (request.get_json(silent=True) or {}).get("key"))
     except org_store.OrgNotFound:
         return jsonify({"message": f"Unknown org: {org_id}"}), 404
-    return jsonify({"env": _public_env(org)}), 200
+    return jsonify({"env": org_vars.list_public(org)}), 200
 
 
 @bp.route("/api/builds", methods=["GET"])

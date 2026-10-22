@@ -9,8 +9,8 @@ credentials and meeting config.
         "secret": "...",
         "webhookUrl": "",
         "roomConfig": { ...merged into the POST /v2/rooms body... },
-        "env": { "KEY": "value", ... },     # per-org settings (admin page)
-        "envSecrets": ["KEY", ...]          # which env values are masked
+        "env": { "KEY": "value", ... },     # org variables (see org_vars.py)
+        "envSecrets": ["KEY", ...]
       }
     }
 
@@ -129,59 +129,17 @@ def save_org(org_id: str, org: dict) -> None:
         _write(data)
 
 
-# ---------------------------------------------------------------------------
-# Per-org environment variables
-# ---------------------------------------------------------------------------
-# Each org can carry its own settings, added one at a time on the admin page:
-#
-#     "env":        {"GOOGLE_SHEET_ID": "...", "SMTP_PASSWORD": "..."}
-#     "envSecrets": ["SMTP_PASSWORD"]      # masked on the admin page
-#
-# Code reads them with get_var(org, "KEY"). Feature modules (e.g. muthoot)
-# register the keys they read with register_env_keys(), so the admin page can
-# suggest them.
-
-ENV_KEY_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]{0,63}$")
-MAX_ENV_VALUE_CHARS = 20000  # room for a pasted service-account JSON key
-
-# key -> {"group", "help", "secret"}; filled by register_env_keys().
-KNOWN_ENV_KEYS: dict = {}
-
-
-def register_env_keys(group: str, keys: dict) -> None:
-    """keys: {KEY: (help text, is_secret)}."""
-    for key, (help_text, secret) in keys.items():
-        KNOWN_ENV_KEYS[key] = {"group": group, "help": help_text, "secret": bool(secret)}
-
-
-class OrgVarError(ValueError):
-    """An org variable is set but isn't of the expected type."""
-
-
-def get_var(org: dict, key: str, default=None, *, cast=str, env_fallback: Optional[str] = None):
-    """The common way to read an org variable.
-
-        get_var(org, "GOOGLE_SHEET_ID")
-        get_var(org, "SMTP_PORT", 587, cast=int)
-        get_var(org, "SMTP_USER", env_fallback="MUTHOOT_SMTP_USER")
-
-    Order: the org's own value, then os.environ[env_fallback] (for settings that
-    used to live in .env), then `default`. Blank counts as unset. The value is
-    stripped and passed through `cast` (str, int, float or bool); a value that
-    doesn't fit raises OrgVarError.
-    """
-    value = (org.get("env") or {}).get(key)
-    if (value is None or not str(value).strip()) and env_fallback:
-        value = os.environ.get(env_fallback)
-    if value is None or not str(value).strip():
-        return default
-    value = str(value).strip()
-    if cast is bool:
-        return value.lower() in ("1", "true", "yes", "on")
-    try:
-        return cast(value)
-    except ValueError:
-        raise OrgVarError(f"Org '{org.get('id', '?')}': {key} must be {cast.__name__} (it is '{value}')")
+def update_org(org_id: str, change) -> dict:
+    """Read-modify-write one org under the lock: change(org) edits it in place.
+    Returns a copy of the saved org. Raises OrgNotFound."""
+    with _lock:
+        data = _read()
+        org = data.get(org_id)
+        if not isinstance(org, dict):
+            raise OrgNotFound(org_id)
+        change(org)
+        _write(data)
+        return copy.deepcopy(org)
 
 
 def request_org_id() -> str:
@@ -196,35 +154,3 @@ def request_org_id() -> str:
         or request.args.get("orgId")
         or ""
     ).strip().lower()
-
-
-def set_env_var(org_id: str, key: str, value: str, secret: bool) -> dict:
-    """Add or update one variable; returns the updated org. Raises OrgNotFound."""
-    with _lock:
-        data = _read()
-        org = data.get(org_id)
-        if not isinstance(org, dict):
-            raise OrgNotFound(org_id)
-        env = dict(org.get("env") or {})
-        env[key] = value
-        secrets = [k for k in (org.get("envSecrets") or []) if k != key and k in env]
-        if secret:
-            secrets.append(key)
-        org["env"], org["envSecrets"] = env, sorted(secrets)
-        _write(data)
-        return copy.deepcopy(org)
-
-
-def delete_env_var(org_id: str, key: str) -> dict:
-    """Remove one variable; returns the updated org. Raises OrgNotFound."""
-    with _lock:
-        data = _read()
-        org = data.get(org_id)
-        if not isinstance(org, dict):
-            raise OrgNotFound(org_id)
-        env = dict(org.get("env") or {})
-        env.pop(key, None)
-        org["env"] = env
-        org["envSecrets"] = [k for k in (org.get("envSecrets") or []) if k in env]
-        _write(data)
-        return copy.deepcopy(org)
