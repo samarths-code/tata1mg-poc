@@ -158,8 +158,11 @@ def list_public(org: dict) -> list:
 
 
 def stored(org: dict) -> dict:
-    """The org's variable fields as stored, to carry over when the org itself is re-saved."""
-    return {ENV_FIELD: dict(org.get(ENV_FIELD) or {}), SECRETS_FIELD: list(org.get(SECRETS_FIELD) or [])}
+    """The org's variable fields as stored, to carry over when the org itself is
+    re-saved. An org without variables gets no fields, so its entry stays as it was."""
+    if not org.get(ENV_FIELD):
+        return {}
+    return {ENV_FIELD: dict(org[ENV_FIELD]), SECRETS_FIELD: list(org.get(SECRETS_FIELD) or [])}
 
 
 def parse_env(text: str) -> tuple:
