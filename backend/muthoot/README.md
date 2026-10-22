@@ -57,7 +57,7 @@ Errors are `{"detail": ...}`, as the customer page expects.
    secret of the account the Zero Runtime agent runs on, and the customer page's
    origin under *Frontend origins* (for CORS).
 2. **Org variables:** on the admin page, *Edit* the org and add its variables one
-   at a time (the Name box suggests them):
+   at a time, or paste a whole .env file into the Name box to add them all at once:
 
    | Name | |
    |---|---|

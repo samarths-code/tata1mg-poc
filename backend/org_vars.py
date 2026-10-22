@@ -15,12 +15,10 @@ Reading (any feature):
     v.get("SMTP_PORT", 587, int)                 # typed; bad value -> OrgVarError
     org_vars.reader(org, env_prefix="MUTHOOT_")  # unset -> os.environ["MUTHOOT_<KEY>"]
 
-Declaring (so the admin page suggests the names and masks the secret ones):
+Each org has its own kinds of variables, so there is no fixed list of names.
 
-    org_vars.register("Muthoot Video PD", {"GOOGLE_SHEET_ID": ("help text", False)})
-
-Writing (admin page): set_var() / delete_var(); list_public() / stored() for
-showing and keeping them.
+Writing (admin page): set_var() / set_vars() / delete_var(); parse_env() turns
+pasted .env text into variables; list_public() / stored() show and keep them.
 """
 import os
 import re
@@ -36,18 +34,9 @@ SECRETS_FIELD = "envSecrets"
 KEY_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]{0,63}$")
 MAX_VALUE_CHARS = 20000  # room for a pasted service-account JSON key
 
-# KEY -> {"group", "help", "secret"}; filled by register().
-KNOWN_KEYS: dict = {}
-
 
 class OrgVarError(ValueError):
     """A variable name or value that isn't allowed, or a value of the wrong type."""
-
-
-def register(group: str, keys: dict) -> None:
-    """keys: {KEY: (help text, is_secret)} — the variables a feature reads."""
-    for key, (help_text, secret) in keys.items():
-        KNOWN_KEYS[key] = {"group": group, "help": help_text, "secret": bool(secret)}
 
 
 # ---------------------------------------------------------------------------
@@ -112,16 +101,32 @@ def _clean(key: str, value) -> tuple:
 
 
 def set_var(org_id: str, key: str, value: str, secret: bool = False) -> dict:
-    """Add or update one variable; returns the updated org. Registered secret
-    keys are always secret. Raises OrgVarError or org_store.OrgNotFound."""
-    key, value = _clean(key, value)
-    secret = bool(secret) or KNOWN_KEYS.get(key, {}).get("secret", False)
+    """Add or update one variable; returns the updated org.
+    Raises OrgVarError or org_store.OrgNotFound."""
+    return set_vars(org_id, [(key, value)], secret)
+
+
+def set_vars(org_id: str, items: list, secret: bool = False) -> dict:
+    """Add or update several variables in one write: items = [(key, value), ...].
+    All are checked first, so either all are saved or none (OrgVarError names the
+    bad ones). Returns the updated org. Raises org_store.OrgNotFound."""
+    if not items:
+        raise OrgVarError("No variables to save")
+    clean, problems = {}, []
+    for key, value in items:
+        try:
+            k, v = _clean(key, value)
+            clean[k] = v  # a repeated name: the last one wins, as in a .env file
+        except OrgVarError as error:
+            problems.append(f"{str(key or '').strip() or '(no name)'}: {error}")
+    if problems:
+        raise OrgVarError("; ".join(problems))
 
     def change(org: dict) -> None:
-        env = {**(org.get(ENV_FIELD) or {}), key: value}
-        secrets = [k for k in (org.get(SECRETS_FIELD) or []) if k != key and k in env]
+        env = {**(org.get(ENV_FIELD) or {}), **clean}
+        secrets = {k for k in (org.get(SECRETS_FIELD) or []) if k in env and k not in clean}
         if secret:
-            secrets.append(key)
+            secrets |= set(clean)
         org[ENV_FIELD], org[SECRETS_FIELD] = env, sorted(secrets)
 
     return org_store.update_org(org_id, change)
@@ -155,3 +160,49 @@ def list_public(org: dict) -> list:
 def stored(org: dict) -> dict:
     """The org's variable fields as stored, to carry over when the org itself is re-saved."""
     return {ENV_FIELD: dict(org.get(ENV_FIELD) or {}), SECRETS_FIELD: list(org.get(SECRETS_FIELD) or [])}
+
+
+def parse_env(text: str) -> tuple:
+    """Pasted .env text -> ([(key, value), ...], [skipped lines]).
+
+    Understands KEY=value, `export KEY=value`, # comments (whole line, or after an
+    unquoted value), and "..." / '...' values — a quoted value may run over
+    several lines (e.g. a private key). "\\n" inside double quotes is a newline.
+    Lines without "=" and variables with no value are skipped.
+    """
+    items, skipped = [], []
+    lines = (text or "").replace("\r\n", "\n").split("\n")
+    i = 0
+    while i < len(lines):
+        raw = lines[i]
+        i += 1
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line[len("export "):].lstrip()
+        if "=" not in line:
+            skipped.append(raw.strip())
+            continue
+        key, value = line.split("=", 1)
+        key, value = key.strip(), value.strip()
+        if value[:1] in ("'", '"'):
+            quote = value[0]
+            body = value[1:]
+            while not body.rstrip().endswith(quote) and i < len(lines):
+                body += "\n" + lines[i]
+                i += 1
+            body = body.rstrip()
+            body = body[:-1] if body.endswith(quote) else body
+            if quote == '"':
+                body = body.replace("\\n", "\n").replace('\\"', '"').replace("\\\\", "\\")
+            value = body
+        else:
+            value = value.split(" #", 1)[0].strip()
+        if not key:
+            skipped.append(raw.strip())
+        elif value == "":
+            skipped.append(f"{key} (no value)")
+        else:
+            items.append((key, value))
+    return items, skipped

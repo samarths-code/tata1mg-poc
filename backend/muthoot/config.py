@@ -43,25 +43,7 @@ def _path(value: str, default: Path) -> Path:
 
 DATA_ROOT = _path(_data_root, PACKAGE_DIR / "data")
 
-# The org variables this flow reads: name -> (help on the admin page, is secret).
-ORG_KEYS = {
-    "ZERORUNTIME_AGENT_ID": ("the deployed Zero Runtime agent (same VideoSDK account as the org's key)", False),
-    "CLIENT_URL": ("the customer page's address; PD links are built on it", False),
-    "GOOGLE_SHEET_ID": ("Google Sheet with LOS / Results / Events tabs", False),
-    "GOOGLE_SERVICE_ACCOUNT_JSON": ("the service account's JSON key, pasted in full", True),
-    "GOOGLE_SERVICE_ACCOUNT_FILE": ("or: path of the JSON key file on the server (relative to backend/)", False),
-    "GOOGLE_PHOTOS_FOLDER_ID": ("optional Drive folder of reference photos", False),
-    "LINK_VALID_HOURS": ("hours a PD link works (default 24, 0 = no limit)", False),
-    "SELFIE_RETRY_MINUTES": ("wait after 3 failed selfies (default 30)", False),
-    "SMTP_HOST": ("mail server for the link emails (default smtp.gmail.com)", False),
-    "SMTP_PORT": ("587 = STARTTLS (default), 465 = SSL", False),
-    "SMTP_USER": ("mail login; empty = no emails are sent", False),
-    "SMTP_PASSWORD": ("mail password (Gmail: an App Password)", True),
-    "EMAIL_FROM": ("sender address (default SMTP_USER)", False),
-    "EMAIL_FROM_NAME": ("sender name (default Muthoot Finance Video PD)", False),
-    "PHOTOS_DIR": ("folder of local reference photos (default backend/muthoot/photos)", False),
-}
-org_vars.register("Muthoot Video PD", ORG_KEYS)
+# The org variables this flow reads are listed in muthoot/README.md (Setup).
 
 
 @dataclass(frozen=True)
