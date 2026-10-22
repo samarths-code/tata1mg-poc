@@ -21,10 +21,7 @@ import stat
 import tempfile
 import zipfile
 
-try:
-    from . import org_store
-except ImportError:
-    import org_store
+import org_store
 
 BUILDS_ROOT = os.environ.get("BUILDS_ROOT", "/var/www")
 

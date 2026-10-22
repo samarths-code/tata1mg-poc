@@ -24,10 +24,7 @@ import os
 import re
 from typing import Optional
 
-try:
-    from . import org_store
-except ImportError:  # run as a script: python3 app.py
-    import org_store
+import org_store
 
 ENV_FIELD = "env"
 SECRETS_FIELD = "envSecrets"

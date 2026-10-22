@@ -13,11 +13,8 @@ from pathlib import Path
 
 from .errors import ApiError
 
-try:
-    from .. import org_store, org_vars
-except ImportError:  # backend run as a script: python3 app.py
-    import org_store
-    import org_vars
+import org_store
+import org_vars
 
 PACKAGE_DIR = Path(__file__).resolve().parent
 BACKEND_DIR = PACKAGE_DIR.parent

@@ -35,12 +35,9 @@ import jwt
 import requests
 from flask import Blueprint, Response, jsonify, request
 
-try:
-    from . import builds, org_store, org_vars
-except ImportError:
-    import builds
-    import org_store
-    import org_vars
+import builds
+import org_store
+import org_vars
 
 bp = Blueprint("admin", __name__)
 
