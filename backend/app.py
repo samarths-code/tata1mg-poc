@@ -13,14 +13,9 @@ from flask import Flask, Response, jsonify, request
 
 load_dotenv()
 
-try:
-    from . import org_store
-    from .admin import admin_url_prefix, bp as admin_bp
-    from . import muthoot
-except ImportError:  # run as a script: python3 app.py
-    import org_store
-    from admin import admin_url_prefix, bp as admin_bp
-    import muthoot
+import org_store
+from admin import admin_url_prefix, bp as admin_bp
+import muthoot
 
 app = Flask(__name__)
 # Largest request body: a 20 MB build zip (admin upload) + multipart overhead.
